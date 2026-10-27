@@ -275,6 +275,15 @@ export const FIELD_CONFIG: FieldConfig[] = [
     required: false,
     order: 23,
   },
+  {
+    csvColumn: 'الملاحظات',
+    label: 'الملاحظات',
+    labelEn: 'Notes',
+    color: 'purple',
+    inputType: 'text',
+    required: false,
+    order: 25,
+  },
 ];
 
 // Helper: get fields by color

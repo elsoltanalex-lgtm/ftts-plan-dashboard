@@ -360,8 +360,8 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
-            {/* Bulk Delete Button */}
-            {selectedIds.length > 0 && (
+            {/* Bulk Delete Button (Admin only) */}
+            {selectedIds.length > 0 && user?.role === 'admin' && (
               <button
                 onClick={handleTriggerBulkDelete}
                 className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 flex items-center gap-1.5 shadow-sm transition animate-pulse"
@@ -371,22 +371,24 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
               </button>
             )}
 
-            {/* Add New Site Button */}
-            <button
-              onClick={() => {
-                if (onAddNew) {
-                  onAddNew();
-                } else {
-                  onEditRecord('');
-                }
-                onClose();
-              }}
-              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-              title="إضافة موقع جديد إلى قاعدة بيانات WE"
-            >
-              <span>➕</span>
-              <span>إضافة موقع جديد</span>
-            </button>
+            {/* Add New Site Button (Admin only) */}
+            {user?.role === 'admin' && (
+              <button
+                onClick={() => {
+                  if (onAddNew) {
+                    onAddNew();
+                  } else {
+                    onEditRecord('');
+                  }
+                  onClose();
+                }}
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                title="إضافة موقع جديد إلى قاعدة بيانات WE (صلاحية الإدارة Admin)"
+              >
+                <span>➕</span>
+                <span>إضافة موقع جديد</span>
+              </button>
+            )}
 
             {/* Customize Columns Button */}
             <button

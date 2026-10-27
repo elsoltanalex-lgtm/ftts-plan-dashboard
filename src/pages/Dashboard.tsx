@@ -790,12 +790,17 @@ export const Dashboard: React.FC = () => {
               onClick={() => {
                 setEditingSiteCode(undefined);
                 setEditingRecord(null);
-                setWeModalMode('add');
+                setWeModalMode(user?.role === 'admin' ? 'add' : 'edit');
                 setIsWeAddDataOpen(true);
               }}
               disabled={weCodesLoading}
+              title={user?.role === 'admin' ? 'إضافة موقع جديد أو تعديل موقع مسجل' : 'تعديل وتحديث بيانات المواقع المسجلة التابعة لقطاعك'}
             >
-              {weCodesLoading ? '⏳ تحميل...' : '➕ إضافة / تحديث بيانات WE'}
+              {weCodesLoading
+                ? '⏳ تحميل...'
+                : user?.role === 'admin'
+                ? '➕ إضافة موقع جديد / ✏️ تعديل'
+                : '✏️ تعديل بيانات مواقع قطاعك'}
             </button>
             <button
               className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-medium text-sm flex items-center gap-1.5"
@@ -901,6 +906,7 @@ export const Dashboard: React.FC = () => {
           await Promise.all([refetchWeRecords(), refetchWeCodes()]);
         }}
         onAddNew={() => {
+          if (user?.role !== 'admin' && user?.sector !== 'ALL') return;
           setEditingSiteCode(undefined);
           setEditingRecord(null);
           setWeModalMode('add');

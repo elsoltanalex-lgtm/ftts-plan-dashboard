@@ -120,6 +120,7 @@ interface AuthContextType {
   canEditRecord: (record: any) => boolean;
   canDeleteRecord: (record: any) => boolean;
   canCreateForSector: (targetSector: string) => boolean;
+  canAddSite: boolean;
   getSectorPermission: (record: any) => SectorPermissionInfo;
   demoAccounts: DemoAccount[];
   isLoginModalOpen: boolean;
@@ -290,25 +291,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [user]
   );
 
-  // Check if current user has permission to delete this record
+  // Check if current user has permission to delete this record (Admin only)
   const canDeleteRecord = useCallback(
-    (record: any): boolean => {
+    (_record?: any): boolean => {
       if (!user) return false;
-      if (user.role === 'admin' || user.sector === 'ALL') return true;
-      if (user.role === 'viewer') return false;
-
-      return isRecordInSector(user.sector, record);
+      return user.role === 'admin' || user.sector === 'ALL';
     },
     [user]
   );
 
-  // Check if current user can create a site in target sector
+  // Check if current user can create a site (Admin only)
   const canCreateForSector = useCallback(
-    (targetSector: string): boolean => {
+    (_targetSector?: string): boolean => {
       if (!user) return false;
-      if (user.role === 'admin' || user.sector === 'ALL') return true;
-      if (user.role === 'viewer') return false;
-      return isSectorMatch(user.sector, targetSector);
+      return user.role === 'admin' || user.sector === 'ALL';
     },
     [user]
   );
@@ -385,6 +381,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       canEditRecord,
       canDeleteRecord,
       canCreateForSector,
+      canAddSite: isAdmin,
       getSectorPermission,
       demoAccounts: PRESET_ACCOUNTS,
       isLoginModalOpen,

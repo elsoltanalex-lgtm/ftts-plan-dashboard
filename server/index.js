@@ -395,7 +395,14 @@ app.post('/api/records', verifyToken, (req, res) => {
     });
   }
 
-  // Add new record
+  // Add new record (Admin only)
+  if (user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: '⛔ غير مصرح: إضافة المواقع الجديدة مقتصرة حصرياً على حساب الإدارة (Admin). حسابات القطاعات تملك صلاحية التعديل على مواقعها فقط.',
+    });
+  }
+
   const record = {
     ...newRecord,
     _id: randomUUID(),
@@ -471,23 +478,22 @@ app.put('/api/records/:id', verifyToken, (req, res) => {
   res.json({ success: true, record: db.records[idx], message: 'تم تحديث السجل بنجاح' });
 });
 
-// DELETE /api/records/:id — Delete a record
+// DELETE /api/records/:id — Delete a record (Admin only)
 app.delete('/api/records/:id', verifyToken, (req, res) => {
   const db = readDB();
   const id = req.params.id;
   const user = req.user;
 
+  if (user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: '⛔ غير مصرح: حذف المواقع مقتصر حصرياً على حساب الإدارة (Admin).',
+    });
+  }
+
   const idx = db.records.findIndex(r => r._id === id);
   if (idx === -1) {
     return res.status(404).json({ success: false, error: 'السجل غير موجود' });
-  }
-
-  const existingSector = db.records[idx]['Exc sector'] || db.records[idx]['Sectore'] || db.records[idx]['Sectores'] || '';
-  if (!checkSectorEditPermission(user, existingSector)) {
-    return res.status(403).json({
-      success: false,
-      error: `لا يمكنك حذف هذا السجل لأنه يتبع قطاع "${existingSector || 'آخر'}". حسابك مخصص لقطاع "${user.sector}".`,
-    });
   }
 
   db.records.splice(idx, 1);
