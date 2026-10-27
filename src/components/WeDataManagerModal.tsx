@@ -7,6 +7,7 @@ import type { WeRecord } from '../config/fieldConfig';
 import { FIELD_CONFIG } from '../config/fieldConfig';
 import { deleteRecord, deleteRecordsBulk, exportCleanCSV } from '../hooks/useWeAPI';
 import { useAuth } from '../context/AuthContext';
+import { isRecordInSector } from '../utils/sectorPermissions';
 import { 
   Trash2, 
   Edit3, 
@@ -70,9 +71,17 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
     setTimeout(() => setToast(null), 4000);
   };
 
+  // ── Sector Scope Restriction: Non-admin users cannot see records outside their sector ──
+  const authorizedRecords = useMemo(() => {
+    if (!user || user.role === 'admin' || user.sector === 'ALL') {
+      return records;
+    }
+    return records.filter((r) => isRecordInSector(user.sector, r));
+  }, [records, user]);
+
   // ── Filtered Records ──
   const filteredRecords = useMemo(() => {
-    return records.filter((r) => {
+    return authorizedRecords.filter((r) => {
       // 1. Text Search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -112,7 +121,7 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
 
       return true;
     });
-  }, [records, searchQuery, selectedFilter]);
+  }, [authorizedRecords, searchQuery, selectedFilter]);
 
   if (!isOpen) return null;
 

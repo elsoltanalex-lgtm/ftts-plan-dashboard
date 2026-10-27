@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   X,
   Search,
@@ -9,6 +9,7 @@ import {
   Lock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { isRecordInSector } from '../utils/sectorPermissions';
 
 import type { SiteRecord } from '../types/dashboard';
 import { STATUS_CONFIG } from '../data/dashboardData';
@@ -26,14 +27,22 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
   sites,
   activeStatusFilter,
 }) => {
-  const { canEditRecord } = useAuth();
+  const { user, canEditRecord } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 8;
 
+  // Strict Sector Scope Restriction: Non-admin users cannot see sites outside their assigned sector
+  const authorizedSites = useMemo(() => {
+    if (!user || user.role === 'admin' || user.sector === 'ALL') {
+      return sites;
+    }
+    return sites.filter((site) => isRecordInSector(user.sector, site));
+  }, [sites, user]);
+
   if (!isOpen) return null;
 
-  const filteredSites = sites.filter((site) => {
+  const filteredSites = authorizedSites.filter((site) => {
     const q = searchTerm.toLowerCase();
     return (
       site.siteCode.toLowerCase().includes(q) ||

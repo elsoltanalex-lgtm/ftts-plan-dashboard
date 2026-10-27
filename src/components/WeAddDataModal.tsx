@@ -52,6 +52,38 @@ const DEFAULT_FALLBACK_DROPDOWNS: Record<string, string[]> = {
   'خطة': ['2021', '2022', '2023', '2024', '2025', '2026', 'خطة عاجلة'],
 };
 
+// ── Fixed baseline fields (Strictly Read-Only / Disabled in EDIT mode) ──
+// Requirements: Site Code, قطاع التنفيذ, قطاع المناطق, الإدارة العامة لتنفيذ الشبكات, مسؤولية التنفيذ, Type, Plan, Site Status
+export const IMMUTABLE_FIELDS_IN_EDIT = new Set([
+  'site code',
+  'Site code',
+  'site_code',
+  'Exc sector',
+  'Exc Sectores',
+  'Sectore',
+  'قطاع التنفيذ',
+  'Sectores',
+  'Zone',
+  'قطاع المناطق',
+  'Exc Zone',
+  'اداره التنفيذ المختصه',
+  'الادارة العامة لتنفيذ الشبكات',
+  'المسئولية',
+  'مسئولية التنفيذ',
+  'مسؤولية التنفيذ',
+  'Type',
+  'النوع',
+  'خطة',
+  'Plan',
+  'Site Status',
+  'حالة الموقع',
+  'السنترال',
+]);
+
+export function isFieldImmutable(csvColumn: string): boolean {
+  return IMMUTABLE_FIELDS_IN_EDIT.has(csvColumn) || IMMUTABLE_FIELDS_IN_EDIT.has(csvColumn.trim());
+}
+
 export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
   isOpen,
   onClose,
@@ -180,6 +212,18 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     try {
       const record = await fetchSiteRecord(code);
       if (record) {
+        // Strict Sector RBAC Restriction:
+        // Disallow loading or viewing sites outside user's assigned sector
+        if (user && user.role !== 'admin' && user.sector && user.sector !== 'ALL') {
+          if (!isRecordInSector(user.sector, record)) {
+            setErrors({
+              _general: `⛔ تم حظر الوصول: الموقع "${code}" يتبع قطاع (${record['Exc sector'] || record['Sectore'] || 'آخر'}). لا تملك صلاحية استعراضه أو تعديله طبقاً لنطاق صلاحية قطاعك (${user.sector}).`,
+            });
+            setLoading(false);
+            return;
+          }
+        }
+
         setMasterRecord(record);
         setActiveMode('edit');
 
@@ -203,7 +247,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [sortedFields]);
+  }, [sortedFields, user]);
 
   // ── Reset or Switch ──
   useEffect(() => {
@@ -212,6 +256,18 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     loadDropdownValues();
 
     if (initialRecord) {
+      // Strict Sector RBAC Restriction on initialRecord
+      if (user && user.role !== 'admin' && user.sector && user.sector !== 'ALL') {
+        if (!isRecordInSector(user.sector, initialRecord)) {
+          setErrors({
+            _general: `⛔ تم حظر الوصول: الموقع "${initialRecord['site code'] || ''}" لا يتبع قطاعك (${user.sector}). التعديل محجوب.`,
+          });
+          setMasterRecord(null);
+          setStep('select-site');
+          return;
+        }
+      }
+
       setMasterRecord(initialRecord);
       setActiveMode('edit');
       setFormData({
@@ -242,6 +298,11 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
   const handleFieldChange = (csvColumn: string, value: string) => {
     if (isReadOnly) return;
 
+    // Strict immutability check: In edit mode, baseline fields cannot be altered
+    if (activeMode === 'edit' && isFieldImmutable(csvColumn)) {
+      return;
+    }
+
     setFormData((prev) => ({
       ...prev,
       [csvColumn]: csvColumn === 'site code' ? value.toUpperCase() : value,
@@ -262,7 +323,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     const newErrors: Record<string, string> = {};
 
     // 1. Site code is always strictly required
-    const code = (formData['site code'] || '').trim();
+    const code = (formData['site code'] || masterRecord?.['site code'] || '').trim();
     if (!code) {
       newErrors['site code'] = 'كود الموقع مطلوب (Site Code)';
     }
@@ -271,13 +332,14 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     if (!formData['التصنيف']?.trim()) {
       newErrors['التصنيف'] = 'التصنيف مطلوب';
     }
-    if (!formData['Site Status']?.trim()) {
+    const statusVal = (formData['Site Status'] || masterRecord?.['Site Status'] || '').trim();
+    if (!statusVal) {
       newErrors['Site Status'] = 'حالة الموقع مطلوبة';
     }
 
     // 3. Check other required fields
     sortedFields.forEach((field) => {
-      if (field.required && field.color !== 'blue') {
+      if (field.required && field.color !== 'blue' && field.csvColumn !== 'Site Status') {
         const val = formData[field.csvColumn]?.trim();
         if (!val) {
           newErrors[field.csvColumn] = `${field.label} مطلوب`;
@@ -335,6 +397,17 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     try {
       const isEdit = activeMode === 'edit';
       const dataToSave = { ...formData };
+
+      // Strictly enforce preservation of baseline immutable fields in EDIT mode:
+      // (كود الموقع، قطاع التنفيذ، قطاع المناطق، الإدارة العامة لتنفيذ الشبكات، مسؤولية التنفيذ، النوع، الخطة، حالة الموقع)
+      if (isEdit && masterRecord) {
+        IMMUTABLE_FIELDS_IN_EDIT.forEach((col) => {
+          if (masterRecord[col] !== undefined && masterRecord[col] !== '') {
+            dataToSave[col] = masterRecord[col];
+          }
+        });
+      }
+
       if (user && user.role !== 'admin' && user.sector && user.sector !== 'ALL') {
         dataToSave['Exc sector'] = user.sector;
         dataToSave['Sectores'] = user.sector;
@@ -711,10 +784,16 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                 <div className="flex items-center justify-between mb-2.5">
                   <div className="flex items-center gap-2">
                     <div className="w-3.5 h-3.5 bg-blue-600 rounded-sm"></div>
-                    <h3 className="font-bold text-blue-900 text-base">
+                    <h3 className="font-bold text-blue-900 text-base flex items-center gap-2">
                       {activeMode === 'add'
                         ? '1. البيانات الأساسية وتحديد الموقع (مطلوبة)'
-                        : '1. البيانات الأساسية والمنطقة (البيانات المرجعية)'}
+                        : '1. البيانات الأساسية والمنطقة (بيانات ثابتة غير قابلة للتعديل)'}
+                      {activeMode === 'edit' && (
+                        <span className="text-xs bg-slate-200 text-slate-700 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 border border-slate-300">
+                          <Lock className="w-3 h-3 text-slate-600" />
+                          قراءة فقط (Disabled)
+                        </span>
+                      )}
                     </h3>
                   </div>
                   {activeMode === 'add' ? (
@@ -722,33 +801,49 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                       حقول إدخال نشطة
                     </span>
                   ) : (
-                    <span className="text-[11px] text-slate-500 font-normal">
-                      قابلة للمراجعة والتعديل
+                    <span className="text-[11px] text-slate-600 font-bold bg-slate-100 px-2.5 py-0.5 rounded border border-slate-300 flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-slate-500" />
+                      محمية ضد التعديل
                     </span>
                   )}
                 </div>
 
-                <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-4">
+                <div className={`rounded-xl p-4 transition-colors ${
+                  activeMode === 'edit'
+                    ? 'bg-slate-100/90 border-2 border-slate-300'
+                    : 'bg-blue-50/60 border border-blue-200'
+                }`}>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     
                     {/* Site Code input */}
                     <div className="flex flex-col">
-                      <label className="text-xs font-bold text-blue-900 mb-1 flex items-center justify-between">
-                        <span>كود الموقع (Site Code)</span>
-                        <span className="text-red-500 font-bold">* مطلوب</span>
+                      <label className="text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                        <span className="flex items-center gap-1">
+                          كود الموقع (Site Code)
+                          {activeMode === 'edit' && <Lock className="w-3 h-3 text-slate-500" />}
+                        </span>
+                        {activeMode === 'edit' ? (
+                          <span className="text-[10px] font-bold text-slate-600 bg-slate-200 px-1.5 py-0.5 rounded border border-slate-300 flex items-center gap-0.5">
+                            <Lock className="w-2.5 h-2.5" /> ثابت (غير قابل للتعديل)
+                          </span>
+                        ) : (
+                          <span className="text-red-500 font-bold">* مطلوب</span>
+                        )}
                       </label>
                       <input
                         type="text"
                         name="site code"
                         id="field-site-code"
                         required
-                        readOnly={activeMode === 'edit' && isReadOnly}
-                        disabled={activeMode === 'edit' && isReadOnly}
+                        readOnly={activeMode === 'edit' || isReadOnly}
+                        disabled={activeMode === 'edit' || isReadOnly}
                         value={formData['site code'] || ''}
                         onChange={(e) => handleFieldChange('site code', e.target.value)}
                         placeholder="مثال: LALXN33439"
                         className={`border rounded-lg px-3 py-2 text-sm font-mono font-bold focus:outline-none transition ${
-                          errors['site code']
+                          activeMode === 'edit' || isReadOnly
+                            ? 'border-slate-300 bg-slate-200/80 text-slate-700 cursor-not-allowed select-none shadow-inner'
+                            : errors['site code']
                             ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
                             : 'border-blue-300 bg-white text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
                         }`}
@@ -768,25 +863,30 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                           field.csvColumn === 'Exc Sectores';
                         const isLockedSectorField =
                           isSectorField && user?.role !== 'admin' && user?.sector && user.sector !== 'ALL';
-                        const isFieldReadOnly = isReadOnly || isLockedSectorField;
-                        const fieldValue = isLockedSectorField
+                        const isFieldFrozen = activeMode === 'edit' || isReadOnly || isLockedSectorField;
+                        const fieldValue = isLockedSectorField && activeMode === 'add'
                           ? user.sector
                           : (formData[field.csvColumn] || '');
 
                         return (
                           <div key={field.csvColumn} className="flex flex-col">
-                            <label className="text-xs font-medium text-blue-700 mb-1 flex items-center justify-between">
-                              <span>
+                            <label className="text-xs font-medium text-slate-800 mb-1 flex items-center justify-between">
+                              <span className="flex items-center gap-1">
                                 {field.label}
-                                <span className="text-blue-400 text-[10px] mr-1">({field.labelEn})</span>
+                                <span className="text-slate-500 text-[10px] mr-1">({field.labelEn})</span>
+                                {activeMode === 'edit' && <Lock className="w-2.5 h-2.5 text-slate-400" />}
                               </span>
-                              {isLockedSectorField && (
+                              {activeMode === 'edit' ? (
+                                <span className="text-[10px] font-bold text-slate-600 bg-slate-200 px-1.5 py-0.5 rounded border border-slate-300 flex items-center gap-0.5">
+                                  <Lock className="w-2.5 h-2.5" /> ثابت
+                                </span>
+                              ) : isLockedSectorField ? (
                                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
                                   <Lock className="w-2.5 h-2.5" /> قطاعك المخصص
                                 </span>
-                              )}
+                              ) : null}
                             </label>
-                            {isSectorField && user?.role === 'admin' ? (
+                            {isSectorField && user?.role === 'admin' && activeMode === 'add' ? (
                               <select
                                 name={field.csvColumn}
                                 id={`field-${field.csvColumn}`}
@@ -794,7 +894,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                                 onChange={(e) => handleFieldChange(field.csvColumn, e.target.value)}
                                 className="border border-blue-300 bg-white text-slate-800 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 font-medium"
                               >
-                                {['الإسكندرية', 'الساحل الشمالي', 'وسط الدلتا', 'غرب الدلتا'].map((sec) => (
+                                {['الإسكندرية', 'الساحل الشمالي', 'وسط الدلتا', 'غرب الدلتا', 'شرق الدلتا', 'القاهرة الكبرى', 'الجيزة وأكتوبر', 'السويس', 'الإسماعيلية', 'الصعيد'].map((sec) => (
                                   <option key={sec} value={sec}>
                                     {sec}
                                   </option>
@@ -805,14 +905,14 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                                 type="text"
                                 name={field.csvColumn}
                                 id={`field-${field.csvColumn}`}
-                                readOnly={isFieldReadOnly}
-                                disabled={isFieldReadOnly}
+                                readOnly={isFieldFrozen}
+                                disabled={isFieldFrozen}
                                 value={fieldValue}
                                 onChange={(e) => handleFieldChange(field.csvColumn, e.target.value)}
-                                placeholder={isFieldReadOnly ? '—' : field.label}
+                                placeholder={isFieldFrozen ? (fieldValue || '—') : field.label}
                                 className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition ${
-                                  isFieldReadOnly
-                                    ? 'bg-slate-100 text-slate-600 border-slate-300 cursor-not-allowed font-medium'
+                                  isFieldFrozen
+                                    ? 'bg-slate-200/80 text-slate-700 border-slate-300 cursor-not-allowed font-medium select-none shadow-inner'
                                     : 'border-blue-200 bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
                                 }`}
                               />
@@ -829,13 +929,23 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                 <div className="flex items-center justify-between mb-2.5">
                   <div className="flex items-center gap-2">
                     <div className="w-3.5 h-3.5 bg-emerald-600 rounded-sm"></div>
-                    <h3 className="font-bold text-emerald-900 text-base">
-                      2. حالة الموقع والتصنيف (قوائم منسدلة محكومة)
+                    <h3 className="font-bold text-emerald-900 text-base flex items-center gap-2">
+                      2. حالة الموقع والتصنيف والمتابعة التشغيلية
+                      {activeMode === 'edit' && (
+                        <span className="text-[11px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold border border-emerald-300">
+                          متاح لتعديل الحالة التشغيلية
+                        </span>
+                      )}
                     </h3>
                   </div>
-                  {isReadOnly && (
+                  {isReadOnly ? (
                     <span className="text-xs text-amber-700 font-normal">(مشاهدة فقط)</span>
-                  )}
+                  ) : activeMode === 'edit' ? (
+                    <span className="text-[11px] text-slate-600 font-semibold bg-slate-100 px-2.5 py-0.5 rounded border border-slate-300 flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-slate-500" />
+                      الخطة وحالة الموقع ثابتتان • باقي الحقول قابلة للتعديل
+                    </span>
+                  ) : null}
                 </div>
 
                 <div className={`border rounded-xl p-4 ${isReadOnly ? 'bg-slate-50 border-slate-200' : 'bg-emerald-50/50 border-emerald-200'}`}>
@@ -844,27 +954,40 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                       const options = dropdownValues[field.csvColumn] || DEFAULT_FALLBACK_DROPDOWNS[field.csvColumn] || [];
                       const currentValue = formData[field.csvColumn] || '';
 
+                      // Strict Immutability Rule: In edit mode, 'خطة' (Plan) and 'Site Status' (Site Status) are completely locked!
+                      const isFieldFrozenInEdit = activeMode === 'edit' && (
+                        field.csvColumn === 'خطة' ||
+                        field.csvColumn === 'Site Status' ||
+                        isFieldImmutable(field.csvColumn)
+                      );
+                      const isFieldDisabled = isReadOnly || isFieldFrozenInEdit;
+
                       return (
                         <div key={field.csvColumn} className="flex flex-col">
-                          <label className="text-xs font-semibold text-emerald-800 mb-1 flex items-center justify-between">
-                            <span>
+                          <label className="text-xs font-semibold text-slate-800 mb-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1">
                               {field.label}
-                              <span className="text-emerald-500 text-[10px] mr-1">({field.labelEn})</span>
+                              <span className="text-slate-500 text-[10px] mr-1">({field.labelEn})</span>
+                              {isFieldFrozenInEdit && <Lock className="w-3 h-3 text-slate-500" />}
                             </span>
-                            {field.required && !isReadOnly && (
+                            {isFieldFrozenInEdit ? (
+                              <span className="text-[10px] font-bold text-slate-600 bg-slate-200 px-1.5 py-0.5 rounded border border-slate-300 flex items-center gap-0.5">
+                                <Lock className="w-2.5 h-2.5" /> ثابت (غير مسموح بالتعديل)
+                              </span>
+                            ) : field.required && !isReadOnly ? (
                               <span className="text-red-500 font-bold">* مطلوب</span>
-                            )}
+                            ) : null}
                           </label>
 
                           <select
                             name={field.csvColumn}
                             id={`field-${field.csvColumn}`}
-                            disabled={isReadOnly}
+                            disabled={isFieldDisabled}
                             value={currentValue}
                             onChange={(e) => handleFieldChange(field.csvColumn, e.target.value)}
                             className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition ${
-                              isReadOnly
-                                ? 'bg-slate-100 text-slate-600 border-slate-300 cursor-not-allowed'
+                              isFieldDisabled
+                                ? 'bg-slate-200/80 text-slate-700 border-slate-300 cursor-not-allowed font-medium select-none shadow-inner'
                                 : errors[field.csvColumn]
                                 ? 'border-red-400 bg-red-50 focus:ring-2 focus:ring-red-200'
                                 : 'border-emerald-300 bg-white text-slate-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200'

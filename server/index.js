@@ -225,19 +225,28 @@ app.get('/api/users/demo', (req, res) => {
 
 // 2. Data Routes
 
-// GET /api/records — Return all records (Everyone can READ all records)
-// In accordance with requirement: all sectors are visible (Read-Only)
+// GET /api/records — Return records scoped by user sector if restricted
 app.get('/api/records', optionalToken, (req, res) => {
   const db = readDB();
+  const user = req.user;
+  let records = db.records;
+
+  if (user && user.role !== 'admin' && user.sector && user.sector !== 'ALL') {
+    records = records.filter(r => {
+      const sec = r['Exc sector'] || r['Sectore'] || r['Sectores'] || r['Exc Sectores'] || '';
+      return isSectorMatch(user.sector, sec);
+    });
+  }
+
   res.json({
     success: true,
-    count: db.records.length,
-    records: db.records,
+    count: records.length,
+    records,
     metadata: db.metadata,
   });
 });
 
-// GET /api/records/:siteCode — Get a single record by site code (Read-Only for all)
+// GET /api/records/:siteCode — Get a single record by site code
 app.get('/api/records/:siteCode', optionalToken, (req, res) => {
   const db = readDB();
   const siteCode = req.params.siteCode;
@@ -245,13 +254,35 @@ app.get('/api/records/:siteCode', optionalToken, (req, res) => {
   if (!record) {
     return res.status(404).json({ success: false, error: `الموقع "${siteCode}" غير موجود` });
   }
+
+  const user = req.user;
+  if (user && user.role !== 'admin' && user.sector && user.sector !== 'ALL') {
+    const sec = record['Exc sector'] || record['Sectore'] || record['Sectores'] || record['Exc Sectores'] || '';
+    if (!isSectorMatch(user.sector, sec)) {
+      return res.status(403).json({
+        success: false,
+        error: `⛔ غير مصرح: الموقع "${siteCode}" يتبع قطاع (${sec}) ولا يقع ضمن نطاق قطاعك المصرح لك به (${user.sector}).`,
+      });
+    }
+  }
+
   res.json({ success: true, record });
 });
 
-// GET /api/site-codes — Return all unique site codes
-app.get('/api/site-codes', (req, res) => {
+// GET /api/site-codes — Return unique site codes
+app.get('/api/site-codes', optionalToken, (req, res) => {
   const db = readDB();
-  const codes = [...new Set(db.records.map(r => r['site code']).filter(Boolean))].sort();
+  const user = req.user;
+  let records = db.records;
+
+  if (user && user.role !== 'admin' && user.sector && user.sector !== 'ALL') {
+    records = records.filter(r => {
+      const sec = r['Exc sector'] || r['Sectore'] || r['Sectores'] || r['Exc Sectores'] || '';
+      return isSectorMatch(user.sector, sec);
+    });
+  }
+
+  const codes = [...new Set(records.map(r => r['site code']).filter(Boolean))].sort();
   res.json({ success: true, codes });
 });
 
@@ -330,12 +361,29 @@ app.post('/api/records', verifyToken, (req, res) => {
 
   if (existingIdx !== -1 && newRecord._forceUpdate) {
     delete newRecord._forceUpdate;
+    const existing = db.records[existingIdx];
     const updated = {
-      ...db.records[existingIdx],
+      ...existing,
       ...newRecord,
       _updatedAt: new Date().toISOString(),
       _updatedBy: user.username,
     };
+    // Preserve immutable fields on existing record
+    const immutableFields = [
+      'site code', 'Site code', 'site_code',
+      'Exc sector', 'Exc Sectores', 'Sectore', 'قطاع التنفيذ',
+      'Zone', 'Sectores', 'قطاع المناطق',
+      'Exc Zone', 'اداره التنفيذ المختصه', 'الادارة العامة لتنفيذ الشبكات',
+      'المسئولية', 'مسئولية التنفيذ', 'مسؤولية التنفيذ',
+      'Type', 'النوع',
+      'خطة', 'Plan',
+      'Site Status', 'حالة الموقع',
+      'السنترال'
+    ];
+    immutableFields.forEach(f => {
+      if (existing[f] !== undefined) updated[f] = existing[f];
+    });
+
     db.records[existingIdx] = updated;
     db.metadata.lastUpdated = new Date().toISOString();
     writeDB(db);
@@ -380,7 +428,8 @@ app.put('/api/records/:id', verifyToken, (req, res) => {
     return res.status(404).json({ success: false, error: 'السجل غير موجود' });
   }
 
-  const existingSector = db.records[idx]['Exc sector'] || db.records[idx]['Sectore'] || db.records[idx]['Sectores'] || '';
+  const existingRecord = db.records[idx];
+  const existingSector = existingRecord['Exc sector'] || existingRecord['Sectore'] || existingRecord['Sectores'] || '';
   if (!checkSectorEditPermission(user, existingSector)) {
     return res.status(403).json({
       success: false,
@@ -388,9 +437,31 @@ app.put('/api/records/:id', verifyToken, (req, res) => {
     });
   }
 
+  const updatedData = { ...req.body };
+
+  // Strictly protect baseline immutable fields:
+  // (كود الموقع، قطاع التنفيذ، قطاع المناطق، الإدارة العامة لتنفيذ الشبكات، مسؤولية التنفيذ، النوع، الخطة، حالة الموقع)
+  const immutableFields = [
+    'site code', 'Site code', 'site_code',
+    'Exc sector', 'Exc Sectores', 'Sectore', 'قطاع التنفيذ',
+    'Zone', 'Sectores', 'قطاع المناطق',
+    'Exc Zone', 'اداره التنفيذ المختصه', 'الادارة العامة لتنفيذ الشبكات',
+    'المسئولية', 'مسئولية التنفيذ', 'مسؤولية التنفيذ',
+    'Type', 'النوع',
+    'خطة', 'Plan',
+    'Site Status', 'حالة الموقع',
+    'السنترال'
+  ];
+
+  immutableFields.forEach(field => {
+    if (existingRecord[field] !== undefined) {
+      updatedData[field] = existingRecord[field];
+    }
+  });
+
   db.records[idx] = {
-    ...db.records[idx],
-    ...req.body,
+    ...existingRecord,
+    ...updatedData,
     _updatedAt: new Date().toISOString(),
     _updatedBy: user.username,
   };
