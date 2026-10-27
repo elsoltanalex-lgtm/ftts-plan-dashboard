@@ -74,7 +74,7 @@ async function migrate() {
     const sector = resolveCanonicalSector(r);
     const status = normalizeStatus(r['التصنيف'], r['الملاحظات']);
     const generalAdmin = cleanStr(r['الادارة العامة لتنفيذ الشبكات']) || cleanStr(r['قطاع التنفيذ']) || 'الإدارة العامة لتنفيذ الشبكات';
-    const competentAdmin = cleanStr(r['قطاع المناطق']) || cleanStr(r['مسئولية التنفيذ']) || 'إدارة التنفيذ والمسارات';
+    const competentAdmin = cleanStr(r['قطاع المناطق']) || (generalAdmin.includes('القاهرة') ? 'مناطق القاهرة الكبرى' : 'إدارة التنفيذ والمسارات');
     const central = cleanStr(r['قطاع المناطق']) || cleanStr(r['الادارة العامة لتنفيذ الشبكات']) || 'سنترال رئيسي';
     const classification = type || 'FTTS Rollout';
     const obstacleReason = cleanStr(r['اسباب التعّذر']) || ((status === 'معوقات' || status === 'متعثرات') && cleanStr(r['الملاحظات']) ? cleanStr(r['الملاحظات']).slice(0, 80) : 'لا يوجد تعذر');
@@ -165,7 +165,11 @@ async function migrate() {
     };
   });
 
-  // 3. Write to server/data/db.json
+  // 3. Write to server/data/db.json and sync server/data/We_FTTS_Report.xlsx
+  const destExcelPath = path.join(process.cwd(), 'server', 'data', 'We_FTTS_Report.xlsx');
+  fs.copyFileSync(excelPath, destExcelPath);
+  console.log(`Synchronized master Excel file to ${destExcelPath}`);
+
   const dbData = {
     records: sbRows.map(r => r.data),
     codes: Array.from(new Set(siteRecords.map(s => s.siteCode))).sort(),
