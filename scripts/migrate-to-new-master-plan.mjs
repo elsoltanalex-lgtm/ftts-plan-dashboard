@@ -63,14 +63,10 @@ async function migrate() {
   const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
   console.log(`Total rows in Excel: ${rawRows.length}`);
 
-  // 1. Build SiteRecord[] objects (for dashboard and preloadedProjects.ts)
-  const siteRecords = rawRows.map((r, i) => {
+  // 1. Build WE SiteRecord[] objects (All 1440 sites belong to WE)
+  const weSiteRecords = rawRows.map((r, i) => {
     const siteCode = cleanStr(r[' Site code']) || `SITE-${i + 1}`;
     const type = cleanStr(r['Type']);
-    let company = 'WE';
-    if (type.includes('VDF')) company = 'Vodafone';
-    else if (type.includes('ORG')) company = 'Orange';
-
     const sector = resolveCanonicalSector(r);
     const status = normalizeStatus(r['التصنيف'], r['الملاحظات']);
     const generalAdmin = cleanStr(r['الادارة العامة لتنفيذ الشبكات']) || cleanStr(r['قطاع التنفيذ']) || 'الإدارة العامة لتنفيذ الشبكات';
@@ -90,10 +86,10 @@ async function migrate() {
     else if (status === 'جاري المعاينة') progressPercent = 20;
 
     return {
-      id: `FTTS-MASTER-${i + 1}`,
+      id: `FTTS-WE-${i + 1}`,
       siteCode,
       siteName: `موقع ${siteCode} - ${central}`,
-      company,
+      company: 'WE',
       status,
       linksCount: 1,
       sector,
@@ -108,6 +104,28 @@ async function migrate() {
       notes: cleanStr(r['الملاحظات']) || cleanStr(r['اسباب التعّذر']) || cleanStr(r['الجهة المطلوب الدعم منها']) || '',
     };
   });
+
+  // 2. Derive Vodafone sites from Sharing (VDF) - 20 sites
+  const vodafoneSiteRecords = weSiteRecords
+    .filter(s => s.classification.includes('VDF'))
+    .map((s, idx) => ({
+      ...s,
+      id: `FTTS-VDF-${idx + 1}`,
+      company: 'Vodafone',
+    }));
+
+  // 3. Derive Orange sites from Sharing (ORG) - 48 sites
+  const orangeSiteRecords = weSiteRecords
+    .filter(s => s.classification.includes('ORG'))
+    .map((s, idx) => ({
+      ...s,
+      id: `FTTS-ORG-${idx + 1}`,
+      company: 'Orange',
+    }));
+
+  // Combined FTTS Plan: Total = WE (1440) + Vodafone (20) + Orange (48) = 1508
+  const siteRecords = [...weSiteRecords, ...vodafoneSiteRecords, ...orangeSiteRecords];
+  console.log(`Aggregation summary: WE=${weSiteRecords.length}, Vodafone=${vodafoneSiteRecords.length}, Orange=${orangeSiteRecords.length}, Total FTTS=${siteRecords.length}`);
 
   // 2. Build Supabase payload rows and db.json objects
   const sbRows = rawRows.map((r, i) => {
@@ -189,20 +207,23 @@ async function migrate() {
 
   const etahaPart = oldContent.slice(oldContent.indexOf(etahaMarker));
 
-  const newPreloadedContent = `// Pre-loaded datasets generated from official WE FTTS master plan:
-// Copy of Report We 14-10-2026.xlsx (1440 Sites - All Operators: WE, Vodafone, Orange)
+  const newPreloadedContent = `// Pre-loaded datasets generated from official FTTS master plan:
+// WE Master Plan: ${weSiteRecords.length} Sites
+// Vodafone Sharing: ${vodafoneSiteRecords.length} Sites
+// Orange Sharing: ${orangeSiteRecords.length} Sites
+// Total FTTS Plan = WE (${weSiteRecords.length}) + Vodafone (${vodafoneSiteRecords.length}) + Orange (${orangeSiteRecords.length}) = ${siteRecords.length} Sites
 
 import type { SiteRecord } from '../types/dashboard';
 
 export const FTTS_EXCEL_SITES: SiteRecord[] = ${JSON.stringify(siteRecords, null, 2)};
 
-export const WE_EXCEL_SITES: SiteRecord[] = FTTS_EXCEL_SITES;
+export const WE_EXCEL_SITES: SiteRecord[] = ${JSON.stringify(weSiteRecords, null, 2)};
 
 ${etahaPart}
 `;
 
   fs.writeFileSync(preloadedPath, newPreloadedContent, 'utf-8');
-  console.log('src/data/preloadedProjects.ts updated successfully with 1440 sites!');
+  console.log(`src/data/preloadedProjects.ts updated: WE=${weSiteRecords.length}, FTTS Total=${siteRecords.length}`);
 
   // 5. Seed Supabase public.we_records table
   console.log('Seeding Supabase public.we_records table...');

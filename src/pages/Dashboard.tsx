@@ -78,9 +78,7 @@ function mapWeRecordToSiteRecord(r: WeRecord, index = 0): SiteRecord {
   }
 
   const type = String(r['Type'] || '');
-  let company: 'WE' | 'Vodafone' | 'Orange' = 'WE';
-  if (type.includes('VDF')) company = 'Vodafone';
-  else if (type.includes('ORG')) company = 'Orange';
+  const company: 'WE' | 'Vodafone' | 'Orange' = 'WE';
 
   const central = r['السنترال'] || r['Zone'] || r['قطاع المناطق'] || r['اداره التنفيذ المختصه'] || 'سنترال رئيسي';
   const rawSectore = r['Sectore'] || r['Sectores'] || r['Exc sector'] || r['Zone'] || '';
@@ -181,9 +179,37 @@ export const Dashboard: React.FC = () => {
     return WE_EXCEL_SITES;
   }, [weCentralRecords]);
 
-  // Combined FTTS dataset: Complete master plan (All 1440 sites: WE, Vodafone, Orange)
+  // Combined FTTS dataset: WE (1440 sites) + Vodafone sharing + Orange sharing = Total FTTS Plan
   const combinedFttsSites = useMemo<SiteRecord[]>(() => {
-    return liveWeSites;
+    // 1. All WE sites (1440 sites from master plan)
+    const weSites = liveWeSites.map((s) => ({ ...s, company: 'WE' as const }));
+
+    // 2. Derive Vodafone sites from Sharing (VDF)
+    const vodafoneSites = liveWeSites
+      .filter((s) => {
+        const cls = String(s.classification || '');
+        return cls.includes('VDF');
+      })
+      .map((s, idx) => ({
+        ...s,
+        id: `FTTS-VDF-${s.siteCode || idx + 1}`,
+        company: 'Vodafone' as const,
+      }));
+
+    // 3. Derive Orange sites from Sharing (ORG)
+    const orangeSites = liveWeSites
+      .filter((s) => {
+        const cls = String(s.classification || '');
+        return cls.includes('ORG');
+      })
+      .map((s, idx) => ({
+        ...s,
+        id: `FTTS-ORG-${s.siteCode || idx + 1}`,
+        company: 'Orange' as const,
+      }));
+
+    // Total FTTS Plan = WE (1440) + Vodafone (20) + Orange (48) = 1508
+    return [...weSites, ...vodafoneSites, ...orangeSites];
   }, [liveWeSites]);
 
   const [filters, setFilters] = useState<FilterState>(initialFilters);
