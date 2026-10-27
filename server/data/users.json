@@ -1,0 +1,171 @@
+[
+  {
+    "id": "user_admin",
+    "username": "admin",
+    "displayName": "الإدارة العامة المركزية",
+    "passwordHash": "$2b$10$apX5ZRph5EX18Z5pkcjUEu1ws2gH9IJza1rRJ0qptbFWInJvfYJf2",
+    "plainPassword": "Admin@2026",
+    "sector": "ALL",
+    "role": "admin",
+    "permissions": [
+      "view_all",
+      "edit_all",
+      "delete_all",
+      "export_all"
+    ]
+  },
+  {
+    "id": "user_alex_coast",
+    "username": "alex_coast",
+    "displayName": "قطاع إسكندرية والساحل",
+    "passwordHash": "$2b$10$apX5ZRph5EX18Z5pkcjUEurVmTRjVywt1ofr8V3qi7UAYzbJ7uPCG",
+    "plainPassword": "AlexCoast@2026",
+    "sector": "قطاع إسكندرية والساحل",
+    "role": "editor",
+    "permissions": [
+      "view_all",
+      "edit_own_sector",
+      "export_all"
+    ]
+  },
+  {
+    "id": "user_alexandria_alias",
+    "username": "alexandria",
+    "displayName": "قطاع إسكندرية والساحل (اسم مستخدم إضافي)",
+    "passwordHash": "$2b$10$apX5ZRph5EX18Z5pkcjUEuwafY1fsJylc9eIbsk9TWHStnLzc0/0W",
+    "plainPassword": "Alex@2026",
+    "sector": "قطاع إسكندرية والساحل",
+    "role": "editor",
+    "permissions": [
+      "view_all",
+      "edit_own_sector",
+      "export_all"
+    ]
+  },
+  {
+    "id": "user_north_coast_alias",
+    "username": "north_coast_matrouh",
+    "displayName": "قطاع إسكندرية والساحل (اسم مستخدم إضافي)",
+    "passwordHash": "$2b$10$apX5ZRph5EX18Z5pkcjUEubioiw3WJO4w4SYQajmsIXPbe23N7VI.",
+    "plainPassword": "CoastMatrouh@2026",
+    "sector": "قطاع إسكندرية والساحل",
+    "role": "editor",
+    "permissions": [
+      "view_all",
+      "edit_own_sector",
+      "export_all"
+    ]
+  },
+  {
+    "id": "user_east_delta",
+    "username": "east_delta",
+    "displayName": "قطاع شرق الدلتا",
+    "passwordHash": "$2b$10$apX5ZRph5EX18Z5pkcjUEuQ4NihUzX6Le7U9QhG8CSjGUNKSAIbPy",
+    "plainPassword": "EastDelta@2026",
+    "sector": "قطاع شرق الدلتا",
+    "role": "editor",
+    "permissions": [
+      "view_all",
+      "edit_own_sector",
+      "export_all"
+    ]
+  },
+  {
+    "id": "user_west_delta",
+    "username": "west_delta",
+    "displayName": "قطاع مناطق غرب الدلتا",
+    "passwordHash": "$2b$10$apX5ZRph5EX18Z5pkcjUEuI.rE0RJ2eXoRHETHNaeqvxX2/bRpSay",
+    "plainPassword": "West@2026",
+    "sector": "قطاع مناطق غرب الدلتا",
+    "role": "editor",
+    "permissions": [
+      "view_all",
+      "edit_own_sector",
+      "export_all"
+    ]
+  },
+  {
+    "id": "user_central_delta",
+    "username": "central_delta",
+    "displayName": "قطاع مناطق وسط الدلتا",
+    "passwordHash": "$2b$10$apX5ZRph5EX18Z5pkcjUEudwaeoXvM6gcuPF1ILdU9lg8pwo1co3q",
+    "plainPassword": "Delta@2026",
+    "sector": "قطاع مناطق وسط الدلتا",
+    "role": "editor",
+    "permissions": [
+      "view_all",
+      "edit_own_sector",
+      "export_all"
+    ]
+  },
+  {
+    "id": "user_suez",
+    "username": "suez",
+    "displayName": "قطاع مناطق السويس",
+    "passwordHash": "$2b$10$apX5ZRph5EX18Z5pkcjUEuvdpBDyh1Ag5OyQR1zlgSkL28ToEW/.m",
+    "plainPassword": "Suez@2026",
+    "sector": "قطاع مناطق السويس",
+    "role": "editor",
+    "permissions": [
+      "view_all",
+      "edit_own_sector",
+      "export_all"
+    ]
+  },
+  {
+    "id": "user_ismailia",
+    "username": "ismailia",
+    "displayName": "قطاع مناطق الإسماعيلية",
+    "passwordHash": "$2b$10$apX5ZRph5EX18Z5pkcjUEuBbhIG7R2w5JqtvZ1s60w4jiX0H2OXXi",
+    "plainPassword": "Ismailia@2026",
+    "sector": "قطاع مناطق الإسماعيلية",
+    "role": "editor",
+    "permissions": [
+      "view_all",
+      "edit_own_sector",
+      "export_all"
+    ]
+  },
+  {
+    "id": "user_cairo",
+    "username": "cairo",
+    "displayName": "قطاع مناطق القاهرة الكبرى",
+    "passwordHash": "$2b$10$apX5ZRph5EX18Z5pkcjUEu1tAzTEYNyBZoYQocVPtkyg1rMpPxQea",
+    "plainPassword": "Cairo@2026",
+    "sector": "قطاع مناطق القاهرة الكبرى",
+    "role": "editor",
+    "permissions": [
+      "view_all",
+      "edit_own_sector",
+      "export_all"
+    ]
+  },
+  {
+    "id": "user_giza_october",
+    "username": "giza_october",
+    "displayName": "قطاع مناطق الجيزة وأكتوبر",
+    "passwordHash": "$2b$10$apX5ZRph5EX18Z5pkcjUEuaZDLUVSnquDJ8iXD1Qb5JUnHZarqVGu",
+    "plainPassword": "Giza@2026",
+    "sector": "قطاع مناطق الجيزة وأكتوبر",
+    "role": "editor",
+    "permissions": [
+      "view_all",
+      "edit_own_sector",
+      "export_all"
+    ]
+  },
+  {
+    "id": "user_upper_egypt",
+    "username": "upper_egypt",
+    "displayName": "قطاع مناطق الصعيد",
+    "passwordHash": "$2b$10$apX5ZRph5EX18Z5pkcjUEuFms7FT/mP3krCCvao5dU/QIlGLV4KpW",
+    "plainPassword": "Upper@2026",
+    "sector": "قطاع مناطق الصعيد",
+    "role": "editor",
+    "permissions": [
+      "view_all",
+      "edit_own_sector",
+      "export_all"
+    ]
+  }
+]
