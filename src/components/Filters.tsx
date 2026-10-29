@@ -1,31 +1,30 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 
 
-import { 
-  Filter, 
-  ChevronDown, 
-  Search, 
-  X, 
-  RotateCcw, 
-  Check, 
-  MapPin, 
-  Building, 
-  Briefcase, 
-  Layers, 
-  Tag, 
+import {
+  Filter,
+  ChevronDown,
+  Search,
+  X,
+  RotateCcw,
+  Check,
+  MapPin,
+  Building,
+  Briefcase,
+  Layers,
+  Tag,
   AlertCircle,
   Lock
 } from 'lucide-react';
 import type { FilterState, SiteRecord } from '../types/dashboard';
 import { useAuth } from '../context/AuthContext';
 import { isRecordInSector, toCanonicalSector } from '../utils/sectorPermissions';
-import { 
-  SECTORS, 
-  GENERAL_ADMINS, 
-  COMPETENT_ADMINS, 
-  CENTRALS, 
-  CLASSIFICATIONS, 
-  OBSTACLE_REASONS 
+import {
+  SECTORS,
+  GENERAL_ADMINS,
+  COMPETENT_ADMINS,
+  CLASSIFICATIONS,
+  OBSTACLE_REASONS
 } from '../data/dashboardData';
 
 interface FiltersProps {
@@ -132,13 +131,12 @@ const SingleFilterDropdown: React.FC<FilterDropdownProps> = ({
         disabled={disabled}
         onClick={() => !disabled && setIsOpen(!isOpen)}
         title={disabled ? (lockedNote || 'نطاق مقيد بحسب صلاحيات حسابك') : undefined}
-        className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xl border transition-all text-right shadow-2xs ${
-          disabled
+        className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xl border transition-all text-right shadow-2xs ${disabled
             ? 'bg-slate-100/90 border-slate-300 text-slate-600 font-semibold cursor-not-allowed opacity-90'
             : isSelected
-            ? 'bg-sky-50 border-sky-400 text-sky-900 font-semibold ring-1 ring-sky-300 cursor-pointer'
-            : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50/50 cursor-pointer'
-        }`}
+              ? 'bg-sky-50 border-sky-400 text-sky-900 font-semibold ring-1 ring-sky-300 cursor-pointer'
+              : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50/50 cursor-pointer'
+          }`}
       >
         <span className="truncate flex-1">
           {isSelected ? value : `الكل (${labelEn})`}
@@ -147,9 +145,8 @@ const SingleFilterDropdown: React.FC<FilterDropdownProps> = ({
           <Lock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
         ) : (
           <ChevronDown
-            className={`w-4 h-4 text-slate-400 transition-transform duration-200 flex-shrink-0 ${
-              isOpen ? 'rotate-180 text-sky-600' : ''
-            }`}
+            className={`w-4 h-4 text-slate-400 transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180 text-sky-600' : ''
+              }`}
           />
         )}
       </button>
@@ -179,11 +176,10 @@ const SingleFilterDropdown: React.FC<FilterDropdownProps> = ({
                 setIsOpen(false);
                 setSearchTerm('');
               }}
-              className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
-                !value
+              className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${!value
                   ? 'bg-sky-100 text-sky-900 font-bold'
                   : 'hover:bg-slate-100 text-slate-700'
-              }`}
+                }`}
             >
               <div className="flex items-center gap-1.5">
                 {!value && <Check className="w-3 h-3 text-sky-700" />}
@@ -207,22 +203,20 @@ const SingleFilterDropdown: React.FC<FilterDropdownProps> = ({
                     setIsOpen(false);
                     setSearchTerm('');
                   }}
-                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
-                    isOptionActive
+                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${isOptionActive
                       ? 'bg-sky-100 text-sky-900 font-bold'
                       : 'hover:bg-slate-100 text-slate-700'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-1.5 truncate">
                     {isOptionActive && <Check className="w-3 h-3 text-sky-700 flex-shrink-0" />}
                     <span className="truncate">{opt}</span>
                   </div>
                   <span
-                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                      isOptionActive
+                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isOptionActive
                         ? 'bg-sky-200/60 text-sky-900 font-bold'
                         : 'bg-slate-100 text-slate-500'
-                    }`}
+                      }`}
                   >
                     {count}
                   </span>
@@ -255,7 +249,6 @@ export const Filters: React.FC<FiltersProps> = ({
     !isSectorLocked && filters.sector,
     filters.generalAdmin,
     filters.competentAdmin,
-    filters.central,
     filters.classification,
     filters.obstacleReason,
   ].filter(Boolean).length;
@@ -275,11 +268,6 @@ export const Filters: React.FC<FiltersProps> = ({
   const dynamicCompetentAdmins = useMemo(() => {
     const list = Array.from(new Set(sitesData.map((s) => s.competentAdmin).filter(Boolean)));
     return list.length > 0 ? list : COMPETENT_ADMINS;
-  }, [sitesData]);
-
-  const dynamicCentrals = useMemo(() => {
-    const list = Array.from(new Set(sitesData.map((s) => s.central).filter(Boolean)));
-    return list.length > 0 ? list : CENTRALS;
   }, [sitesData]);
 
   const dynamicClassifications = useMemo(() => {
@@ -314,7 +302,7 @@ export const Filters: React.FC<FiltersProps> = ({
           <button
             onClick={onResetFilters}
             id="btn-reset-bottom-filters"
-            className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer"
           >
             <RotateCcw className="w-3 h-3" />
             <span>إلغاء تصفية الفلاتر ({activeCount})</span>
@@ -322,8 +310,8 @@ export const Filters: React.FC<FiltersProps> = ({
         )}
       </div>
 
-      {/* Grid of the 6 Slicers requested */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+      {/* Grid of the 5 Slicers (Central removed, Classification renamed to Type) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
         {/* 1. القطاع */}
         <SingleFilterDropdown
           id="filter-sector"
@@ -365,24 +353,11 @@ export const Filters: React.FC<FiltersProps> = ({
           filterKey="competentAdmin"
         />
 
-        {/* 4. الاسترال */}
-        <SingleFilterDropdown
-          id="filter-central"
-          label="الاسترال (السنترال)"
-          labelEn="Central / Exchange"
-          icon={Layers}
-          value={filters.central}
-          options={dynamicCentrals}
-          onChange={(val) => onChangeFilter('central', val)}
-          sitesData={sitesData}
-          filterKey="central"
-        />
-
-        {/* 5. التصنيف */}
+        {/* 4. Type (renamed from التصنيف) */}
         <SingleFilterDropdown
           id="filter-classification"
-          label="التصنيف"
-          labelEn="Classification"
+          label="Type"
+          labelEn="Type"
           icon={Tag}
           value={filters.classification}
           options={dynamicClassifications}
@@ -391,7 +366,7 @@ export const Filters: React.FC<FiltersProps> = ({
           filterKey="classification"
         />
 
-        {/* 6. أسباب التعذر */}
+        {/* 5. أسباب التعذر */}
         <SingleFilterDropdown
           id="filter-obstacle-reason"
           label="أسباب التعذر"

@@ -299,3 +299,65 @@ export const getFieldByColumn = (col: string) => FIELD_CONFIG.find(f => f.csvCol
 
 // Type for a WE record using the CSV column names as keys
 export type WeRecord = Record<string, string>;
+
+// ──────────────────────────────────────────────────────
+// Approved Classifications Specification
+// ──────────────────────────────────────────────────────
+export const APPROVED_CLASSIFICATIONS = [
+  'تم الانتهاء',
+  'تم التشغيل فايبر',
+  'جاري المعاينة',
+  'جاري تصاريح',
+  'جاري كهربي',
+  'جاري مدني',
+  'متعذر',
+  'معوقات',
+] as const;
+
+export type ApprovedClassification = typeof APPROVED_CLASSIFICATIONS[number];
+
+/**
+ * Normalizes any classification string according to business rules:
+ * 1. Cancel "تم مدني" completely -> convert to "جاري كهربي"
+ * 2. Cancel "جاري العمل" completely -> convert to "جاري مدني"
+ * 3. Enforce the 8 approved classifications
+ */
+export function normalizeClassification(raw?: string | null): string {
+  if (!raw) return 'جاري مدني';
+  const trimmed = raw.trim();
+
+  // Rule 1: تم مدني -> جاري كهربي
+  if (trimmed === 'تم مدني' || trimmed === 'تم مدنى' || trimmed.includes('تم مدن')) {
+    return 'جاري كهربي';
+  }
+
+  // Rule 2: جاري العمل -> جاري مدني
+  if (trimmed.includes('كهرب')) {
+    return 'جاري كهربي';
+  }
+  if (
+    trimmed === 'جاري العمل' ||
+    trimmed === 'جارى العمل' ||
+    trimmed === 'جاري العمل مدني' ||
+    trimmed === 'جارى مدنى' ||
+    trimmed === 'جارى مدني'
+  ) {
+    return 'جاري مدني';
+  }
+
+  // Variations to approved names
+  if (trimmed === 'تم التشغيل فيبر' || trimmed === 'تم التشغيل') {
+    return 'تم التشغيل فايبر';
+  }
+  if (trimmed === 'جارى المعاينة') {
+    return 'جاري المعاينة';
+  }
+  if (trimmed === 'جارى تصاريح') {
+    return 'جاري تصاريح';
+  }
+  if (trimmed === 'متعثر' || trimmed === 'متعثرات') {
+    return 'متعذر';
+  }
+
+  return trimmed;
+}

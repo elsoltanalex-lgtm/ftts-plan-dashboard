@@ -460,11 +460,31 @@ app.put('/api/records/:id', verifyToken, (req, res) => {
     'السنترال'
   ];
 
-  immutableFields.forEach(field => {
-    if (existingRecord[field] !== undefined) {
-      updatedData[field] = existingRecord[field];
+  if (user.role !== 'admin') {
+    immutableFields.forEach(field => {
+      if (existingRecord[field] !== undefined) {
+        updatedData[field] = existingRecord[field];
+      }
+    });
+  }
+
+  // Normalize classification to approved choices
+  if (updatedData['التصنيف']) {
+    const rawT = updatedData['التصنيف'].toString().trim();
+    if (rawT === 'تم مدنى' || rawT === 'تم مدني' || rawT.includes('تم مدن')) {
+      updatedData['التصنيف'] = 'جاري كهربي';
+    } else if (rawT === 'جارى العمل' || rawT === 'جاري العمل' || rawT === 'جاري العمل مدني') {
+      updatedData['التصنيف'] = 'جاري مدني';
+    } else if (rawT.includes('كهرب')) {
+      updatedData['التصنيف'] = 'جاري كهربي';
+    } else if (rawT === 'جارى المعاينة') {
+      updatedData['التصنيف'] = 'جاري المعاينة';
+    } else if (rawT === 'جارى تصاريح') {
+      updatedData['التصنيف'] = 'جاري تصاريح';
+    } else if (rawT === 'تم التشغيل فيبر' || rawT === 'تم التشغيل') {
+      updatedData['التصنيف'] = 'تم التشغيل فايبر';
     }
-  });
+  }
 
   db.records[idx] = {
     ...existingRecord,

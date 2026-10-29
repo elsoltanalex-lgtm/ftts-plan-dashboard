@@ -463,6 +463,7 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
                 <th className="p-3">القطاع والمنطقة</th>
                 <th className="p-3">السنترال / إدارة التنفيذ</th>
                 <th className="p-3">أسباب التعذر / المعوقات</th>
+                <th className="p-3">الملاحظات</th>
                 <th className="p-3">التاريخ المتوقع</th>
                 <th className="p-3 w-28 text-center">الإجراءات</th>
               </tr>
@@ -470,7 +471,7 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
             <tbody className="divide-y divide-slate-100">
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-12 text-center text-slate-400">
+                  <td colSpan={10} className="p-12 text-center text-slate-400">
                     <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                     لا توجد سجلات تطابق البحث أو الفلتر المحدد
                   </td>
@@ -548,6 +549,9 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
                       </td>
                       <td className="p-3 text-slate-500 max-w-[180px] truncate" title={obstacle}>
                         {obstacle || 'لا يوجد'}
+                      </td>
+                      <td className="p-3 text-slate-600 max-w-[200px] truncate" title={r['الملاحظات'] || ''}>
+                        {r['الملاحظات'] || '---'}
                       </td>
                       <td className="p-3 text-slate-500 font-mono text-[11px]">
                         {expectedDate || '---'}

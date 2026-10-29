@@ -59,6 +59,41 @@ export const STATUS_CONFIG: Record<
     border: '#fcd34d',
     textColor: '#b45309',
   },
+  'جاري مدني': {
+    en: 'Civil Work in Progress',
+    color: '#4f46e5', // Indigo
+    bgLight: '#e0e7ff',
+    border: '#818cf8',
+    textColor: '#3730a3',
+  },
+  'جاري كهربي': {
+    en: 'Electrical Work in Progress',
+    color: '#d97706', // Amber Gold
+    bgLight: '#fef3c7',
+    border: '#fcd34d',
+    textColor: '#b45309',
+  },
+  'تم الانتهاء': {
+    en: 'Completed',
+    color: '#16a34a', // Emerald Green
+    bgLight: '#dcfce7',
+    border: '#4ade80',
+    textColor: '#15803d',
+  },
+  'تم التشغيل فايبر': {
+    en: 'Fiber Operational',
+    color: '#059669', // Emerald
+    bgLight: '#d1fae5',
+    border: '#34d399',
+    textColor: '#047857',
+  },
+  'متعذر': {
+    en: 'Stalled / Stumbled',
+    color: '#dc2626', // Crimson Red
+    bgLight: '#fee2e2',
+    border: '#f87171',
+    textColor: '#b91c1c',
+  },
 };
 
 // Fallback palette for any unexpected statuses in uploaded Excel sheets

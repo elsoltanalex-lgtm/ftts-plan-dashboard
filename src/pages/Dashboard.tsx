@@ -19,10 +19,11 @@ import { ShieldCheck, Building2, Eye, LogIn, Lock, LogOut } from 'lucide-react';
 import { isRecordInSector, toCanonicalSector } from '../utils/sectorPermissions';
 import { useWeRecords, useWeSiteCodes, exportToCSV } from '../hooks/useWeAPI';
 import type { WeRecord } from '../config/fieldConfig';
+import { normalizeClassification } from '../config/fieldConfig';
 
 
-import { 
-  calculateStatusSummaries 
+import {
+  calculateStatusSummaries
 } from '../data/dashboardData';
 import {
   FTTS_EXCEL_SITES,
@@ -30,8 +31,8 @@ import {
   ETAHA_EXCEL_SITES,
   TAHAWOL_EXCEL_SITES,
 } from '../data/preloadedProjects';
-import type { 
-  FilterState, 
+import type {
+  FilterState,
   KpiData,
   SiteRecord,
   StatusType,
@@ -56,12 +57,12 @@ function mapWeRecordToSiteRecord(r: WeRecord, index = 0): SiteRecord {
   const siteCode = r['site code'] || (r as any).site_code || `SITE-${index + 1}`;
   const rawStatus = r['Site Status'] || '';
   const rawTasneef = r['التصنيف'] || '';
-  
+
   let status: StatusType = 'جاري المعاينة';
   const ss = String(rawStatus).toUpperCase();
-  const tasneef = String(rawTasneef);
+  const tasneef = normalizeClassification(rawTasneef);
 
-  if (tasneef.includes('انتهاء') || tasneef.includes('تشغيل فيبر') || tasneef.includes('تسليم')) {
+  if (tasneef.includes('انتهاء') || tasneef.includes('تشغيل فايبر') || tasneef.includes('تشغيل فيبر') || tasneef.includes('تسليم')) {
     status = 'تم التسليم';
   } else if (tasneef.includes('تصاريح') || ss.includes('RDT') || tasneef.includes('طلب استخراج')) {
     status = 'جاري تصاريح';
@@ -86,14 +87,14 @@ function mapWeRecordToSiteRecord(r: WeRecord, index = 0): SiteRecord {
 
   const generalAdmin = r['اداره التنفيذ المختصه'] || r['Exc Zone'] || r['الادارة العامة لتنفيذ الشبكات'] || 'الإدارة العامة لتنفيذ الشبكات';
   const competentAdmin = r['Zone'] || r['قطاع المناطق'] || r['مسئولية التنفيذ'] || 'إدارة التنفيذ والمسارات';
-  const classification = type || r['التصنيف'] || 'FTTS Rollout';
+  const classification = type || tasneef || 'FTTS Rollout';
   const obstacleReason = r['اسباب التعذر'] || r['الملاحظات'] || 'لا يوجد تعذر';
   const expectedDate = r['خطة'] ? `${r['خطة']}-12-31` : (r['التاريخ المتوقع للانتهاء'] || '2026-12-31');
 
   let progressPercent = 25;
   if (status === 'تم التسليم') progressPercent = 100;
-  else if (status === 'جاري العمل مدني') progressPercent = tasneef.includes('تم مدنى') ? 80 : 60;
-  else if (status === 'جاري العمل كهربى') progressPercent = 70;
+  else if (status === 'جاري العمل مدني' || status === 'جاري مدني') progressPercent = 60;
+  else if (status === 'جاري العمل كهربى' || status === 'جاري كهربي') progressPercent = 75;
   else if (status === 'جاري تصاريح') progressPercent = 40;
   else if (status === 'معوقات') progressPercent = 30;
   else if (status === 'متعثرات') progressPercent = 15;
@@ -139,18 +140,18 @@ export const Dashboard: React.FC = () => {
   const [weModalMode, setWeModalMode] = useState<'add' | 'edit'>('edit');
 
   // Live WE records and site codes from Supabase cloud database
-  const { 
-    records: weCentralRecords, 
-    loading: weRecordsLoading, 
-    refetch: refetchWeRecords, 
+  const {
+    records: weCentralRecords,
+    loading: weRecordsLoading,
+    refetch: refetchWeRecords,
     updateOrAddRecordLocally,
     removeRecordLocally: _removeRecordLocally
   } = useWeRecords();
-  const { 
-    codes: weCentralCodes, 
-    loading: weCodesLoading, 
-    refetch: refetchWeCodes, 
-    addCodeLocally 
+  const {
+    codes: weCentralCodes,
+    loading: weCodesLoading,
+    refetch: refetchWeCodes,
+    addCodeLocally
   } = useWeSiteCodes();
 
   // Instant handler for adding/editing records with immediate local state reflection
@@ -352,8 +353,8 @@ export const Dashboard: React.FC = () => {
     const obstaclesCount = filteredSites.filter((s) => s.status === 'معوقات').length;
     const stalledCount = filteredSites.filter((s) => s.status === 'متعثرات').length;
     const inProgressSites = totalSites - completedSites;
-    const completionRate = totalSites > 0 
-      ? Number(((completedSites / totalSites) * 100).toFixed(1)) 
+    const completionRate = totalSites > 0
+      ? Number(((completedSites / totalSites) * 100).toFixed(1))
       : 0;
 
     return {
@@ -527,7 +528,6 @@ export const Dashboard: React.FC = () => {
     if (filters.sector) count++;
     if (filters.generalAdmin) count++;
     if (filters.competentAdmin) count++;
-    if (filters.central) count++;
     if (filters.classification) count++;
     if (filters.obstacleReason) count++;
     return count;
@@ -761,76 +761,76 @@ export const Dashboard: React.FC = () => {
               activeScope === 'FTTS'
                 ? 'مشغلو شبكات المحمول (ftts.xlsx + We.xlsx)'
                 : activeScope === 'ETAHA'
-                ? 'تصنيف الجهات والعملاء (الاتاحه .xlsx)'
-                : activeScope === 'TAHAWOL'
-                ? 'الوزارات والهيئات الحكومية (بيان التحول الرقمى.xlsx)'
-                : 'تحديد المشغل / الكيان'
+                  ? 'تصنيف الجهات والعملاء (الاتاحه .xlsx)'
+                  : activeScope === 'TAHAWOL'
+                    ? 'الوزارات والهيئات الحكومية (بيان التحول الرقمى.xlsx)'
+                    : 'تحديد المشغل / الكيان'
             }
             subtitle={
               activeScope === 'FTTS'
                 ? 'انقر على Vodafone أو Orange لعرض ftts.xlsx أو WE لعرض We.xlsx'
                 : activeScope === 'ETAHA'
-                ? 'تصفية مواقع وفروع الإتاحة بحسب القطاع المستفيد'
-                : 'تصفية مواقع التحول الرقمي بحسب الوزارة المعنية'
+                  ? 'تصفية مواقع وفروع الإتاحة بحسب القطاع المستفيد'
+                  : 'تصفية مواقع التحول الرقمي بحسب الوزارة المعنية'
             }
             customCards={customScopeCards}
             stats={companyStats}
           />
           {/* WE Action Buttons */}
           {filters.company === 'WE' && (
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium text-sm flex items-center gap-1.5"
-              onClick={() => setIsWeAnalysisOpen(true)}
-            >
-              📊 عرض تحليل WE
-            </button>
-            <button
-              className="px-4 py-2 bg-blue-800 text-white rounded hover:bg-blue-900 font-medium text-sm flex items-center gap-1.5 cursor-pointer shadow-sm transition"
-              onClick={() => {
-                setEditingSiteCode(undefined);
-                setEditingRecord(null);
-                setWeModalMode(user?.role === 'admin' ? 'add' : 'edit');
-                setIsWeAddDataOpen(true);
-              }}
-              disabled={weCodesLoading}
-              title={user?.role === 'admin' ? 'إضافة موقع جديد أو تعديل موقع مسجل' : 'تعديل وتحديث بيانات المواقع المسجلة التابعة لقطاعك'}
-            >
-              {weCodesLoading
-                ? '⏳ تحميل...'
-                : user?.role === 'admin'
-                ? '➕ إضافة موقع جديد / ✏️ تعديل'
-                : '✏️ تعديل بيانات مواقع قطاعك'}
-            </button>
-            <button
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-medium text-sm flex items-center gap-1.5"
-              onClick={() => exportToCSV()}
-              title="تصدير قاعدة البيانات المركزية كاملة إلى CSV"
-            >
-              📥 تصدير البيانات المركزية (CSV)
-            </button>
-            <button
-              className="px-4 py-2 bg-purple-700 text-white rounded hover:bg-purple-800 font-medium text-sm flex items-center gap-1.5 shadow-sm"
-              onClick={() => setIsWeManagerOpen(true)}
-              title="إدارة وتعديل السجلات وحذف البيانات غير المهمة أو تصدير CSV نظيف"
-            >
-              🧹 إدارة وحذف بيانات WE (CSV)
-            </button>
-            <button
-              className="px-3 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 font-medium text-sm flex items-center gap-1.5 transition"
-              onClick={() => {
-                refetchWeRecords();
-                refetchWeCodes();
-              }}
-              title="تحديث البيانات من السحابة"
-            >
-              🔄 {weRecordsLoading ? 'جارِ المزامنة...' : 'تحديث مباشر'}
-            </button>
-            <span className="px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-xs font-semibold">
-              ⚡ سحابي: {user && user.role !== 'admin' && user.sector !== 'ALL' ? liveWeSites.filter(s => isRecordInSector(user.sector, s)).length : liveWeSites.length} موقع
-            </span>
-          </div>
-        )}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium text-sm flex items-center gap-1.5"
+                onClick={() => setIsWeAnalysisOpen(true)}
+              >
+                📊 عرض تحليل WE
+              </button>
+              <button
+                className="px-4 py-2 bg-blue-800 text-white rounded hover:bg-blue-900 font-medium text-sm flex items-center gap-1.5 cursor-pointer shadow-sm transition"
+                onClick={() => {
+                  setEditingSiteCode(undefined);
+                  setEditingRecord(null);
+                  setWeModalMode(user?.role === 'admin' ? 'add' : 'edit');
+                  setIsWeAddDataOpen(true);
+                }}
+                disabled={weCodesLoading}
+                title={user?.role === 'admin' ? 'إضافة موقع جديد أو تعديل موقع مسجل' : 'تعديل وتحديث بيانات المواقع المسجلة التابعة لقطاعك'}
+              >
+                {weCodesLoading
+                  ? '⏳ تحميل...'
+                  : user?.role === 'admin'
+                    ? '➕ إضافة موقع جديد / ✏️ تعديل'
+                    : '✏️ تعديل بيانات مواقع قطاعك'}
+              </button>
+              <button
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-medium text-sm flex items-center gap-1.5"
+                onClick={() => exportToCSV()}
+                title="تصدير قاعدة البيانات المركزية كاملة إلى CSV"
+              >
+                📥 تصدير البيانات المركزية (CSV)
+              </button>
+              <button
+                className="px-4 py-2 bg-purple-700 text-white rounded hover:bg-purple-800 font-medium text-sm flex items-center gap-1.5 shadow-sm"
+                onClick={() => setIsWeManagerOpen(true)}
+                title="إدارة وتعديل السجلات وحذف البيانات غير المهمة أو تصدير CSV نظيف"
+              >
+                🧹 إدارة وحذف بيانات WE (CSV)
+              </button>
+              <button
+                className="px-3 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 font-medium text-sm flex items-center gap-1.5 transition"
+                onClick={() => {
+                  refetchWeRecords();
+                  refetchWeCodes();
+                }}
+                title="تحديث البيانات من السحابة"
+              >
+                🔄 {weRecordsLoading ? 'جارِ المزامنة...' : 'تحديث مباشر'}
+              </button>
+              <span className="px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-xs font-semibold">
+                ⚡ سحابي: {user && user.role !== 'admin' && user.sector !== 'ALL' ? liveWeSites.filter(s => isRecordInSector(user.sector, s)).length : liveWeSites.length} موقع
+              </span>
+            </div>
+          )}
         </div>
 
         {/* 5. Interactive Dashboard Slicers / Filters (Positioned above Overview & Donut Charts) */}
@@ -877,10 +877,10 @@ export const Dashboard: React.FC = () => {
             {activeScope === 'FTTS'
               ? 'مصدر البيانات: ftts.xlsx (Orange/Vodafone) & We.xlsx (WE)'
               : activeScope === 'ETAHA'
-              ? 'مصدر البيانات: الاتاحه .xlsx (1,374 موقع)'
-              : activeScope === 'TAHAWOL'
-              ? 'مصدر البيانات: بيان التحول الرقمى.xlsx (380 موقع)'
-              : `ملف مخصص: ${uploadedMetadata?.fileName}`}
+                ? 'مصدر البيانات: الاتاحه .xlsx (1,374 موقع)'
+                : activeScope === 'TAHAWOL'
+                  ? 'مصدر البيانات: بيان التحول الرقمى.xlsx (380 موقع)'
+                  : `ملف مخصص: ${uploadedMetadata?.fileName}`}
           </span>
         </footer>
       </div>
@@ -891,6 +891,12 @@ export const Dashboard: React.FC = () => {
         onClose={() => setIsDetailsModalOpen(false)}
         sites={filteredSites}
         activeStatusFilter={modalFilterStatus || filters.status || undefined}
+        onEditSite={(siteCode) => {
+          setEditingSiteCode(siteCode);
+          setEditingRecord(null);
+          setWeModalMode('edit');
+          setIsWeAddDataOpen(true);
+        }}
       />
 
       <WeDataAnalysisModal

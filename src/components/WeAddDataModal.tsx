@@ -1,7 +1,12 @@
 // src/components/WeAddDataModal.tsx
-// Dynamic data-entry modal driven by fieldConfig.ts with Sector-based Permissions.
-// Supports both EDITING existing WE sites and ADDING brand new WE sites.
-// Binds inputs to onSave / onSubmit with instant local state reflection and Supabase synchronization.
+// Dynamic data-entry modal driven by fieldConfig.ts with Strict Role-Based Permissions & Conditional Fields.
+// Layout:
+// 1. Top Section (قسم بيانات الموقع الأساسية): Fixed & Read-only baseline site data at the very top.
+// 2. Bottom Section (قسم التعديل والحالة):
+//    - حالة الموقع (Site Status) with animated pulse indicator if On Air
+//    - التصنيف (Classification) directly beneath Site Status
+//    - Branching Dynamic Conditional Fields bound to the chosen Classification
+// All sector permissions and locked baseline fields are strictly preserved.
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
@@ -9,28 +14,38 @@ import {
   getGreenFields,
   getPurpleFields,
   getSortedFields,
+  APPROVED_CLASSIFICATIONS,
+  normalizeClassification,
 } from '../config/fieldConfig';
 import type { WeRecord } from '../config/fieldConfig';
 import { fetchSiteRecord, fetchDropdownValues, saveRecord } from '../hooks/useWeAPI';
 import { useAuth } from '../context/AuthContext';
 import { isRecordInSector } from '../utils/sectorPermissions';
-import { 
-  Lock, 
-  CheckCircle2, 
-  AlertCircle, 
-  ShieldAlert, 
-  Eye, 
-  X, 
-  PlusCircle, 
-  Edit3, 
-  Search, 
+import {
+  Lock,
+  CheckCircle2,
+  AlertCircle,
+  ShieldAlert,
+  Eye,
+  X,
+  PlusCircle,
+  Edit3,
+  Search,
   ArrowRight,
   Save,
   UploadCloud,
+  FileCheck,
+  Building2,
+  Calendar,
+  Layers,
+  Sparkles,
+  Sliders,
+  Activity,
   FileText,
-  ChevronDown,
-  ChevronUp,
-  FileCheck
+  Clock,
+  DollarSign,
+  Navigation,
+  Radio
 } from 'lucide-react';
 
 export interface WeAddDataModalProps {
@@ -51,12 +66,14 @@ type FormStep = 'select-site' | 'fill-form';
 // Fallback options for key dropdowns if Supabase has not yet accumulated distinct values
 const DEFAULT_FALLBACK_DROPDOWNS: Record<string, string[]> = {
   'Site Status': [
+    'On Air',
+    'CGA',
     'ON AIR',
     'تم التشغيل',
     'تم الانتهاء',
     'تم التسليم',
     'جاري العمل مدني',
-    'جاري العمل كهربى',
+    'جاري العمل كهربي',
     'جاري العمل',
     'جاري المعاينة',
     'جاري تصاريح',
@@ -68,17 +85,13 @@ const DEFAULT_FALLBACK_DROPDOWNS: Record<string, string[]> = {
   ],
   'التصنيف': [
     'تم الانتهاء',
-    'تم التشغيل',
-    'تم التشغيل فيبر',
-    'جاري العمل',
+    'تم التشغيل فايبر',
     'جاري المعاينة',
     'جاري تصاريح',
-    'جاري العمل كهربى',
-    'جاري العمل مدني',
+    'جاري كهربي',
+    'جاري مدني',
     'متعذر',
     'معوقات',
-    'متعثرات',
-    'تم التسليم',
   ],
   'اسباب التعذر': [
     'ارتفاع التكلفة',
@@ -110,17 +123,16 @@ const DEFAULT_FALLBACK_DROPDOWNS: Record<string, string[]> = {
   'خطة': ['2021', '2022', '2023', '2024', '2025', '2026', 'خطة عاجلة'],
 };
 
-// ── Fixed baseline fields (Strictly Read-Only / Disabled in EDIT mode) ──
-// Requirements: Site Code, قطاع التنفيذ, قطاع المناطق, الإدارة العامة لتنفيذ الشبكات, مسؤولية التنفيذ, Type, Plan, Site Status
-export const IMMUTABLE_FIELDS_IN_EDIT = new Set([
+// ── Baseline Immutable Fields (Strictly Read-Only for Regular Sector Users) ──
+// Requirements: كود الموقع، قطاع التنفيذ، قطاع المناطق، الإدارة العامة لتنفيذ الشبكات، مسؤولية التنفيذ، النوع، الخطة، حالة الموقع
+export const IMMUTABLE_FIELDS_FOR_SECTOR = new Set([
   'site code',
   'Site code',
   'site_code',
   'Exc sector',
   'Exc Sectores',
-  'Sectore',
-  'قطاع التنفيذ',
   'Sectores',
+  'قطاع التنفيذ',
   'Zone',
   'قطاع المناطق',
   'Exc Zone',
@@ -136,68 +148,67 @@ export const IMMUTABLE_FIELDS_IN_EDIT = new Set([
   'Site Status',
   'حالة الموقع',
   'السنترال',
+  'Sectore',
 ]);
 
-export function isFieldImmutable(csvColumn: string): boolean {
-  return IMMUTABLE_FIELDS_IN_EDIT.has(csvColumn) || IMMUTABLE_FIELDS_IN_EDIT.has(csvColumn.trim());
+export function isFieldImmutableForSector(csvColumn: string): boolean {
+  return IMMUTABLE_FIELDS_FOR_SECTOR.has(csvColumn) || IMMUTABLE_FIELDS_FOR_SECTOR.has(csvColumn.trim());
 }
 
-// ── Helper Types & Functions for Status-Driven RBAC ──
+// ── Status & Classification Categories for Conditional Fields Display ──
 export type SiteStatusCategory =
-  | 'completed'
-  | 'operational'
-  | 'in_progress'
-  | 'stalled'
-  | 'obstacles'
+  | 'completed_or_operational' // تم الانتهاء أو تم التشغيل أو تم التشغيل فايبر
+  | 'in_progress'              // جاري المعاينة، جاري تصاريح، جاري العمل، جاري العمل كهربي، جاري العمل مدني
+  | 'stalled'                  // متعذر
+  | 'obstacles'                // معوقات
   | 'general';
 
-export function getSiteStatusCategory(statusRaw?: string, classificationRaw?: string): SiteStatusCategory {
-  const s = `${statusRaw || ''} ${classificationRaw || ''}`.toLowerCase().trim();
+export function getClassificationCategory(classificationRaw?: string, statusRaw?: string): SiteStatusCategory {
+  const c = (classificationRaw || '').toLowerCase().trim();
+  const s = (statusRaw || '').toLowerCase().trim();
+  // Classification in Line 2 is the primary driver as requested
+  const target = c || s;
 
-  // 1. Operational (تم التشغيل / تم التشغيل فايبر / ON AIR)
-  if (
-    s.includes('تم التشغيل') ||
-    s.includes('تشغيل فايبر') ||
-    s.includes('تشغيل فيبر') ||
-    s.includes('on air') ||
-    s.includes('onair') ||
-    (s.includes('تشغيل') && !s.includes('جاري'))
-  ) {
-    return 'operational';
-  }
-
-  // 2. Completed (تم الانتهاء / تم التسليم)
-  if (
-    s.includes('تم الانتهاء') ||
-    s.includes('انتهاء') ||
-    s.includes('تم التسليم') ||
-    s.includes('تسليم')
-  ) {
-    return 'completed';
-  }
-
-  // 3. Stalled (متعذر / متعثرات)
-  if (s.includes('متعذر') || s.includes('متعثر') || s.includes('تعذر')) {
+  // 1. متعذر (Stalled)
+  if (target.includes('متعذر') || target.includes('متعثر') || target.includes('تعذر') || target.includes('رفض')) {
     return 'stalled';
   }
 
-  // 4. Obstacles (معوقات / PROBLEM)
-  if (s.includes('معوق') || s.includes('problem') || s.includes('عائق')) {
+  // 2. معوقات (Obstacles)
+  if (target.includes('معوق') || target.includes('problem') || target.includes('عائق')) {
     return 'obstacles';
   }
 
-  // 5. In Progress (جاري العمل، جاري المعاينة، جاري تصاريح، جاري العمل كهربي، جاري العمل مدني)
+  // 3. تم الانتهاء أو تم التشغيل أو تم التشغيل فايبر (Completed or Operational)
   if (
-    s.includes('جاري العمل') ||
-    s.includes('جاري المعاينة') ||
-    s.includes('جاري تصاريح') ||
-    s.includes('كهرب') ||
-    s.includes('مدن') ||
-    s.includes('معاين') ||
-    s.includes('تصريح') ||
-    s.includes('cwf') ||
-    s.includes('rdt') ||
-    s.includes('جاري')
+    target.includes('تم الانتهاء') ||
+    target.includes('انتهاء') ||
+    target.includes('تم التسليم') ||
+    target.includes('تسليم') ||
+    target.includes('تم التشغيل') ||
+    target.includes('تشغيل فايبر') ||
+    target.includes('تشغيل فيبر') ||
+    target.includes('on air') ||
+    target.includes('onair') ||
+    (target.includes('تشغيل') && !target.includes('جاري'))
+  ) {
+    return 'completed_or_operational';
+  }
+
+  // 4. جاري العمل، جاري تصاريح، جاري المعاينة، جاري العمل مدني، جاري العمل كهربي (In Progress)
+  if (
+    target.includes('جاري العمل') ||
+    target.includes('جاري المعاينة') ||
+    target.includes('معاين') ||
+    target.includes('جاري تصاريح') ||
+    target.includes('تصاريح') ||
+    target.includes('تصريح') ||
+    target.includes('كهرب') ||
+    target.includes('مدن') ||
+    target.includes('عمل') ||
+    target.includes('cwf') ||
+    target.includes('rdt') ||
+    target.includes('جاري')
   ) {
     return 'in_progress';
   }
@@ -215,7 +226,13 @@ export function getStalledSubReason(reasonRaw?: string): StalledSubReason {
   if (r.includes('تصاريح') || r.includes('تصريح') || r.includes('مرور') || r.includes('سكة حديد')) {
     return 'permits';
   }
-  if (r.includes('عدم إمكانية') || r.includes('عدم امكانية') || r.includes('امكانية') || r.includes('إمكانية') || r.includes('استحالة')) {
+  if (
+    r.includes('عدم إمكانية') ||
+    r.includes('عدم امكانية') ||
+    r.includes('امكانية') ||
+    r.includes('إمكانية') ||
+    r.includes('استحالة')
+  ) {
     return 'impossible';
   }
   return 'other';
@@ -235,8 +252,9 @@ export function getObstaclesSubReason(reasonRaw?: string): ObstaclesSubReason {
     r.includes('اهالي') ||
     r.includes('تنسيق مع جهات أخرى') ||
     r.includes('تنسيق مع جهات حكومية') ||
+    r.includes('جهات أخرى') ||
+    r.includes('جهات حكومية') ||
     r.includes('تنسيق') ||
-    r.includes('جهات') ||
     r.includes('حكومي')
   ) {
     return 'governmental_owner_objection';
@@ -245,70 +263,6 @@ export function getObstaclesSubReason(reasonRaw?: string): ObstaclesSubReason {
     return 'far_distance';
   }
   return 'other';
-}
-
-export function isFieldAllowedForCurrentState(
-  csvColumn: string,
-  category: SiteStatusCategory,
-  stalledReason: StalledSubReason,
-  obstaclesReason: ObstaclesSubReason
-): boolean {
-  if (isFieldImmutable(csvColumn)) return false;
-  if (csvColumn === 'الملاحظات' || csvColumn === 'notes') return true;
-
-  if (category === 'completed') {
-    return (
-      csvColumn === 'التاريخ الفعلى للانتهاء' ||
-      csvColumn === 'التاريخ المتوقع للانتهاء' ||
-      csvColumn === 'المستند'
-    );
-  }
-
-  if (category === 'operational') {
-    return (
-      csvColumn === 'التاريخ الفعلى للانتهاء' ||
-      csvColumn === 'المستند'
-    );
-  }
-
-  if (category === 'in_progress') {
-    return csvColumn === 'التاريخ المتوقع للانتهاء';
-  }
-
-  if (category === 'stalled') {
-    if (csvColumn === 'اسباب التعذر') return true;
-    if (stalledReason === 'high_cost') {
-      return (
-        csvColumn === 'تكلفة التوصيل بدون مسار تراسلى بالجنيه' ||
-        csvColumn === 'تكلفة التوصيل على المسار التراسلى بالجنيه' ||
-        csvColumn === 'المسافة كم'
-      );
-    }
-    if (stalledReason === 'permits') {
-      return csvColumn === 'التاريخ المتوقع للانتهاء';
-    }
-    if (stalledReason === 'impossible') {
-      return false; // only notes allowed
-    }
-    return true;
-  }
-
-  if (category === 'obstacles') {
-    if (csvColumn === 'اسباب التعذر') return true;
-    if (obstaclesReason === 'governmental_owner_objection') {
-      return csvColumn === 'الجهة المطلوب الدعم منها';
-    }
-    if (obstaclesReason === 'far_distance') {
-      return (
-        csvColumn === 'المسافة كم' ||
-        csvColumn === 'تكلفة التوصيل بدون مسار تراسلى بالجنيه' ||
-        csvColumn === 'تكلفة التوصيل على المسار التراسلى بالجنيه'
-      );
-    }
-    return true;
-  }
-
-  return true;
 }
 
 export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
@@ -326,7 +280,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
   const isAdmin = Boolean(user && (user.role === 'admin' || user.sector === 'ALL'));
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
-  // ── Mode & Step State ──
+  // ── Mode & Step State (Sector accounts CAN NEVER add sites) ──
   const [activeMode, setActiveMode] = useState<FormMode>(mode === 'add' && !isAdmin ? 'edit' : mode);
   const [step, setStep] = useState<FormStep>(initialSiteCode || initialRecord || (mode === 'add' && isAdmin) ? 'fill-form' : 'select-site');
   const [siteCodeSearch, setSiteCodeSearch] = useState('');
@@ -342,14 +296,25 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     existingRecord: WeRecord;
   } | null>(null);
 
-  // Dynamic Status & Reason computations for Conditional Field Customization
-  const currentStatus = formData['Site Status'] || masterRecord?.['Site Status'] || '';
-  const currentClassification = formData['التصنيف'] || masterRecord?.['التصنيف'] || '';
+  // Admin Toggle for full field editing
+  const [adminFullEditMode, setAdminFullEditMode] = useState(false);
+
+  // Computed values
+  const currentStatus = formData['Site Status'] || masterRecord?.['Site Status'] || 'On Air';
+  const rawClassification = formData['التصنيف'] || masterRecord?.['التصنيف'] || 'جاري مدني';
+  const currentClassification = normalizeClassification(rawClassification);
   const currentReason = formData['اسباب التعذر'] || masterRecord?.['اسباب التعذر'] || '';
 
+  // Pulse Indicator: check if status is On Air
+  const isOnAir = useMemo(() => {
+    const s = String(currentStatus || '').toLowerCase().trim();
+    return s === 'on air' || s === 'onair' || s.includes('on air') || s.includes('onair');
+  }, [currentStatus]);
+
+  // Driving category from Classification in Line 2
   const currentCategory = useMemo(() => {
-    return getSiteStatusCategory(currentStatus, currentClassification);
-  }, [currentStatus, currentClassification]);
+    return getClassificationCategory(currentClassification, currentStatus);
+  }, [currentClassification, currentStatus]);
 
   const currentStalledReason = useMemo(() => {
     return getStalledSubReason(currentReason);
@@ -380,7 +345,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
   const purpleFields = useMemo(() => getPurpleFields(), []);
   const sortedFields = useMemo(() => getSortedFields(), []);
 
-  // Determine user's sector default for new additions
+  // Default sector for new additions
   const userDefaultSector = useMemo(() => {
     if (!user || user.sector === 'ALL') return 'الإسكندرية';
     return user.sector;
@@ -393,7 +358,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
         canEdit: isAdmin,
         reason: isAdmin
           ? 'إضافة موقع جديد (صلاحية كاملة للإدارة Admin)'
-          : 'غير مصرح للقطاعات بإضافة مواقع جديدة',
+          : 'غير مصرح للقطاعات بإضافة مواقع جديدة (مقفولة تماماً)',
       };
     }
     if (!masterRecord) return null;
@@ -402,7 +367,6 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
   const isReadOnly = Boolean(activeMode === 'edit' && permissionInfo && !permissionInfo.canEdit);
 
-
   // Filtered site codes for search
   const filteredCodes = useMemo(() => {
     if (!siteCodeSearch.trim()) return allSiteCodes.slice(0, 50);
@@ -410,14 +374,13 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     return allSiteCodes.filter((c) => c.toLowerCase().includes(q)).slice(0, 50);
   }, [allSiteCodes, siteCodeSearch]);
 
-  // Check if typed search code exists in dataset
   const hasExactMatch = useMemo(() => {
     if (!siteCodeSearch.trim()) return true;
     const q = siteCodeSearch.trim().toLowerCase();
     return allSiteCodes.some((c) => c.toLowerCase() === q);
   }, [allSiteCodes, siteCodeSearch]);
 
-  // ── Load dropdown values for green fields ──
+  // Load dropdown values
   const loadDropdownValues = useCallback(async () => {
     const values: Record<string, string[]> = { ...DEFAULT_FALLBACK_DROPDOWNS };
     for (const field of greenFields) {
@@ -434,10 +397,10 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     setDropdownValues(values);
   }, [greenFields]);
 
-  // ── Initialize a Blank Form for "Add New Entry" (Admin Only) ──
+  // Initialize a Blank Form for "Add New Entry" (Admin Only)
   const initNewEntry = useCallback((customCode = '') => {
     if (!isAdmin) {
-      setErrors({ _general: 'غير مصرح: حسابات مستخدمي القطاعات لا تملك صلاحية إضافة مواقع جديدة (مقتصرة على حساب الإدارة Admin فقط).' });
+      setErrors({ _general: 'غير مصرح: حسابات مستخدمي القطاعات لا تملك صلاحية إضافة مواقع جديدة (مقفولة تماماً لهم ومتاحة لحساب الإدارة Admin فقط).' });
       return;
     }
     setActiveMode('add');
@@ -456,9 +419,9 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       'السنترال': 'سنترال رئيسي',
       'اداره التنفيذ المختصه': 'الإدارة المختصة',
       'Type': 'New',
-      'المسئولية': 'تنفيذ',
-      'Site Status': 'جاري المعاينة',
-      'التصنيف': 'جاري المعاينة',
+      'المسئولية': 'المصرية للاتصالات',
+      'Site Status': 'On Air',
+      'التصنيف': 'جاري مدني',
       'اسباب التعذر': 'لا يوجد تعذر',
       'خطة': new Date().getFullYear().toString(),
       'التاريخ المتوقع للانتهاء': `${new Date().getFullYear()}-12-31`,
@@ -468,7 +431,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     setFormData(blank);
   }, [isAdmin, userDefaultSector]);
 
-  // ── Handle Selecting an Existing Site Code to Edit ──
+  // Handle Selecting an Existing Site Code to Edit
   const handleSelectSiteCode = useCallback(async (code: string) => {
     setLoading(true);
     setErrors({});
@@ -479,11 +442,10 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       const record = await fetchSiteRecord(code);
       if (record) {
         // Strict Sector RBAC Restriction:
-        // Disallow loading or viewing sites outside user's assigned sector
         if (user && user.role !== 'admin' && user.sector && user.sector !== 'ALL') {
           if (!isRecordInSector(user.sector, record)) {
             setErrors({
-              _general: `⛔ تم حظر الوصول: الموقع "${code}" يتبع قطاع (${record['Exc sector'] || record['Sectore'] || 'آخر'}). لا تملك صلاحية استعراضه أو تعديله طبقاً لنطاق صلاحية قطاعك (${user.sector}).`,
+              _general: `⛔ تم حظر الوصول: الموقع "${code}" يتبع قطاع (${record['Exc sector'] || record['Sectore'] || 'آخر'}). لا تملك صلاحية استعراضه أو تعديله طبقاً لنطاق صلاحية قطاعك (${user.sector}). كل مستخدم يرى ويعدل مواقع قطاعه فقط.`,
             });
             setLoading(false);
             return;
@@ -493,7 +455,6 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
         setMasterRecord(record);
         setActiveMode('edit');
 
-        // Pre-populate form data with all fields from master record, preserving _id and id
         const initial: WeRecord = {
           ...record,
           _id: record._id || (record as any).id || '',
@@ -503,6 +464,9 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
             initial[f.csvColumn] = record[f.csvColumn] || '';
           }
         });
+        if (initial['التصنيف']) {
+          initial['التصنيف'] = normalizeClassification(initial['التصنيف']);
+        }
         setFormData(initial);
         setStep('fill-form');
       } else {
@@ -515,18 +479,17 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     }
   }, [sortedFields, user]);
 
-  // ── Reset or Switch ──
+  // Reset or Switch
   useEffect(() => {
     if (!isOpen) return;
 
     loadDropdownValues();
 
     if (initialRecord) {
-      // Strict Sector RBAC Restriction on initialRecord
       if (user && user.role !== 'admin' && user.sector && user.sector !== 'ALL') {
         if (!isRecordInSector(user.sector, initialRecord)) {
           setErrors({
-            _general: `⛔ تم حظر الوصول: الموقع "${initialRecord['site code'] || ''}" لا يتبع قطاعك (${user.sector}). التعديل محجوب.`,
+            _general: `⛔ تم حظر الوصول: الموقع "${initialRecord['site code'] || ''}" لا يتبع قطاعك (${user.sector}). التعديل محجوب. كل مستخدم يرى ويعدل مواقع قطاعه فقط.`,
           });
           setMasterRecord(null);
           setStep('select-site');
@@ -536,10 +499,12 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
       setMasterRecord(initialRecord);
       setActiveMode('edit');
-      setFormData({
+      const normRecord = {
         ...initialRecord,
         _id: initialRecord._id || (initialRecord as any).id || '',
-      });
+        'التصنيف': normalizeClassification(initialRecord['التصنيف']),
+      };
+      setFormData(normRecord);
       setStep('fill-form');
       setErrors({});
       setSuccessMessage('');
@@ -560,24 +525,14 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     }
   }, [isOpen, initialSiteCode, initialRecord, mode, isAdmin, loadDropdownValues, handleSelectSiteCode, initNewEntry, user]);
 
-  // ── Handle Field Change ──
+  // Handle Field Change
   const handleFieldChange = (csvColumn: string, value: string) => {
     if (isReadOnly) return;
 
-    // Strict immutability check: In edit mode, baseline fields cannot be altered
-    if (activeMode === 'edit' && isFieldImmutable(csvColumn)) {
+    // Strict immutability check for Sector users in edit mode:
+    // Notice: 'التصنيف' is NOT immutable here because the user selects it in Line 2 to drive conditional fields
+    if (activeMode === 'edit' && !isAdmin && isFieldImmutableForSector(csvColumn)) {
       return;
-    }
-
-    // In edit mode, non-admins can only alter fields permitted for the current status state
-    if (activeMode === 'edit') {
-      const activeReason = csvColumn === 'اسباب التعذر' ? value : currentReason;
-      const stReason = getStalledSubReason(activeReason);
-      const obReason = getObstaclesSubReason(activeReason);
-
-      if (!isFieldAllowedForCurrentState(csvColumn, currentCategory, stReason, obReason)) {
-        return;
-      }
     }
 
     setFormData((prev) => ({
@@ -585,7 +540,6 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       [csvColumn]: csvColumn === 'site code' ? value.toUpperCase() : value,
     }));
 
-    // Clear field-specific error
     if (errors[csvColumn]) {
       setErrors((prev) => {
         const next = { ...prev };
@@ -595,18 +549,16 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     }
   };
 
-  // ── Form Validation ──
+  // Form Validation
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    // 1. Site code is always strictly required
     const code = (formData['site code'] || masterRecord?.['site code'] || '').trim();
     if (!code) {
       newErrors['site code'] = 'كود الموقع مطلوب (Site Code)';
     }
 
     if (activeMode === 'add') {
-      // 2. Classification & Status are required in add mode
       if (!formData['التصنيف']?.trim()) {
         newErrors['التصنيف'] = 'التصنيف مطلوب';
       }
@@ -615,7 +567,6 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
         newErrors['Site Status'] = 'حالة الموقع مطلوبة';
       }
 
-      // 3. Check other required fields in add mode
       sortedFields.forEach((field) => {
         if (field.required && field.color !== 'blue' && field.csvColumn !== 'Site Status') {
           const val = formData[field.csvColumn]?.trim();
@@ -626,7 +577,6 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       });
     }
 
-    // 4. Validate numbers and coordinates if entered
     purpleFields.forEach((field) => {
       const val = formData[field.csvColumn]?.trim();
       if (val) {
@@ -650,15 +600,18 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  // ── Handle Save / Submit ──
+  // Handle Save / Submit
   const handleSave = async (forceUpdate = false) => {
     if (isReadOnly) {
       setErrors({ _general: 'غير مصرح بالتعديل: هذا الموقع يتبع قطاعاً آخر ولديك صلاحية المشاهدة فقط.' });
       return;
     }
 
-    // Strict Sector RBAC Verification for Non-Admin
     if (user && user.role !== 'admin' && user.sector && user.sector !== 'ALL') {
+      if (activeMode === 'add') {
+        setErrors({ _general: 'غير مصرح: حسابات مستخدمي القطاعات لا تمتلك صلاحية إضافة مواقع جديدة (مقفولة تماماً).' });
+        return;
+      }
       if (activeMode === 'edit' && masterRecord) {
         if (!isRecordInSector(user.sector, masterRecord)) {
           setErrors({ _general: `غير مصرح بالتعديل: هذا الموقع يتبع قطاعاً آخر. مسموح لك فقط بتعديل مواقع قطاع (${user.sector}).` });
@@ -677,14 +630,18 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       const isEdit = activeMode === 'edit';
       const dataToSave = { ...formData };
 
-      // Strictly enforce preservation of baseline immutable fields in EDIT mode:
-      // (كود الموقع، قطاع التنفيذ، قطاع المناطق، الإدارة العامة لتنفيذ الشبكات، مسؤولية التنفيذ، النوع، الخطة، حالة الموقع)
-      if (isEdit && masterRecord) {
-        IMMUTABLE_FIELDS_IN_EDIT.forEach((col) => {
+      // Strictly preserve immutable baseline fields for Sector users:
+      // Site Status in Line 1 is also locked for sector officer as requested
+      if (isEdit && !isAdmin && masterRecord) {
+        IMMUTABLE_FIELDS_FOR_SECTOR.forEach((col) => {
           if (masterRecord[col] !== undefined && masterRecord[col] !== '') {
             dataToSave[col] = masterRecord[col];
           }
         });
+        // Ensure the chosen Classification from Line 2 is preserved
+        if (formData['التصنيف']) {
+          dataToSave['التصنيف'] = formData['التصنيف'];
+        }
       }
 
       if (user && user.role !== 'admin' && user.sector && user.sector !== 'ALL') {
@@ -692,24 +649,23 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
         dataToSave['Sectores'] = user.sector;
         dataToSave['Exc Sectores'] = user.sector;
       }
+
       const result = await saveRecord(dataToSave, forceUpdate, isEdit);
 
       if (result.success && result.record) {
         const saved = result.record;
-        setSuccessMessage(result.message || 'تم حفظ وتحديث البيانات بنجاح ✅');
+        setSuccessMessage(result.message || 'تم حفظ وتحديث بيانات الموقع بنجاح ✅');
 
-        // IMMEDIATELY invoke parent callbacks for 0ms UI reactivity
         if (onSave) {
-          try { await onSave(saved); } catch {}
+          try { await onSave(saved); } catch { }
         }
         if (onSubmit) {
-          try { await onSubmit(saved); } catch {}
+          try { await onSubmit(saved); } catch { }
         }
         if (onSaved) {
-          try { onSaved(saved); } catch {}
+          try { onSaved(saved); } catch { }
         }
 
-        // Brief visual confirmation before closing modal
         setTimeout(() => {
           handleClose();
         }, 700);
@@ -728,13 +684,11 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     }
   };
 
-  // Handle Form Submit Event (e.g. hitting Enter)
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     handleSave(false);
   };
 
-  // ── Reset ──
   const resetForm = () => {
     setStep('select-site');
     setActiveMode('edit');
@@ -744,6 +698,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     setErrors({});
     setSuccessMessage('');
     setDuplicateWarning(null);
+    setAdminFullEditMode(false);
   };
 
   const handleClose = () => {
@@ -755,12 +710,12 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 animate-in fade-in">
-      <div 
+      <div
         className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden text-right border border-slate-200"
         dir="rtl"
       >
-        {/* ── Modal Header ── */}
-        <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white px-6 py-4 flex items-center justify-between shadow-md">
+        {/* ── Modal Header Banner ── */}
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white px-6 py-4 flex items-center justify-between shadow-md">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-white shrink-0">
               {activeMode === 'add' ? (
@@ -773,39 +728,42 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg sm:text-xl font-bold">
+                <h2 className="text-lg sm:text-xl font-bold tracking-tight">
                   {activeMode === 'add'
-                    ? 'إضافة موقع جديد إلى بيانات WE'
+                    ? 'إضافة موقع جديد إلى بيانات WE (حساب الإدارة)'
                     : step === 'select-site'
-                    ? 'اختيار موقع WE لتحديثه'
-                    : `تعديل بيانات الموقع: ${formData['site code'] || ''}`}
+                      ? 'اختيار موقع WE لتحديثه'
+                      : `تعديل بيانات الموقع: ${formData['site code'] || masterRecord?.['site code'] || ''}`}
                 </h2>
-                <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
-                  activeMode === 'add'
+                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${activeMode === 'add'
                     ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/30'
                     : 'bg-blue-500/20 text-blue-200 border-blue-400/30'
-                }`}>
-                  {activeMode === 'add' ? 'إضافة جديدة ➕' : 'تعديل وتحديث ✏️'}
+                  }`}>
+                  {activeMode === 'add' ? 'إضافة موقع جديد ➕' : 'تعديل وتحديث ✏️'}
                 </span>
+                {isAdmin && (
+                  <span className="text-[10px] bg-purple-500/30 text-purple-200 px-2 py-0.5 rounded-full border border-purple-400/40 font-bold">
+                    حساب الإدارة (Admin) 👑
+                  </span>
+                )}
               </div>
               <p className="text-xs text-blue-200 mt-0.5">
                 {activeMode === 'add'
-                  ? 'أدخل بيانات الموقع الجديد وسيتم حفظه فوراً في قاعدة البيانات المركزية واللوحة'
+                  ? 'إضافة موقع جديد وحفظه في السحابة (متاح فقط للإدارة المركزية)'
                   : step === 'select-site'
-                  ? 'ابحث بكود الموقع لتحميل بياناته وتعديلها وفقاً لصلاحيات قطاعك'
-                  : isReadOnly
-                  ? 'وضع المشاهدة فقط (يتبع قطاعاً آخر)'
-                  : 'صلاحية التعديل متاحة (تابع لقطاعك)'}
+                    ? 'ابحث بكود الموقع لتحميل بياناته وتحديثه وفقاً لصلاحيات قطاعك'
+                    : isReadOnly
+                      ? 'وضع المشاهدة فقط (الموقع يتبع قطاعاً آخر)'
+                      : 'بيانات الموقع الأساسية في الأعلى • حالة الموقع والتصنيف • الحقول الشرطية تفتح تلقائياً'}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* User Sector Badge */}
             {user && (
               <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 rounded-full text-xs font-semibold text-sky-200 border border-white/20">
-                <span>قطاعك:</span>
-                <strong className="text-white">{user.sector}</strong>
+                <span>نطاق:</span>
+                <strong className="text-white">{user.role === 'admin' ? 'كافة القطاعات' : user.sector}</strong>
               </span>
             )}
             <button
@@ -818,9 +776,9 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
           </div>
         </div>
 
-        {/* ── Mode Switcher Tabs (If not locked to direct edit) ── */}
+        {/* ── Mode Switcher & Navigation Bar ── */}
         <div className="bg-slate-100 border-b border-slate-200 px-6 py-2 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => {
@@ -831,50 +789,70 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                   setStep('select-site');
                 }
               }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                activeMode === 'edit'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${activeMode === 'edit'
                   ? 'bg-white text-blue-800 shadow-sm border border-slate-200'
                   : 'text-slate-600 hover:bg-slate-200/70'
-              }`}
+                }`}
             >
               <Edit3 className="w-3.5 h-3.5 text-blue-600" />
               <span>تعديل موقع موجود</span>
             </button>
 
-            {isAdmin && (
+            {/* Add New Site Button (Strictly locked to Admin) */}
+            {isAdmin ? (
               <button
                 type="button"
                 onClick={() => initNewEntry()}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  activeMode === 'add'
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${activeMode === 'add'
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : 'text-slate-600 hover:bg-slate-200/70'
-                }`}
+                  }`}
               >
                 <PlusCircle className="w-3.5 h-3.5" />
-                <span>➕ إضافة موقع جديد</span>
+                <span>➕ إضافة موقع جديد (Admin)</span>
               </button>
+            ) : (
+              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-slate-400 bg-slate-200/60 px-2.5 py-1 rounded-md">
+                <Lock className="w-3 h-3 text-slate-400" />
+                <span>إضافة المواقع مقفولة لقطاعات التنفيذ (متاحة لحساب الإدارة فقط)</span>
+              </span>
             )}
           </div>
 
-          {step === 'fill-form' && activeMode === 'edit' && (
-            <button
-              type="button"
-              onClick={() => setStep('select-site')}
-              className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 transition"
-            >
-              <span>← العودة لقائمة البحث</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {isAdmin && step === 'fill-form' && activeMode === 'edit' && (
+              <button
+                type="button"
+                onClick={() => setAdminFullEditMode((prev) => !prev)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${adminFullEditMode
+                    ? 'bg-purple-100 text-purple-800 border-purple-300'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                title="التبديل بين التنسيق المنظم للحقول الشرطية وتعديل كافة الحقول الشامل"
+              >
+                <Sliders className="w-3.5 h-3.5 text-purple-600" />
+                <span>{adminFullEditMode ? 'تعديل شامل (مفعّل)' : 'فتح تعديل شامل (Admin)'}</span>
+              </button>
+            )}
+
+            {step === 'fill-form' && activeMode === 'edit' && (
+              <button
+                type="button"
+                onClick={() => setStep('select-site')}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 transition"
+              >
+                <span>← العودة لاختيار موقع آخر</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ── Sector Permission Banner ── */}
         {step === 'fill-form' && permissionInfo && (
-          <div className={`px-6 py-2.5 border-b flex items-center justify-between gap-3 ${
-            permissionInfo.canEdit 
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
-              : 'bg-amber-50 border-amber-200 text-amber-900'
-          }`}>
+          <div className={`px-6 py-2 border-b flex items-center justify-between gap-3 ${permissionInfo.canEdit
+              ? 'bg-emerald-50/90 border-emerald-200 text-emerald-900'
+              : 'bg-amber-50/90 border-amber-200 text-amber-900'
+            }`}>
             <div className="flex items-center gap-2 text-xs font-medium">
               {permissionInfo.canEdit ? (
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -885,12 +863,11 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
             </div>
 
             <div className="shrink-0 flex items-center gap-1.5">
-              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                permissionInfo.canEdit 
-                  ? 'bg-emerald-200 text-emerald-900' 
+              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${permissionInfo.canEdit
+                  ? 'bg-emerald-200 text-emerald-900'
                   : 'bg-amber-200 text-amber-900'
-              }`}>
-                {permissionInfo.canEdit ? 'قابل للتعديل والحفظ' : 'مشاهدة فقط'}
+                }`}>
+                {permissionInfo.canEdit ? 'قابل للتعديل' : 'مشاهدة فقط'}
               </span>
             </div>
           </div>
@@ -943,14 +920,14 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
         )}
 
         {/* ── Modal Main Body ── */}
-        <div className="overflow-y-auto flex-1 p-6">
+        <div className="overflow-y-auto flex-1 p-5 sm:p-6 space-y-5">
           {/* ── Step 1: Search & Select Existing Site ── */}
           {step === 'select-site' && activeMode === 'edit' && (
             <div className="max-w-2xl mx-auto py-2">
               <label className="block text-sm font-bold text-slate-800 mb-2">
                 🔍 ابحث عن كود الموقع المراد تعديله (Site Code):
               </label>
-              
+
               <div className="relative">
                 <Search className="w-5 h-5 text-slate-400 absolute right-3.5 top-3.5" />
                 <input
@@ -963,7 +940,6 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                 />
               </div>
 
-              {/* Action when code is not found: Direct button to add it (Admin only) */}
               {!hasExactMatch && siteCodeSearch.trim().length >= 3 && (
                 <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between gap-3">
                   <div className="text-xs text-blue-900">
@@ -988,7 +964,6 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                 </div>
               )}
 
-              {/* Loading spinner */}
               {loading && (
                 <div className="flex items-center justify-center py-8 gap-3">
                   <div className="w-6 h-6 border-3 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
@@ -996,22 +971,11 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                 </div>
               )}
 
-              {/* Site Code Filter List */}
               {!loading && (
                 <div className="mt-3 max-h-72 overflow-y-auto border border-slate-200 rounded-xl bg-slate-50/50 divide-y divide-slate-100 shadow-inner">
                   {filteredCodes.length === 0 ? (
                     <div className="text-center py-8 text-slate-500">
-                      <p className="font-medium text-sm">لا توجد نتائج مطابقة لبحثك</p>
-                      {siteCodeSearch.trim() && isAdmin && (
-                        <button
-                          type="button"
-                          onClick={() => initNewEntry(siteCodeSearch.trim())}
-                          className="mt-3 px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition inline-flex items-center gap-1.5"
-                        >
-                          <PlusCircle className="w-4 h-4" />
-                          <span>إضافة موقع جديد بالكود "{siteCodeSearch.trim()}"</span>
-                        </button>
-                      )}
+                      <p className="font-medium text-sm">لا توجد نتائج مطابقة لبحثك في نطاق قطاعك</p>
                     </div>
                   ) : (
                     filteredCodes.map((code) => (
@@ -1033,778 +997,815 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
               )}
 
               <p className="text-xs text-slate-400 mt-2.5">
-                يتم عرض أول 50 نتيجة. استخدم شريط البحث للعثور على أي كود موقع بدقة.
+                كل مستخدم يرى ويعدل مواقع قطاعه فقط. استخدم شريط البحث للوصول لأي كود موقع بدقة.
               </p>
             </div>
           )}
 
-          {/* ── Step 2: Full Form (Both Edit and Add New Entry) ── */}
+          {/* ── Step 2: Full Form (Edit mode & Add mode) ── */}
           {step === 'fill-form' && (
-            <form id="we-data-form" onSubmit={handleFormSubmit} className="space-y-6">
+            <form id="we-data-form" onSubmit={handleFormSubmit} className="space-y-5">
 
-              {/* Sector Permission & Scope Alerts */}
               {isReadOnly && (
                 <div className="p-3.5 bg-rose-50 border border-rose-300 rounded-xl flex items-start gap-3 text-rose-900 shadow-xs">
                   <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                   <div className="text-xs">
                     <strong className="block font-bold mb-0.5 text-sm">⚠️ وضع المشاهدة فقط (خارج نطاق قطاعك)</strong>
                     <span>
-                      هذا الموقع تابع لقطاع آخر. مسموح لك فقط بإضافة وتعديل مواقع قطاع (<strong>{user?.sector}</strong>). التعديل والحفظ محجوبان لحماية سرية وتكامل البيانات.
+                      هذا الموقع تابع لقطاع آخر. مسموح لك فقط بتعديل مواقع قطاع (<strong>{user?.sector}</strong>). التعديل والحفظ محجوبان لحماية سرية وتكامل البيانات.
                     </span>
-                  </div>
-                </div>
-              )}
-
-              {activeMode === 'add' && user && user.role !== 'admin' && user.sector && user.sector !== 'ALL' && (
-                <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center gap-2.5 text-emerald-900 shadow-xs">
-                  <Lock className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <div className="text-xs">
-                    <span>يتم ربط وتسجيل هذا الموقع الجديد تلقائياً تحت نطاق: </span>
-                    <strong className="font-bold underline">قطاع {user.sector}</strong>
-                    <span> (مقيد بنطاق صلاحياتك المعتمدة حصرياً).</span>
                   </div>
                 </div>
               )}
 
               {activeMode === 'edit' ? (
                 <>
-                  {/* ── 1. BASELINE FIXED FIELDS (Strictly Read-Only in Edit Mode) ── */}
-                  <div className="bg-slate-100/90 border-2 border-slate-300 rounded-2xl p-4 sm:p-5 shadow-2xs">
-                    <div className="flex items-center justify-between mb-3 border-b border-slate-200 pb-2.5">
+                  {/* ═══════════════════════════════════════════════════════════════════════════════════ */}
+                  {/* قسم بيانات الموقع الأساسية (في الأعلى)                                             */}
+                  {/* يتم وضع جميع "بيانات الموقع الأساسية" الثابتة (غير القابلة للتعديل لمسؤول القطاع)  */}
+                  {/* في قمة الصفحة فور فتح نافذة تعديل بيانات الموقع لتكون واضحة في المقدمة            */}
+                  {/* ═══════════════════════════════════════════════════════════════════════════════════ */}
+                  <div className="bg-gradient-to-br from-slate-50 via-white to-blue-50/40 border-2 border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+                    <div className="flex items-center justify-between pb-2.5 border-b border-slate-200 flex-wrap gap-2">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-slate-800 text-white flex items-center justify-center shrink-0">
-                          <Lock className="w-4 h-4 text-amber-300" />
+                        <div className="w-8 h-8 rounded-lg bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-700 shrink-0">
+                          <Building2 className="w-4 h-4" />
                         </div>
                         <div>
                           <h3 className="font-bold text-slate-800 text-sm sm:text-base flex items-center gap-2">
-                            <span>1. الحقول الأساسية الثابتة للموقع (محمية ضد التعديل)</span>
+                            <span>بيانات الموقع الأساسية</span>
+                            <span className="text-[11px] font-normal text-slate-500 hidden sm:inline">(Base Site Information)</span>
                           </h3>
-                          <p className="text-[11px] text-slate-500 mt-0.5">
-                            الحقول الأساسية ثابتة وغير قابلة للتعديل لأي مستخدم عادي طبقاً لضوابط الصلاحيات
+                          <p className="text-[11px] text-slate-500">
+                            البيانات المرجعية الثابتة للموقع المعتمَدة في خطة FTTS
                           </p>
                         </div>
                       </div>
-                      <span className="text-[11px] bg-slate-200 text-slate-700 px-2.5 py-1 rounded-full font-bold border border-slate-300 flex items-center gap-1 shrink-0">
-                        <Lock className="w-3 h-3 text-slate-500" />
-                        Read-Only / مغلقة
+                      <span className="text-[11px] text-slate-600 font-bold bg-slate-100 px-3 py-1 rounded-full border border-slate-300 shadow-2xs flex items-center gap-1.5 shrink-0">
+                        <Lock className="w-3.5 h-3.5 text-slate-500" />
+                        <span>ثابتة لمسؤول القطاع (Read-only)</span>
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
                       {[
-                        { label: 'كود الموقع', labelEn: 'Site Code', val: formData['site code'] || masterRecord?.['site code'] || '—' },
-                        { label: 'قطاع التنفيذ', labelEn: 'Exc Sector', val: formData['Exc sector'] || formData['Sectores'] || masterRecord?.['Exc sector'] || '—' },
-                        { label: 'قطاع المناطق', labelEn: 'Zone', val: formData['Zone'] || formData['قطاع المناطق'] || masterRecord?.['Zone'] || '—' },
-                        { label: 'الإدارة العامة لتنفيذ الشبكات', labelEn: 'General Network Admin', val: formData['Exc Zone'] || formData['الادارة العامة لتنفيذ الشبكات'] || masterRecord?.['Exc Zone'] || '—' },
-                        { label: 'مسؤولية التنفيذ', labelEn: 'Responsibility', val: formData['المسئولية'] || formData['مسئولية التنفيذ'] || masterRecord?.['المسئولية'] || '—' },
-                        { label: 'النوع', labelEn: 'Type', val: formData['Type'] || formData['النوع'] || masterRecord?.['Type'] || '—' },
-                        { label: 'الخطة', labelEn: 'Plan Year', val: formData['خطة'] || formData['Plan'] || masterRecord?.['خطة'] || '—' },
-                        { label: 'حالة الموقع', labelEn: 'Site Status', val: currentStatus || '—' },
-                      ].map((item, idx) => (
-                        <div key={idx} className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
-                          <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
-                            <span className="font-semibold text-slate-700">{item.label}</span>
-                            <span className="text-[10px] text-slate-400">({item.labelEn})</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-1 mt-1 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg">
-                            <span className="font-bold text-slate-800 text-xs sm:text-sm font-mono truncate" title={item.val}>
-                              {item.val}
-                            </span>
-                            <Lock className="w-3 h-3 text-slate-400 shrink-0" />
-                          </div>
+                        { label: 'كود الموقع', val: formData['site code'] || masterRecord?.['site code'] || '—', isCode: true },
+                        { label: 'قطاع التنفيذ', val: formData['Exc sector'] || formData['Sectores'] || masterRecord?.['Exc sector'] || '—' },
+                        { label: 'قطاع المناطق', val: formData['Zone'] || formData['قطاع المناطق'] || masterRecord?.['Zone'] || '—' },
+                        { label: 'إدارة الشبكات', val: formData['Exc Zone'] || formData['اداره التنفيذ المختصه'] || masterRecord?.['Exc Zone'] || '—' },
+                        { label: 'مسؤولية التنفيذ', val: formData['المسئولية'] || formData['مسئولية التنفيذ'] || masterRecord?.['المسئولية'] || '—' },
+                        { label: 'النوع', val: formData['Type'] || formData['النوع'] || masterRecord?.['Type'] || '—' },
+                        { label: 'الخطة', val: formData['خطة'] || formData['Plan'] || masterRecord?.['خطة'] || '—' },
+                        { label: 'السنترال', val: formData['السنترال'] || masterRecord?.['السنترال'] || '—' },
+                      ].map((item, i) => (
+                        <div key={i} className="bg-white border border-slate-200 rounded-xl p-2.5 shadow-2xs hover:border-blue-200 transition">
+                          <span className="text-[10px] text-slate-400 block font-semibold mb-0.5">{item.label}</span>
+                          <span className={`font-bold text-slate-900 text-xs sm:text-sm truncate block ${item.isCode ? 'font-mono text-blue-700' : ''}`} title={item.val}>
+                            {item.val}
+                          </span>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* ── 2. CONDITIONAL EDITING SECTION BASED ON SITE STATUS ── */}
-                  {currentCategory === 'completed' && (
-                    <div className="bg-emerald-50/80 border-2 border-emerald-300 rounded-2xl p-5 shadow-xs animate-in fade-in">
-                      <div className="flex items-center justify-between mb-4 border-b border-emerald-200 pb-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                            <CheckCircle2 className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-emerald-950 text-base">
-                                حالة الموقع: تم الانتهاء
-                              </h4>
-                              <span className="text-[11px] bg-emerald-200 text-emerald-900 px-2.5 py-0.5 rounded-full font-bold">
-                                مسموح بتعديل الحقول المحددة أدناه فقط
-                              </span>
-                            </div>
-                            <p className="text-xs text-emerald-700 mt-0.5">
-                              المسموح: (تاريخ الانتهاء، إرفاق المستند مع زر رفع، والملاحظات) • باقي الخانات مغلقة
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+                  {/* ═══════════════════════════════════════════════════════════════════════════════════ */}
+                  {/* قسم التعديل والحالة (في الأسفل)                                                     */}
+                  {/* إزالة أي مصطلحات مثل (السطر الأول أو السطر الثاني)، وجعل العناوين مباشرة ونظيفة:   */}
+                  {/* - حالة الموقع (Site Status) مع مؤشر الإشارة (Pulse Indicator إذا كان الموقع On Air) */}
+                  {/* - التصنيف (Classification) مباشرة أسفل حالة الموقع                                 */}
+                  {/* - الحقول الشرطية والتفصيلية المتفرعة من التصنيف بحسب الحالات المحددة                */}
+                  {/* ═══════════════════════════════════════════════════════════════════════════════════ */}
+                  <div className="bg-white border-2 border-slate-300 rounded-2xl p-5 shadow-sm space-y-4">
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* 1. تاريخ الانتهاء */}
-                        <div className="flex flex-col">
-                          <label className="text-xs font-bold text-emerald-950 mb-1.5 flex items-center justify-between">
-                            <span>تاريخ الانتهاء (Completion Date)</span>
-                            <span className="text-emerald-700 text-[11px] font-semibold">قابل للتعديل</span>
-                          </label>
-                          <input
-                            type="date"
-                            name="التاريخ الفعلى للانتهاء"
-                            id="field-actual-date"
-                            readOnly={isReadOnly}
-                            disabled={isReadOnly}
-                            value={formData['التاريخ الفعلى للانتهاء'] || formData['التاريخ المتوقع للانتهاء'] || ''}
-                            onChange={(e) => handleFieldChange('التاريخ الفعلى للانتهاء', e.target.value)}
-                            className="border border-emerald-300 bg-white text-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 font-mono shadow-xs"
-                          />
-                        </div>
-
-                        {/* 2. إرفاق المستند مع زر رفع */}
-                        <div className="flex flex-col">
-                          <label className="text-xs font-bold text-emerald-950 mb-1.5 flex items-center justify-between">
-                            <span>إرفاق المستند الرسمي / محضر الإنجاز</span>
-                            <span className="text-emerald-700 text-[11px] font-semibold">مستند معتمد</span>
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="file"
-                              ref={fileInputRef}
-                              onChange={handleFileUpload}
-                              className="hidden"
-                              accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xlsx"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => fileInputRef.current?.click()}
-                              disabled={isReadOnly}
-                              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer disabled:opacity-50"
-                            >
-                              <UploadCloud className="w-4 h-4" />
-                              <span>رفع ملف المستند</span>
-                            </button>
-                            <div className="flex-1 bg-white border border-emerald-300 rounded-xl px-3 py-2 text-xs text-slate-700 truncate font-mono flex items-center justify-between">
-                              <span className="truncate">
-                                {formData['المستند'] ? formData['المستند'] : 'لم يتم إرفاق ملف بعد'}
-                              </span>
-                              {formData['المستند'] && (
-                                <button
-                                  type="button"
-                                  onClick={handleRemoveDocument}
-                                  className="text-red-500 hover:text-red-700 font-bold mr-1 text-xs cursor-pointer"
-                                  title="إلغاء المرفق"
-                                >
-                                  ✕
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          {formData['المستند'] && (
-                            <span className="text-[11px] text-emerald-700 font-semibold mt-1 flex items-center gap-1">
-                              <FileCheck className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>تم إرفاق المستند بنجاح وجاهز للحفظ في السجل</span>
-                            </span>
-                          )}
-                        </div>
-
-                        {/* 3. الملاحظات */}
-                        <div className="md:col-span-2 flex flex-col">
-                          <label className="text-xs font-bold text-emerald-950 mb-1.5 flex items-center justify-between">
-                            <span>الملاحظات (Notes)</span>
-                            <span className="text-emerald-700 text-[11px] font-semibold">قابل للتعديل</span>
-                          </label>
-                          <textarea
-                            rows={3}
-                            name="الملاحظات"
-                            id="field-notes"
-                            readOnly={isReadOnly}
-                            disabled={isReadOnly}
-                            value={formData['الملاحظات'] || ''}
-                            onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
-                            placeholder="أدخل أي ملاحظات أو تفاصيل حول إنهاء وتسليم الموقع..."
-                            className="border border-emerald-300 bg-white text-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 shadow-xs"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {currentCategory === 'operational' && (
-                    <div className="bg-sky-50/80 border-2 border-sky-300 rounded-2xl p-5 shadow-xs animate-in fade-in">
-                      <div className="flex items-center justify-between mb-4 border-b border-sky-200 pb-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-9 h-9 rounded-xl bg-sky-600 text-white flex items-center justify-center shrink-0">
-                            <CheckCircle2 className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-sky-950 text-base">
-                                حالة الموقع: تشغيل (ON AIR / تم التشغيل)
-                              </h4>
-                              <span className="text-[11px] bg-sky-200 text-sky-900 px-2.5 py-0.5 rounded-full font-bold">
-                                مسموح بتعديل الحقول أدناه فقط
-                              </span>
-                            </div>
-                            <p className="text-xs text-sky-700 mt-0.5">
-                              المسموح: (تاريخ التشغيل/التاريخ الفعلي، إرفاق المستند مع زر رفع، والملاحظات) • باقي الخانات مغلقة
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* 1. تاريخ التشغيل / التاريخ الفعلي */}
-                        <div className="flex flex-col">
-                          <label className="text-xs font-bold text-sky-950 mb-1.5 flex items-center justify-between">
-                            <span>تاريخ التشغيل / التاريخ الفعلي (Actual On-Air Date)</span>
-                            <span className="text-sky-700 text-[11px] font-semibold">قابل للتعديل</span>
-                          </label>
-                          <input
-                            type="date"
-                            name="التاريخ الفعلى للانتهاء"
-                            id="field-actual-date"
-                            readOnly={isReadOnly}
-                            disabled={isReadOnly}
-                            value={formData['التاريخ الفعلى للانتهاء'] || ''}
-                            onChange={(e) => handleFieldChange('التاريخ الفعلى للانتهاء', e.target.value)}
-                            className="border border-sky-300 bg-white text-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 font-mono shadow-xs"
-                          />
-                        </div>
-
-                        {/* 2. إرفاق المستند مع زر رفع */}
-                        <div className="flex flex-col">
-                          <label className="text-xs font-bold text-sky-950 mb-1.5 flex items-center justify-between">
-                            <span>إرفاق المستند الرسمي / محضر التشغيل</span>
-                            <span className="text-sky-700 text-[11px] font-semibold">مستند معتمد</span>
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="file"
-                              ref={fileInputRef}
-                              onChange={handleFileUpload}
-                              className="hidden"
-                              accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xlsx"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => fileInputRef.current?.click()}
-                              disabled={isReadOnly}
-                              className="px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer disabled:opacity-50"
-                            >
-                              <UploadCloud className="w-4 h-4" />
-                              <span>رفع ملف المستند</span>
-                            </button>
-                            <div className="flex-1 bg-white border border-sky-300 rounded-xl px-3 py-2 text-xs text-slate-700 truncate font-mono flex items-center justify-between">
-                              <span className="truncate">
-                                {formData['المستند'] ? formData['المستند'] : 'لم يتم إرفاق ملف بعد'}
-                              </span>
-                              {formData['المستند'] && (
-                                <button
-                                  type="button"
-                                  onClick={handleRemoveDocument}
-                                  className="text-red-500 hover:text-red-700 font-bold mr-1 text-xs cursor-pointer"
-                                  title="إلغاء المرفق"
-                                >
-                                  ✕
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          {formData['المستند'] && (
-                            <span className="text-[11px] text-sky-700 font-semibold mt-1 flex items-center gap-1">
-                              <FileCheck className="w-3.5 h-3.5 text-sky-600" />
-                              <span>تم إرفاق المستند بنجاح وجاهز للحفظ في السجل</span>
-                            </span>
-                          )}
-                        </div>
-
-                        {/* 3. الملاحظات */}
-                        <div className="md:col-span-2 flex flex-col">
-                          <label className="text-xs font-bold text-sky-950 mb-1.5 flex items-center justify-between">
-                            <span>الملاحظات (Notes)</span>
-                            <span className="text-sky-700 text-[11px] font-semibold">قابل للتعديل</span>
-                          </label>
-                          <textarea
-                            rows={3}
-                            name="الملاحظات"
-                            id="field-notes"
-                            readOnly={isReadOnly}
-                            disabled={isReadOnly}
-                            value={formData['الملاحظات'] || ''}
-                            onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
-                            placeholder="أدخل أي ملاحظات حول تشغيل الموقع والتنسيق الفني..."
-                            className="border border-sky-300 bg-white text-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 shadow-xs"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {currentCategory === 'in_progress' && (
-                    <div className="bg-amber-50/80 border-2 border-amber-300 rounded-2xl p-5 shadow-xs animate-in fade-in">
-                      <div className="flex items-center justify-between mb-4 border-b border-amber-200 pb-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center shrink-0">
-                            <Edit3 className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-amber-950 text-base">
-                                حالة الموقع: {currentStatus || 'جاري العمل والتنفيذ'}
-                              </h4>
-                              <span className="text-[11px] bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full font-bold">
-                                مسموح بتعديل الحقول أدناه فقط
-                              </span>
-                            </div>
-                            <p className="text-xs text-amber-700 mt-0.5">
-                              المسموح: (التاريخ المتوقع للانتهاء/للتنفيذ والملاحظات) • باقي الخانات مغلقة
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* 1. التاريخ المتوقع للانتهاء / للتنفيذ */}
-                        <div className="flex flex-col">
-                          <label className="text-xs font-bold text-amber-950 mb-1.5 flex items-center justify-between">
-                            <span>التاريخ المتوقع للانتهاء / للتنفيذ (Expected Target Date)</span>
-                            <span className="text-amber-700 text-[11px] font-semibold">قابل للتعديل</span>
-                          </label>
-                          <input
-                            type="date"
-                            name="التاريخ المتوقع للانتهاء"
-                            id="field-expected-date"
-                            readOnly={isReadOnly}
-                            disabled={isReadOnly}
-                            value={formData['التاريخ المتوقع للانتهاء'] || ''}
-                            onChange={(e) => handleFieldChange('التاريخ المتوقع للانتهاء', e.target.value)}
-                            className="border border-amber-300 bg-white text-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 font-mono shadow-xs"
-                          />
-                        </div>
-
-                        {/* 2. الملاحظات */}
-                        <div className="flex flex-col md:col-span-2">
-                          <label className="text-xs font-bold text-amber-950 mb-1.5 flex items-center justify-between">
-                            <span>الملاحظات وموقف الأعمال (Notes & Progress)</span>
-                            <span className="text-amber-700 text-[11px] font-semibold">قابل للتعديل</span>
-                          </label>
-                          <textarea
-                            rows={3}
-                            name="الملاحظات"
-                            id="field-notes"
-                            readOnly={isReadOnly}
-                            disabled={isReadOnly}
-                            value={formData['الملاحظات'] || ''}
-                            onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
-                            placeholder="أدخل أي ملاحظات حول سير الأعمال، نسب الإنجاز، وموقف التنفيذ الميداني..."
-                            className="border border-amber-300 bg-white text-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 shadow-xs"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {currentCategory === 'stalled' && (
-                    <div className="bg-rose-50/80 border-2 border-rose-300 rounded-2xl p-5 shadow-xs animate-in fade-in">
-                      <div className="flex items-center justify-between mb-4 border-b border-rose-200 pb-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0">
-                            <AlertCircle className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-rose-950 text-base">
-                                حالة الموقع: متعذر
-                              </h4>
-                              <span className="text-[11px] bg-rose-200 text-rose-900 px-2.5 py-0.5 rounded-full font-bold">
-                                تخصيص الحقول بناءً على سبب التعذر
-                              </span>
-                            </div>
-                            <p className="text-xs text-rose-700 mt-0.5">
-                              حدد سبب التعذر لتفعيل الحقول المخصصة له طبقاً للائحة النظام
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Reason dropdown */}
-                      <div className="mb-4">
-                        <label className="text-xs font-bold text-rose-950 mb-1.5 flex items-center justify-between">
-                          <span>سبب التعذر (Stall Reason)</span>
-                          <span className="text-rose-700 text-[11px] font-semibold">محدد الحقول</span>
+                    {/* ──────────────────────────────────────────────────────────── */}
+                    {/* حالة الموقع (Site Status)                                    */}
+                    {/* ──────────────────────────────────────────────────────────── */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 sm:p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                          <Activity className="w-4 h-4 text-sky-600" />
+                          <span>حالة الموقع (Site Status)</span>
                         </label>
-                        <select
-                          name="اسباب التعذر"
-                          id="field-stalled-reason"
-                          disabled={isReadOnly}
-                          value={formData['اسباب التعذر'] || ''}
-                          onChange={(e) => handleFieldChange('اسباب التعذر', e.target.value)}
-                          className="border border-rose-300 bg-white text-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 font-semibold shadow-xs w-full cursor-pointer"
-                        >
-                          <option value="">-- اختر سبب التعذر --</option>
-                          {['ارتفاع التكلفة', 'التصاريح', 'عدم إمكانية', 'تصاريح مرور', 'تصاريح سكة حديد', 'أخرى'].map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
+                        <span className="text-[11px] font-bold text-slate-500 bg-slate-200 px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-slate-300">
+                          <Lock className="w-3 h-3 text-slate-500" />
+                          <span>ثابتة لمسؤول القطاع (Read-only)</span>
+                        </span>
                       </div>
 
-                      {/* Sub-reason conditional fields */}
-                      {currentStalledReason === 'high_cost' && (
-                        <div className="bg-white/90 border border-rose-200 rounded-xl p-4 mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 animate-in fade-in">
-                          <div className="md:col-span-3 text-xs font-bold text-rose-800 border-b border-rose-100 pb-1.5">
-                            💰 تفاصيل التكاليف والمسافة (سبب ارتفاع التكلفة):
+                      {/* Display of Site Status + Pulse Indicator if On Air */}
+                      {isAdmin && adminFullEditMode ? (
+                        <div className="mt-1">
+                          <select
+                            name="Site Status"
+                            value={currentStatus}
+                            onChange={(e) => handleFieldChange('Site Status', e.target.value)}
+                            className="w-full bg-white border-2 border-purple-300 rounded-xl px-4 py-2.5 text-sm sm:text-base font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-300 cursor-pointer"
+                          >
+                            {(dropdownValues['Site Status'] || DEFAULT_FALLBACK_DROPDOWNS['Site Status'] || []).map((st) => (
+                              <option key={st} value={st}>
+                                {st}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between bg-white border-2 border-slate-200 rounded-xl px-4 py-3 shadow-2xs flex-wrap gap-2">
+                          <div className="flex items-center gap-3">
+                            {/* Pulse Indicator: إذا كان الموقع On Air، يتم وضع مؤشر الإشارة النابض تماماً كالصفحة الرئيسية */}
+                            {isOnAir ? (
+                              <div className="flex items-center gap-3">
+                                <span className="relative flex h-3 w-3 items-center justify-center">
+                                  <span className="w-3 h-3 rounded-full bg-emerald-400 animate-ping absolute inline-flex opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                                </span>
+                                <span className="text-base sm:text-lg font-mono font-extrabold text-emerald-800 tracking-wide">
+                                  {currentStatus || 'On Air'}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2.5">
+                                <span className="w-2.5 h-2.5 rounded-full bg-sky-500"></span>
+                                <span className="text-base sm:text-lg font-mono font-extrabold text-slate-900 tracking-wide">
+                                  {currentStatus || 'CGA'}
+                                </span>
+                              </div>
+                            )}
                           </div>
 
-                          <div className="flex flex-col">
-                            <label className="text-xs font-medium text-slate-700 mb-1">
-                              التكلفة المتوقعة بدون مسار (بالجنيه)
-                            </label>
-                            <input
-                              type="number"
-                              step="any"
-                              name="تكلفة التوصيل بدون مسار تراسلى بالجنيه"
-                              value={formData['تكلفة التوصيل بدون مسار تراسلى بالجنيه'] || ''}
-                              onChange={(e) => handleFieldChange('تكلفة التوصيل بدون مسار تراسلى بالجنيه', e.target.value)}
-                              placeholder="مثال: 180000"
-                              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-rose-200"
-                            />
+                          <div className="flex items-center gap-2">
+                            {isOnAir && (
+                              <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 font-semibold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                <span>مؤشر الإشارة: متصل بالشبكة (On Air)</span>
+                              </span>
+                            )}
+                            <span className="text-xs text-slate-400 font-semibold bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                              قراءة فقط 🔒
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ──────────────────────────────────────────────────────────── */}
+                    {/* التصنيف (Classification) - يظهر مباشرة أسفل حالة الموقع      */}
+                    {/* ──────────────────────────────────────────────────────────── */}
+                    <div className="bg-indigo-50/40 border border-indigo-200 rounded-xl p-3.5 sm:p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs sm:text-sm font-bold text-indigo-950 flex items-center gap-1.5">
+                          <Sliders className="w-4 h-4 text-indigo-600" />
+                          <span>التصنيف (Classification)</span>
+                          <span className="text-red-500 font-bold">*</span>
+                        </label>
+                        <span className="text-[11px] font-bold text-indigo-700 bg-indigo-100 px-2.5 py-0.5 rounded-full border border-indigo-200">
+                          ⚡ تتفرع منه الحقول الشرطية أدناه
+                        </span>
+                      </div>
+
+                      {/* Interactive Selection of Classification */}
+                      <select
+                        name="التصنيف"
+                        id="field-classification-select"
+                        disabled={isReadOnly}
+                        value={currentClassification || ''}
+                        onChange={(e) => handleFieldChange('التصنيف', e.target.value)}
+                        className="w-full bg-white border-2 border-indigo-300 rounded-xl px-4 py-2.5 text-sm sm:text-base font-bold text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 shadow-xs cursor-pointer transition"
+                      >
+                        <option value="">-- اختر التصنيف المعتمد للموقع --</option>
+                        {APPROVED_CLASSIFICATIONS.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+
+                      <p className="text-[11px] text-indigo-700 mt-1.5 font-medium">
+                        💡 تفتح الحقول الشرطية والتفصيلية المخصصة مباشرة أدناه بحسب التصنيف المختار أعلاه.
+                      </p>
+                    </div>
+
+                    {/* ──────────────────────────────────────────────────────────── */}
+                    {/* ربط الحقول الشرطية بالتصنيف: تفتح الحقول التابعة له مباشرة   */}
+                    {/* ──────────────────────────────────────────────────────────── */}
+                    <div className="pt-1">
+
+                      {/* ── CASE 1: التصنيف "تم الانتهاء" أو "تم التشغيل" أو "تم التشغيل فايبر" ── */}
+                      {currentCategory === 'completed_or_operational' && (
+                        <div className="bg-emerald-50/70 border-2 border-emerald-300 rounded-xl p-4 sm:p-5 space-y-4 animate-in fade-in shadow-xs">
+                          <div className="flex items-center justify-between pb-2 border-b border-emerald-200 flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                              <h4 className="font-bold text-emerald-950 text-sm sm:text-base">
+                                الحقول التابعة لتصنيف ({currentClassification}):
+                              </h4>
+                            </div>
+                            <span className="text-[11px] bg-emerald-200 text-emerald-900 px-2.5 py-0.5 rounded-full font-bold">
+                              التاريخ الفعلي + الملاحظات (باقي الحقول مغلقة)
+                            </span>
                           </div>
 
-                          <div className="flex flex-col">
-                            <label className="text-xs font-medium text-slate-700 mb-1">
-                              التكلفة المتوقعة بمسار تراسلي (بالجنيه)
-                            </label>
-                            <input
-                              type="number"
-                              step="any"
-                              name="تكلفة التوصيل على المسار التراسلى بالجنيه"
-                              value={formData['تكلفة التوصيل على المسار التراسلى بالجنيه'] || ''}
-                              onChange={(e) => handleFieldChange('تكلفة التوصيل على المسار التراسلى بالجنيه', e.target.value)}
-                              placeholder="مثال: 95000"
-                              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-rose-200"
-                            />
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* خانة التاريخ الفعلي */}
+                            <div className="flex flex-col">
+                              <label className="text-xs font-bold text-slate-800 mb-1.5 flex items-center justify-between">
+                                <span className="flex items-center gap-1.5">
+                                  <span>📅 خانة التاريخ الفعلي</span>
+                                  <span className="text-slate-400 text-[11px] font-normal">(Actual Date)</span>
+                                </span>
+                                <span className="text-emerald-700 text-[10px] font-bold bg-emerald-100 px-2 py-0.2 rounded-full">
+                                  مفتوح للتعديل
+                                </span>
+                              </label>
+                              <input
+                                type="date"
+                                name="التاريخ الفعلى للانتهاء"
+                                id="field-actual-date"
+                                readOnly={isReadOnly}
+                                disabled={isReadOnly}
+                                value={formData['التاريخ الفعلى للانتهاء'] || formData['التاريخ المتوقع للانتهاء'] || ''}
+                                onChange={(e) => handleFieldChange('التاريخ الفعلى للانتهاء', e.target.value)}
+                                className="border-2 border-emerald-300 bg-white text-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 font-mono shadow-xs font-bold"
+                              />
+                            </div>
+
+                            {/* إرفاق المستند (محضر الإنجاز أو الاستلام) */}
+                            <div className="flex flex-col">
+                              <label className="text-xs font-bold text-slate-800 mb-1.5 flex items-center justify-between">
+                                <span>إرفاق المستند / محضر الاستلام</span>
+                                <span className="text-slate-500 text-[11px]">مستند رسمي</span>
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="file"
+                                  ref={fileInputRef}
+                                  onChange={handleFileUpload}
+                                  className="hidden"
+                                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xlsx"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => fileInputRef.current?.click()}
+                                  disabled={isReadOnly}
+                                  className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer disabled:opacity-50"
+                                >
+                                  <UploadCloud className="w-4 h-4" />
+                                  <span>رفع ملف</span>
+                                </button>
+                                <div className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-700 truncate font-mono flex items-center justify-between">
+                                  <span className="truncate">
+                                    {formData['المستند'] ? formData['المستند'] : 'لم يتم إرفاق ملف بعد'}
+                                  </span>
+                                  {formData['المستند'] && (
+                                    <button
+                                      type="button"
+                                      onClick={handleRemoveDocument}
+                                      className="text-red-500 hover:text-red-700 font-bold mr-1 text-xs cursor-pointer"
+                                    >
+                                      ✕
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* خانة الملاحظات */}
+                            <div className="md:col-span-2 flex flex-col">
+                              <label className="text-xs font-bold text-slate-800 mb-1.5 flex items-center justify-between">
+                                <span className="flex items-center gap-1.5">
+                                  <span>📝 خانة الملاحظات</span>
+                                  <span className="text-slate-400 text-[11px] font-normal">(Notes)</span>
+                                </span>
+                                <span className="text-emerald-700 text-[10px] font-bold bg-emerald-100 px-2 py-0.2 rounded-full">
+                                  مفتوح للتعديل
+                                </span>
+                              </label>
+                              <textarea
+                                rows={3}
+                                name="الملاحظات"
+                                id="field-notes"
+                                readOnly={isReadOnly}
+                                disabled={isReadOnly}
+                                value={formData['الملاحظات'] || ''}
+                                onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
+                                placeholder="أدخل أي ملاحظات حول تسليم وتشغيل الموقع..."
+                                className="border-2 border-emerald-300 bg-white text-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 shadow-xs"
+                              />
+                            </div>
                           </div>
 
-                          <div className="flex flex-col">
-                            <label className="text-xs font-medium text-slate-700 mb-1">
-                              المسافة (كم)
-                            </label>
-                            <input
-                              type="number"
-                              step="0.1"
-                              name="المسافة كم"
-                              value={formData['المسافة كم'] || ''}
-                              onChange={(e) => handleFieldChange('المسافة كم', e.target.value)}
-                              placeholder="مثال: 4.2"
-                              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-rose-200"
-                            />
-                          </div>
-
-                          <div className="md:col-span-3 flex flex-col mt-1">
-                            <label className="text-xs font-medium text-slate-700 mb-1">
-                              الملاحظات
-                            </label>
-                            <textarea
-                              rows={2}
-                              name="الملاحظات"
-                              value={formData['الملاحظات'] || ''}
-                              onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
-                              placeholder="ملاحظات تفصيلية حول التكلفة والمسار..."
-                              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-rose-200"
-                            />
+                          <div className="text-[11px] text-emerald-800 bg-emerald-100/60 p-2.5 rounded-lg flex items-center gap-1.5">
+                            <Lock className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                            <span>باقي الحقول مغلقة وغير قابلة للتعديل لمسؤول القطاع لضمان سلامة بيانات السجل.</span>
                           </div>
                         </div>
                       )}
 
-                      {currentStalledReason === 'permits' && (
-                        <div className="bg-white/90 border border-rose-200 rounded-xl p-4 mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 animate-in fade-in">
-                          <div className="md:col-span-2 text-xs font-bold text-rose-800 border-b border-rose-100 pb-1.5">
-                            📜 تفاصيل تعذر التصاريح:
+                      {/* ── CASE 2: التصنيف ("جاري المعاينة"، "جاري تصاريح"، "جاري العمل"، إلخ) ── */}
+                      {currentCategory === 'in_progress' && (
+                        <div className="bg-amber-50/70 border-2 border-amber-300 rounded-xl p-4 sm:p-5 space-y-4 animate-in fade-in shadow-xs">
+                          <div className="flex items-center justify-between pb-2 border-b border-amber-200 flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-5 h-5 text-amber-600 shrink-0" />
+                              <h4 className="font-bold text-amber-950 text-sm sm:text-base">
+                                الحقول التابعة لتصنيف ({currentClassification}):
+                              </h4>
+                            </div>
+                            <span className="text-[11px] bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full font-bold">
+                              التاريخ المتوقع + الملاحظات (باقي الحقول مغلقة)
+                            </span>
                           </div>
 
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* خانة التاريخ المتوقع */}
+                            <div className="flex flex-col md:col-span-1">
+                              <label className="text-xs font-bold text-slate-800 mb-1.5 flex items-center justify-between">
+                                <span className="flex items-center gap-1.5">
+                                  <span>📅 خانة التاريخ المتوقع للانتهاء</span>
+                                  <span className="text-slate-400 text-[11px] font-normal">(Expected Date)</span>
+                                </span>
+                                <span className="text-amber-700 text-[10px] font-bold bg-amber-100 px-2 py-0.2 rounded-full">
+                                  مفتوح للتعديل
+                                </span>
+                              </label>
+                              <input
+                                type="date"
+                                name="التاريخ المتوقع للانتهاء"
+                                id="field-expected-date"
+                                readOnly={isReadOnly}
+                                disabled={isReadOnly}
+                                value={formData['التاريخ المتوقع للانتهاء'] || ''}
+                                onChange={(e) => handleFieldChange('التاريخ المتوقع للانتهاء', e.target.value)}
+                                className="border-2 border-amber-300 bg-white text-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 font-mono shadow-xs font-bold"
+                              />
+                            </div>
+
+                            <div className="flex flex-col md:col-span-1 justify-center bg-white border border-amber-200 rounded-xl p-3 text-xs text-amber-900">
+                              <span className="font-bold">المتابعة الميدانية:</span>
+                              <span className="text-[11px] text-slate-600 mt-1">
+                                تم قفل باقي البيانات تلقائياً لحماية المسار والتنفيذ. يرجى إدخال التاريخ المستهدف وتفصيل الموقف بالملاحظات.
+                              </span>
+                            </div>
+
+                            {/* خانة الملاحظات */}
+                            <div className="flex flex-col md:col-span-2">
+                              <label className="text-xs font-bold text-slate-800 mb-1.5 flex items-center justify-between">
+                                <span className="flex items-center gap-1.5">
+                                  <span>📝 خانة الملاحظات وموقف الأعمال</span>
+                                  <span className="text-slate-400 text-[11px] font-normal">(Notes)</span>
+                                </span>
+                                <span className="text-amber-700 text-[10px] font-bold bg-amber-100 px-2 py-0.2 rounded-full">
+                                  مفتوح للتعديل
+                                </span>
+                              </label>
+                              <textarea
+                                rows={3}
+                                name="الملاحظات"
+                                id="field-notes"
+                                readOnly={isReadOnly}
+                                disabled={isReadOnly}
+                                value={formData['الملاحظات'] || ''}
+                                onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
+                                placeholder="أدخل أي ملاحظات حول المعاينة، التصاريح، التنسيق، وموقف الأعمال الميدانية..."
+                                className="border-2 border-amber-300 bg-white text-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 shadow-xs"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="text-[11px] text-amber-800 bg-amber-100/60 p-2.5 rounded-lg flex items-center gap-1.5">
+                            <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                            <span>باقي الحقول مغلقة وغير قابلة للتعديل لمسؤول القطاع طبقاً للصلاحيات.</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ── CASE 3: التصنيف "متعذر" ── */}
+                      {currentCategory === 'stalled' && (
+                        <div className="bg-rose-50/70 border-2 border-rose-300 rounded-xl p-4 sm:p-5 space-y-4 animate-in fade-in shadow-xs">
+                          <div className="flex items-center justify-between pb-2 border-b border-rose-200 flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                              <h4 className="font-bold text-rose-950 text-sm sm:text-base">
+                                تفاصيل التعذر التابعة لتصنيف ({currentClassification}):
+                              </h4>
+                            </div>
+                            <span className="text-[11px] bg-rose-200 text-rose-900 px-2.5 py-0.5 rounded-full font-bold">
+                              حدد سبب التعذر لإظهار الحقول المخصصة له
+                            </span>
+                          </div>
+
+                          {/* Stalled Reason Dropdown */}
+                          <div className="bg-white border border-rose-200 p-3.5 rounded-xl shadow-2xs">
+                            <label className="text-xs font-bold text-rose-950 mb-1.5 flex items-center justify-between">
+                              <span className="flex items-center gap-1">
+                                <span>قائمة أسباب التعذر (Stall Reason):</span>
+                                <span className="text-red-500 font-bold">* مطلوب</span>
+                              </span>
+                              <span className="text-xs text-rose-700 font-semibold">محدد ظهور الحقول</span>
+                            </label>
+                            <select
+                              name="اسباب التعذر"
+                              id="field-stalled-reason"
+                              disabled={isReadOnly}
+                              value={formData['اسباب التعذر'] || ''}
+                              onChange={(e) => handleFieldChange('اسباب التعذر', e.target.value)}
+                              className="border-2 border-rose-300 bg-white text-slate-800 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 font-bold shadow-xs w-full cursor-pointer"
+                            >
+                              <option value="">-- اختر سبب التعذر --</option>
+                              <option value="ارتفاع التكلفة">ارتفاع التكلفة</option>
+                              <option value="التصاريح">التصاريح</option>
+                              <option value="عدم إمكانية">عدم إمكانية</option>
+                              <option value="تصاريح مرور">تصاريح مرور</option>
+                              <option value="تصاريح سكة حديد">تصاريح سكة حديد</option>
+                              <option value="أخرى">أخرى</option>
+                            </select>
+                          </div>
+
+                          {/* 3.1: إذا كان السبب "ارتفاع التكلفة" */}
+                          {currentStalledReason === 'high_cost' && (
+                            <div className="bg-white border-2 border-rose-200 rounded-xl p-4 grid grid-cols-1 md:grid-cols-3 gap-3 animate-in fade-in shadow-2xs">
+                              <div className="md:col-span-3 text-xs font-bold text-rose-800 border-b border-rose-100 pb-1.5 flex items-center gap-1.5">
+                                <DollarSign className="w-4 h-4 text-rose-600" />
+                                <span>الحقول المخصصة لسبب (ارتفاع التكلفة):</span>
+                              </div>
+
+                              <div className="flex flex-col">
+                                <label className="text-xs font-bold text-slate-700 mb-1">
+                                  التكلفة المتوقعة بدون مسار (ج.م)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  name="تكلفة التوصيل بدون مسار تراسلى بالجنيه"
+                                  readOnly={isReadOnly}
+                                  disabled={isReadOnly}
+                                  value={formData['تكلفة التوصيل بدون مسار تراسلى بالجنيه'] || ''}
+                                  onChange={(e) => handleFieldChange('تكلفة التوصيل بدون مسار تراسلى بالجنيه', e.target.value)}
+                                  placeholder="مثال: 180000"
+                                  className="border border-rose-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-rose-200 bg-white font-mono font-bold"
+                                />
+                              </div>
+
+                              <div className="flex flex-col">
+                                <label className="text-xs font-bold text-slate-700 mb-1">
+                                  التكلفة المتوقعة بمسار تراسلي (ج.م)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  name="تكلفة التوصيل على المسار التراسلى بالجنيه"
+                                  readOnly={isReadOnly}
+                                  disabled={isReadOnly}
+                                  value={formData['تكلفة التوصيل على المسار التراسلى بالجنيه'] || ''}
+                                  onChange={(e) => handleFieldChange('تكلفة التوصيل على المسار التراسلى بالجنيه', e.target.value)}
+                                  placeholder="مثال: 95000"
+                                  className="border border-rose-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-rose-200 bg-white font-mono font-bold"
+                                />
+                              </div>
+
+                              <div className="flex flex-col">
+                                <label className="text-xs font-bold text-slate-700 mb-1">
+                                  المسافة (كم)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  name="المسافة كم"
+                                  readOnly={isReadOnly}
+                                  disabled={isReadOnly}
+                                  value={formData['المسافة كم'] || ''}
+                                  onChange={(e) => handleFieldChange('المسافة كم', e.target.value)}
+                                  placeholder="مثال: 4.5"
+                                  className="border border-rose-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-rose-200 bg-white font-mono font-bold"
+                                />
+                              </div>
+
+                              <div className="md:col-span-3 flex flex-col mt-1">
+                                <label className="text-xs font-bold text-slate-700 mb-1">
+                                  الملاحظات
+                                </label>
+                                <textarea
+                                  rows={2}
+                                  name="الملاحظات"
+                                  readOnly={isReadOnly}
+                                  disabled={isReadOnly}
+                                  value={formData['الملاحظات'] || ''}
+                                  onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
+                                  placeholder="ملاحظات تفصيلية حول أسباب ارتفاع التكلفة..."
+                                  className="border border-rose-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-rose-200 bg-white"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 3.2: إذا كان السبب "التصاريح" */}
+                          {currentStalledReason === 'permits' && (
+                            <div className="bg-white border-2 border-rose-200 rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-3 animate-in fade-in shadow-2xs">
+                              <div className="md:col-span-2 text-xs font-bold text-rose-800 border-b border-rose-100 pb-1.5 flex items-center gap-1.5">
+                                <Calendar className="w-4 h-4 text-rose-600" />
+                                <span>الحقول المخصصة لسبب (التصاريح):</span>
+                              </div>
+
+                              <div className="flex flex-col">
+                                <label className="text-xs font-bold text-slate-700 mb-1">
+                                  التاريخ المتوقع للانتهاء
+                                </label>
+                                <input
+                                  type="date"
+                                  name="التاريخ المتوقع للانتهاء"
+                                  readOnly={isReadOnly}
+                                  disabled={isReadOnly}
+                                  value={formData['التاريخ المتوقع للانتهاء'] || ''}
+                                  onChange={(e) => handleFieldChange('التاريخ المتوقع للانتهاء', e.target.value)}
+                                  className="border border-rose-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-rose-200 bg-white font-mono font-bold"
+                                />
+                              </div>
+
+                              <div className="flex flex-col md:col-span-2">
+                                <label className="text-xs font-bold text-slate-700 mb-1">
+                                  الملاحظات
+                                </label>
+                                <textarea
+                                  rows={2}
+                                  name="الملاحظات"
+                                  readOnly={isReadOnly}
+                                  disabled={isReadOnly}
+                                  value={formData['الملاحظات'] || ''}
+                                  onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
+                                  placeholder="ملاحظات حول جهة التصاريح، رقم الطلب، وموقف الصدور..."
+                                  className="border border-rose-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-rose-200 bg-white"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 3.3: إذا كان السبب "عدم إمكانية" */}
+                          {currentStalledReason === 'impossible' && (
+                            <div className="bg-white border-2 border-rose-300 rounded-xl p-4 flex flex-col gap-2 animate-in fade-in shadow-2xs">
+                              <div className="text-xs font-bold text-rose-900 border-b border-rose-200 pb-1.5 flex items-center gap-1.5">
+                                <AlertCircle className="w-4 h-4 text-rose-600" />
+                                <span>خانة مخصصة لـ (الملاحظات) لتوضيح وتفصيل سبب عدم الإمكانية:</span>
+                              </div>
+                              <label className="text-xs font-semibold text-slate-700">
+                                يرجى كتابة وتفصيل أسباب عدم الإمكانية الفنية أو الهندسية أو الميدانية بدقة تامة:
+                              </label>
+                              <textarea
+                                rows={4}
+                                name="الملاحظات"
+                                readOnly={isReadOnly}
+                                disabled={isReadOnly}
+                                value={formData['الملاحظات'] || ''}
+                                onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
+                                placeholder="يرجى كتابة وتفصيل أسباب عدم الإمكانية الفنية أو الميدانية أو وجود عوائق جغرافية لا تسمح بتوصيل الفايبر بدقة هنا..."
+                                className="border-2 border-rose-300 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-rose-400 bg-rose-50/20 font-medium shadow-xs"
+                              />
+                            </div>
+                          )}
+
+                          {currentStalledReason === 'other' && formData['اسباب التعذر'] && (
+                            <div className="bg-white border border-rose-200 rounded-xl p-3 flex flex-col gap-2 animate-in fade-in">
+                              <label className="text-xs font-bold text-slate-700">
+                                الملاحظات
+                              </label>
+                              <textarea
+                                rows={3}
+                                name="الملاحظات"
+                                readOnly={isReadOnly}
+                                disabled={isReadOnly}
+                                value={formData['الملاحظات'] || ''}
+                                onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
+                                placeholder="ملاحظات وتفاصيل سبب التعذر..."
+                                className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-rose-200"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* ── CASE 4: التصنيف "معوقات" ── */}
+                      {currentCategory === 'obstacles' && (
+                        <div className="bg-orange-50/70 border-2 border-orange-300 rounded-xl p-4 sm:p-5 space-y-4 animate-in fade-in shadow-xs">
+                          <div className="flex items-center justify-between pb-2 border-b border-orange-200 flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <ShieldAlert className="w-5 h-5 text-orange-600 shrink-0" />
+                              <h4 className="font-bold text-orange-950 text-sm sm:text-base">
+                                تفاصيل المعوقات التابعة لتصنيف ({currentClassification}):
+                              </h4>
+                            </div>
+                            <span className="text-[11px] bg-orange-200 text-orange-900 px-2.5 py-0.5 rounded-full font-bold">
+                              حدد سبب المعوقات لإظهار الحقول المطلوبة
+                            </span>
+                          </div>
+
+                          {/* Obstacle Reason Dropdown */}
+                          <div className="bg-white border border-orange-200 p-3.5 rounded-xl shadow-2xs">
+                            <label className="text-xs font-bold text-orange-950 mb-1.5 flex items-center justify-between">
+                              <span className="flex items-center gap-1">
+                                <span>قائمة أسباب المعوقات:</span>
+                                <span className="text-red-500 font-bold">* مطلوب</span>
+                              </span>
+                              <span className="text-xs text-orange-700 font-semibold">محدد ظهور الحقول</span>
+                            </label>
+                            <select
+                              name="اسباب التعذر"
+                              id="field-obstacle-reason"
+                              disabled={isReadOnly}
+                              value={formData['اسباب التعذر'] || ''}
+                              onChange={(e) => handleFieldChange('اسباب التعذر', e.target.value)}
+                              className="border-2 border-orange-300 bg-white text-slate-800 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 font-bold shadow-xs w-full cursor-pointer"
+                            >
+                              <option value="">-- اختر سبب المعوقات --</option>
+                              <option value="اعتراض مالك">اعتراض مالك</option>
+                              <option value="اعتراض أهالي">اعتراض أهالي</option>
+                              <option value="التنسيق مع جهات أخرى">التنسيق مع جهات أخرى</option>
+                              <option value="التنسيق مع جهات حكومية">التنسيق مع جهات حكومية</option>
+                              <option value="بعد المسافة">بعد المسافة</option>
+                              <option value="أخرى">أخرى</option>
+                            </select>
+                          </div>
+
+                          {/* 4.1: إذا كان السبب (اعتراض مالك، اعتراض أهالي، التنسيق مع جهات أخرى، أو التنسيق مع جهات حكومية) */}
+                          {currentObstaclesReason === 'governmental_owner_objection' && (
+                            <div className="bg-white border-2 border-orange-200 rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-3 animate-in fade-in shadow-2xs">
+                              <div className="md:col-span-2 text-xs font-bold text-orange-800 border-b border-orange-100 pb-1.5 flex items-center gap-1.5">
+                                <Building2 className="w-4 h-4 text-orange-600" />
+                                <span>الحقول المخصصة لـ (الاعتراضات والتنسيق مع الجهات):</span>
+                              </div>
+
+                              <div className="flex flex-col md:col-span-2">
+                                <label className="text-xs font-bold text-slate-700 mb-1">
+                                  الجهة المطلوب الدعم منها
+                                </label>
+                                <select
+                                  name="الجهة المطلوب الدعم منها"
+                                  readOnly={isReadOnly}
+                                  disabled={isReadOnly}
+                                  value={formData['الجهة المطلوب الدعم منها'] || ''}
+                                  onChange={(e) => handleFieldChange('الجهة المطلوب الدعم منها', e.target.value)}
+                                  className="border border-orange-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-orange-200 bg-white cursor-pointer font-medium"
+                                >
+                                  <option value="">-- اختر الجهة المطلوب الدعم منها --</option>
+                                  {(dropdownValues['الجهة المطلوب الدعم منها'] || DEFAULT_FALLBACK_DROPDOWNS['الجهة المطلوب الدعم منها'] || []).map((auth) => (
+                                    <option key={auth} value={auth}>
+                                      {auth}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="md:col-span-2 flex flex-col">
+                                <label className="text-xs font-bold text-slate-700 mb-1">
+                                  الملاحظات
+                                </label>
+                                <textarea
+                                  rows={3}
+                                  name="الملاحظات"
+                                  readOnly={isReadOnly}
+                                  disabled={isReadOnly}
+                                  value={formData['الملاحظات'] || ''}
+                                  onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
+                                  placeholder="تفاصيل الاعتراض أو التنسيق المطلوب والملاحظات..."
+                                  className="border border-orange-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-200 bg-white"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 4.2: إذا كان السبب "بعد المسافة" */}
+                          {currentObstaclesReason === 'far_distance' && (
+                            <div className="bg-white border-2 border-orange-200 rounded-xl p-4 grid grid-cols-1 md:grid-cols-3 gap-3 animate-in fade-in shadow-2xs">
+                              <div className="md:col-span-3 text-xs font-bold text-orange-800 border-b border-orange-100 pb-1.5 flex items-center gap-1.5">
+                                <Navigation className="w-4 h-4 text-orange-600" />
+                                <span>الحقول المخصصة لسبب (بعد المسافة والتكاليف):</span>
+                              </div>
+
+                              <div className="flex flex-col">
+                                <label className="text-xs font-bold text-slate-700 mb-1">
+                                  المسافة (كم)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  name="المسافة كم"
+                                  readOnly={isReadOnly}
+                                  disabled={isReadOnly}
+                                  value={formData['المسافة كم'] || ''}
+                                  onChange={(e) => handleFieldChange('المسافة كم', e.target.value)}
+                                  placeholder="مثال: 5.8"
+                                  className="border border-orange-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-200 bg-white font-mono font-bold"
+                                />
+                              </div>
+
+                              <div className="flex flex-col">
+                                <label className="text-xs font-bold text-slate-700 mb-1">
+                                  تكلفة التوصيل بدون وسط تراسلي (ج.م)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  name="تكلفة التوصيل بدون مسار تراسلى بالجنيه"
+                                  readOnly={isReadOnly}
+                                  disabled={isReadOnly}
+                                  value={formData['تكلفة التوصيل بدون مسار تراسلى بالجنيه'] || ''}
+                                  onChange={(e) => handleFieldChange('تكلفة التوصيل بدون مسار تراسلى بالجنيه', e.target.value)}
+                                  placeholder="مثال: 210000"
+                                  className="border border-orange-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-200 bg-white font-mono font-bold"
+                                />
+                              </div>
+
+                              <div className="flex flex-col">
+                                <label className="text-xs font-bold text-slate-700 mb-1">
+                                  تكلفة التوصيل على مسار تراسلي (ج.م)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  name="تكلفة التوصيل على المسار التراسلى بالجنيه"
+                                  readOnly={isReadOnly}
+                                  disabled={isReadOnly}
+                                  value={formData['تكلفة التوصيل على المسار التراسلى بالجنيه'] || ''}
+                                  onChange={(e) => handleFieldChange('تكلفة التوصيل على المسار التراسلى بالجنيه', e.target.value)}
+                                  placeholder="مثال: 110000"
+                                  className="border border-orange-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-200 bg-white font-mono font-bold"
+                                />
+                              </div>
+
+                              <div className="md:col-span-3 flex flex-col mt-1">
+                                <label className="text-xs font-bold text-slate-700 mb-1">
+                                  الملاحظات
+                                </label>
+                                <textarea
+                                  rows={2}
+                                  name="الملاحظات"
+                                  readOnly={isReadOnly}
+                                  disabled={isReadOnly}
+                                  value={formData['الملاحظات'] || ''}
+                                  onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
+                                  placeholder="ملاحظات وتفاصيل التوصيل والمسافات..."
+                                  className="border border-orange-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-200 bg-white"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {currentObstaclesReason === 'other' && formData['اسباب التعذر'] && (
+                            <div className="bg-white border border-orange-200 rounded-xl p-3 flex flex-col gap-2 animate-in fade-in">
+                              <label className="text-xs font-bold text-slate-700">
+                                الملاحظات
+                              </label>
+                              <textarea
+                                rows={3}
+                                name="الملاحظات"
+                                readOnly={isReadOnly}
+                                disabled={isReadOnly}
+                                value={formData['الملاحظات'] || ''}
+                                onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
+                                placeholder="ملاحظات وتفاصيل المعوقات..."
+                                className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-200"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* General fallback if classification is empty/unspecified */}
+                      {currentCategory === 'general' && (
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in">
                           <div className="flex flex-col">
-                            <label className="text-xs font-medium text-slate-700 mb-1">
+                            <label className="text-xs font-bold text-slate-800 mb-1.5">
                               التاريخ المتوقع للانتهاء
                             </label>
                             <input
                               type="date"
                               name="التاريخ المتوقع للانتهاء"
+                              readOnly={isReadOnly}
+                              disabled={isReadOnly}
                               value={formData['التاريخ المتوقع للانتهاء'] || ''}
                               onChange={(e) => handleFieldChange('التاريخ المتوقع للانتهاء', e.target.value)}
-                              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-rose-200"
+                              className="border border-slate-300 bg-white text-slate-800 rounded-xl px-3.5 py-2 text-sm font-mono"
                             />
                           </div>
-
                           <div className="flex flex-col md:col-span-2">
-                            <label className="text-xs font-medium text-slate-700 mb-1">
-                              الملاحظات
-                            </label>
-                            <textarea
-                              rows={2}
-                              name="الملاحظات"
-                              value={formData['الملاحظات'] || ''}
-                              onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
-                              placeholder="ملاحظات حول جهة التصريح وموقف الصدور..."
-                              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-rose-200"
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {currentStalledReason === 'impossible' && (
-                        <div className="bg-white/90 border border-rose-200 rounded-xl p-4 mt-3 flex flex-col gap-2 animate-in fade-in">
-                          <div className="text-xs font-bold text-rose-800 border-b border-rose-100 pb-1.5">
-                            🚫 تفصيل وشرح سبب عدم الإمكانية:
-                          </div>
-                          <label className="text-xs font-medium text-slate-700">
-                            خانة الملاحظات لتوضيح وتفصيل سبب عدم الإمكانية
-                          </label>
-                          <textarea
-                            rows={4}
-                            name="الملاحظات"
-                            value={formData['الملاحظات'] || ''}
-                            onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
-                            placeholder="يرجى تفصيل وشرح سبب عدم الإمكانية الفنية أو الهندسية أو الميدانية بدقة هنا..."
-                            className="border border-rose-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-rose-200 bg-rose-50/30"
-                          />
-                        </div>
-                      )}
-
-                      {currentStalledReason === 'other' && (
-                        <div className="bg-white/90 border border-rose-200 rounded-xl p-4 mt-3 flex flex-col gap-2 animate-in fade-in">
-                          <label className="text-xs font-medium text-slate-700">
-                            الملاحظات
-                          </label>
-                          <textarea
-                            rows={3}
-                            name="الملاحظات"
-                            value={formData['الملاحظات'] || ''}
-                            onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
-                            placeholder="تفاصيل سبب التعذر والملاحظات..."
-                            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-rose-200"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {currentCategory === 'obstacles' && (
-                    <div className="bg-orange-50/80 border-2 border-orange-300 rounded-2xl p-5 shadow-xs animate-in fade-in">
-                      <div className="flex items-center justify-between mb-4 border-b border-orange-200 pb-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-9 h-9 rounded-xl bg-orange-600 text-white flex items-center justify-center shrink-0">
-                            <ShieldAlert className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-orange-950 text-base">
-                                حالة الموقع: معوقات
-                              </h4>
-                              <span className="text-[11px] bg-orange-200 text-orange-900 px-2.5 py-0.5 rounded-full font-bold">
-                                تخصيص الحقول بناءً على نوع المعوق
-                              </span>
-                            </div>
-                            <p className="text-xs text-orange-700 mt-0.5">
-                              حدد سبب المعوق لتفعيل الحقول المطلوبة وفقاً لقواعد النظام
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Reason dropdown */}
-                      <div className="mb-4">
-                        <label className="text-xs font-bold text-orange-950 mb-1.5 flex items-center justify-between">
-                          <span>سبب المعوقات (Obstacle Reason)</span>
-                          <span className="text-orange-700 text-[11px] font-semibold">محدد الحقول</span>
-                        </label>
-                        <select
-                          name="اسباب التعذر"
-                          id="field-obstacle-reason"
-                          disabled={isReadOnly}
-                          value={formData['اسباب التعذر'] || ''}
-                          onChange={(e) => handleFieldChange('اسباب التعذر', e.target.value)}
-                          className="border border-orange-300 bg-white text-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 font-semibold shadow-xs w-full cursor-pointer"
-                        >
-                          <option value="">-- اختر سبب المعوقات --</option>
-                          {[
-                            'اعتراض مالك',
-                            'اعتراض أهالي',
-                            'التنسيق مع جهات أخرى',
-                            'التنسيق مع جهات حكومية',
-                            'بعد المسافة',
-                            'أخرى'
-                          ].map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Sub-reason conditional fields */}
-                      {currentObstaclesReason === 'governmental_owner_objection' && (
-                        <div className="bg-white/90 border border-orange-200 rounded-xl p-4 mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 animate-in fade-in">
-                          <div className="md:col-span-2 text-xs font-bold text-orange-800 border-b border-orange-100 pb-1.5">
-                            🏛️ تفاصيل الاعتراضات والتنسيق الحكومي:
-                          </div>
-
-                          <div className="flex flex-col md:col-span-2">
-                            <label className="text-xs font-medium text-slate-700 mb-1">
-                              الجهة المطلوب الدعم منها
-                            </label>
-                            <select
-                              name="الجهة المطلوب الدعم منها"
-                              value={formData['الجهة المطلوب الدعم منها'] || ''}
-                              onChange={(e) => handleFieldChange('الجهة المطلوب الدعم منها', e.target.value)}
-                              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-200 cursor-pointer"
-                            >
-                              <option value="">-- اختر الجهة المطلوب الدعم منها --</option>
-                              {(dropdownValues['الجهة المطلوب الدعم منها'] || DEFAULT_FALLBACK_DROPDOWNS['الجهة المطلوب الدعم منها'] || []).map((auth) => (
-                                <option key={auth} value={auth}>
-                                  {auth}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="md:col-span-2 flex flex-col">
-                            <label className="text-xs font-medium text-slate-700 mb-1">
+                            <label className="text-xs font-bold text-slate-800 mb-1.5">
                               الملاحظات
                             </label>
                             <textarea
                               rows={3}
                               name="الملاحظات"
+                              readOnly={isReadOnly}
+                              disabled={isReadOnly}
                               value={formData['الملاحظات'] || ''}
                               onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
-                              placeholder="تفاصيل الاعتراض أو التنسيق المطلوب والملاحظات..."
-                              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-200"
+                              placeholder="الملاحظات..."
+                              className="border border-slate-300 bg-white text-slate-800 rounded-xl px-3.5 py-2 text-sm"
                             />
                           </div>
                         </div>
                       )}
 
-                      {currentObstaclesReason === 'far_distance' && (
-                        <div className="bg-white/90 border border-orange-200 rounded-xl p-4 mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 animate-in fade-in">
-                          <div className="md:col-span-3 text-xs font-bold text-orange-800 border-b border-orange-100 pb-1.5">
-                            📏 تفاصيل بعد المسافة والتكاليف:
-                          </div>
-
-                          <div className="flex flex-col">
-                            <label className="text-xs font-medium text-slate-700 mb-1">
-                              المسافة (كم)
-                            </label>
-                            <input
-                              type="number"
-                              step="0.1"
-                              name="المسافة كم"
-                              value={formData['المسافة كم'] || ''}
-                              onChange={(e) => handleFieldChange('المسافة كم', e.target.value)}
-                              placeholder="مثال: 5.8"
-                              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-200"
-                            />
-                          </div>
-
-                          <div className="flex flex-col">
-                            <label className="text-xs font-medium text-slate-700 mb-1">
-                              تكلفة التوصيل بدون وسط تراسلي (بالجنيه)
-                            </label>
-                            <input
-                              type="number"
-                              step="any"
-                              name="تكلفة التوصيل بدون مسار تراسلى بالجنيه"
-                              value={formData['تكلفة التوصيل بدون مسار تراسلى بالجنيه'] || ''}
-                              onChange={(e) => handleFieldChange('تكلفة التوصيل بدون مسار تراسلى بالجنيه', e.target.value)}
-                              placeholder="مثال: 210000"
-                              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-200"
-                            />
-                          </div>
-
-                          <div className="flex flex-col">
-                            <label className="text-xs font-medium text-slate-700 mb-1">
-                              تكلفة التوصيل على مسار تراسلي (بالجنيه)
-                            </label>
-                            <input
-                              type="number"
-                              step="any"
-                              name="تكلفة التوصيل على المسار التراسلى بالجنيه"
-                              value={formData['تكلفة التوصيل على المسار التراسلى بالجنيه'] || ''}
-                              onChange={(e) => handleFieldChange('تكلفة التوصيل على المسار التراسلى بالجنيه', e.target.value)}
-                              placeholder="مثال: 110000"
-                              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-200"
-                            />
-                          </div>
-
-                          <div className="md:col-span-3 flex flex-col mt-1">
-                            <label className="text-xs font-medium text-slate-700 mb-1">
-                              الملاحظات
-                            </label>
-                            <textarea
-                              rows={2}
-                              name="الملاحظات"
-                              value={formData['الملاحظات'] || ''}
-                              onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
-                              placeholder="ملاحظات وتفاصيل التوصيل والمسافات..."
-                              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-200"
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {currentObstaclesReason === 'other' && (
-                        <div className="bg-white/90 border border-orange-200 rounded-xl p-4 mt-3 flex flex-col gap-2 animate-in fade-in">
-                          <label className="text-xs font-medium text-slate-700">
-                            الملاحظات
-                          </label>
-                          <textarea
-                            rows={3}
-                            name="الملاحظات"
-                            value={formData['الملاحظات'] || ''}
-                            onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
-                            placeholder="ملاحظات وتفاصيل المعوق..."
-                            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-200"
-                          />
-                        </div>
-                      )}
                     </div>
-                  )}
+                  </div>
 
-                  {currentCategory === 'general' && (
-                    <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-5 shadow-xs animate-in fade-in">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex flex-col">
-                          <label className="text-xs font-bold text-slate-800 mb-1.5">
-                            التاريخ المتوقع للانتهاء / للتنفيذ
-                          </label>
-                          <input
-                            type="date"
-                            name="التاريخ المتوقع للانتهاء"
-                            readOnly={isReadOnly}
-                            disabled={isReadOnly}
-                            value={formData['التاريخ المتوقع للانتهاء'] || ''}
-                            onChange={(e) => handleFieldChange('التاريخ المتوقع للانتهاء', e.target.value)}
-                            className="border border-slate-300 bg-white text-slate-800 rounded-xl px-3.5 py-2.5 text-sm font-mono"
-                          />
-                        </div>
-                        <div className="flex flex-col md:col-span-2">
-                          <label className="text-xs font-bold text-slate-800 mb-1.5">
-                            الملاحظات
-                          </label>
-                          <textarea
-                            rows={3}
-                            name="الملاحظات"
-                            readOnly={isReadOnly}
-                            disabled={isReadOnly}
-                            value={formData['الملاحظات'] || ''}
-                            onChange={(e) => handleFieldChange('الملاحظات', e.target.value)}
-                            placeholder="الملاحظات..."
-                            className="border border-slate-300 bg-white text-slate-800 rounded-xl px-3.5 py-2.5 text-sm"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
+
                 </>
               ) : (
                 /* ── activeMode === 'add' (Admin Only): Full Form Sections ── */
@@ -1815,17 +1816,16 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                       <div className="flex items-center gap-2">
                         <div className="w-3.5 h-3.5 bg-blue-600 rounded-sm"></div>
                         <h3 className="font-bold text-blue-900 text-base flex items-center gap-2">
-                          1. البيانات الأساسية وتحديد الموقع (مطلوبة)
+                          1. البيانات الأساسية وتحديد الموقع (مطلوبة للإدارة)
                         </h3>
                       </div>
                       <span className="text-[11px] text-emerald-700 font-medium bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        حقول إدخال نشطة
+                        صلاحية الإدارة Admin 👑
                       </span>
                     </div>
 
                     <div className="rounded-xl p-4 bg-blue-50/60 border border-blue-200">
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {/* Site Code input */}
                         <div className="flex flex-col">
                           <label className="text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
                             <span className="flex items-center gap-1">كود الموقع (Site Code)</span>
@@ -1839,18 +1839,16 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                             value={formData['site code'] || ''}
                             onChange={(e) => handleFieldChange('site code', e.target.value)}
                             placeholder="مثال: LALXN33439"
-                            className={`border rounded-lg px-3 py-2 text-sm font-mono font-bold focus:outline-none transition ${
-                              errors['site code']
+                            className={`border rounded-lg px-3 py-2 text-sm font-mono font-bold focus:outline-none transition ${errors['site code']
                                 ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
                                 : 'border-blue-300 bg-white text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-                            }`}
+                              }`}
                           />
                           {errors['site code'] && (
                             <span className="text-red-600 text-[11px] mt-1 font-semibold">{errors['site code']}</span>
                           )}
                         </div>
 
-                        {/* Blue fields mapping */}
                         {blueFields
                           .filter((f) => f.csvColumn !== 'site code')
                           .map((field) => {
@@ -1876,7 +1874,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                                     onChange={(e) => handleFieldChange(field.csvColumn, e.target.value)}
                                     className="border border-blue-300 bg-white text-slate-800 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 font-medium cursor-pointer"
                                   >
-                                    {['الإسكندرية', 'الساحل الشمالي', 'وسط الدلتا', 'غرب الدلتا', 'شرق الدلتا', 'القاهرة الكبرى', 'الجيزة وأكتوبر', 'السويس', 'الإسماعيلية', 'الصعيد'].map((sec) => (
+                                    {['الإسكندرية والساحل', 'شرق الدلتا', 'مناطق غرب الدلتا', 'مناطق وسط الدلتا', 'مناطق السويس', 'مناطق الإسماعيلية', 'مناطق القاهرة الكبرى', 'مناطق الجيزة وأكتوبر', 'مناطق الصعيد'].map((sec) => (
                                       <option key={sec} value={sec}>
                                         {sec}
                                       </option>
@@ -1934,11 +1932,10 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                                 id={`field-${field.csvColumn}`}
                                 value={currentValue}
                                 onChange={(e) => handleFieldChange(field.csvColumn, e.target.value)}
-                                className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition cursor-pointer ${
-                                  errors[field.csvColumn]
+                                className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition cursor-pointer ${errors[field.csvColumn]
                                     ? 'border-red-400 bg-red-50 focus:ring-2 focus:ring-red-200'
                                     : 'border-emerald-300 bg-white text-slate-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200'
-                                }`}
+                                  }`}
                               >
                                 <option value="">-- اختر {field.label} --</option>
                                 {options.map((val) => (
@@ -2004,11 +2001,10 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                                 value={formData[field.csvColumn] || ''}
                                 onChange={(e) => handleFieldChange(field.csvColumn, e.target.value)}
                                 placeholder={field.label}
-                                className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition ${
-                                  errors[field.csvColumn]
+                                className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition ${errors[field.csvColumn]
                                     ? 'border-red-400 bg-red-50 focus:ring-2 focus:ring-red-200'
                                     : 'border-purple-300 bg-white text-slate-800 focus:border-purple-500 focus:ring-2 focus:ring-purple-200'
-                                }`}
+                                  }`}
                               />
 
                               {errors[field.csvColumn] && (
@@ -2030,14 +2026,21 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
         {/* ── Footer / Actions ── */}
         <div className="border-t border-slate-200 px-6 py-4 bg-slate-50 flex items-center justify-between">
           <div className="hidden sm:flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 text-xs text-blue-700 bg-blue-100/70 px-2.5 py-1 rounded-md font-medium">
-              <span className="w-2 h-2 bg-blue-600 rounded-full"></span> بيانات أساسية
+            <span className="inline-flex items-center gap-1.5 text-xs text-slate-700 bg-slate-200/80 px-2.5 py-1 rounded-md font-medium">
+              <Lock className="w-3 h-3 text-slate-500" />
+              <span>بيانات أساسية ثابتة</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-100/70 px-2.5 py-1 rounded-md font-medium">
-              <span className="w-2 h-2 bg-emerald-600 rounded-full"></span> قائمة منسدلة
+            <span className="inline-flex items-center gap-1.5 text-xs text-sky-700 bg-sky-100/80 px-2.5 py-1 rounded-md font-medium">
+              <Activity className="w-3 h-3 text-sky-600" />
+              <span>حالة الموقع</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 text-xs text-purple-700 bg-purple-100/70 px-2.5 py-1 rounded-md font-medium">
-              <span className="w-2 h-2 bg-purple-600 rounded-full"></span> إدخال يدوي
+            <span className="inline-flex items-center gap-1.5 text-xs text-indigo-700 bg-indigo-100/80 px-2.5 py-1 rounded-md font-medium">
+              <Sliders className="w-3 h-3 text-indigo-600" />
+              <span>التصنيف والمتابعة</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-100/80 px-2.5 py-1 rounded-md font-medium">
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              <span>حقول شرطية ذكية</span>
             </span>
           </div>
 
@@ -2060,18 +2063,17 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                   title="الموقع يتبع قطاعاً آخر - المشاهدة فقط متاحة"
                 >
                   <Lock className="w-4 h-4" />
-                  <span>مشاهدة فقط (تابع لقطاع آخر)</span>
+                  <span>مشاهدة فقط (خارج نطاق قطاعك)</span>
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => handleSave(false)}
                   disabled={saving}
-                  className={`px-6 py-2.5 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md hover:shadow-lg disabled:opacity-50 transition flex items-center gap-2 cursor-pointer ${
-                    activeMode === 'add'
+                  className={`px-6 py-2.5 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md hover:shadow-lg disabled:opacity-50 transition flex items-center gap-2 cursor-pointer ${activeMode === 'add'
                       ? 'bg-gradient-to-l from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800'
                       : 'bg-gradient-to-l from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800'
-                  }`}
+                    }`}
                 >
                   {saving ? (
                     <>
@@ -2086,7 +2088,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                   ) : (
                     <>
                       <Save className="w-4 h-4" />
-                      <span>💾 حفظ وتحديث السجل</span>
+                      <span>💾 حفظ وتحديث بيانات الموقع</span>
                     </>
                   )}
                 </button>

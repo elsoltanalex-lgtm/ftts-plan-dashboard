@@ -6,7 +6,8 @@ import {
   Building2,
   ChevronLeft,
   ChevronRight,
-  Lock
+  Lock,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { isRecordInSector } from '../utils/sectorPermissions';
@@ -19,6 +20,7 @@ interface SiteDetailsModalProps {
   onClose: () => void;
   sites: SiteRecord[];
   activeStatusFilter?: string;
+  onEditSite?: (siteCode: string) => void;
 }
 
 export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
@@ -26,6 +28,7 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
   onClose,
   sites,
   activeStatusFilter,
+  onEditSite,
 }) => {
   const { user, canEditRecord } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
@@ -51,6 +54,8 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
       site.sector.toLowerCase().includes(q) ||
       site.company.toLowerCase().includes(q) ||
       site.status.toLowerCase().includes(q) ||
+      (site.notes && site.notes.toLowerCase().includes(q)) ||
+      (site.obstacleReason && site.obstacleReason.toLowerCase().includes(q)) ||
       (site.civilContractor && site.civilContractor.toLowerCase().includes(q))
     );
   });
@@ -191,12 +196,18 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                   <th className="py-2.5 px-3 text-center">الروابط</th>
                   <th className="py-2.5 px-3">القطاع</th>
                   <th className="py-2.5 px-3">التاريخ المستهدف</th>
-                  <th className="py-2.5 px-3">المقاول / الملاحظات</th>
+                  <th className="py-2.5 px-3">المقاول / التعذر</th>
+                  <th className="py-2.5 px-3 min-w-[220px]">الملاحظات (Notes)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {pagedSites.map((site) => {
-                  const cfg = STATUS_CONFIG[site.status];
+                  const cfg = STATUS_CONFIG[site.status] || {
+                    color: '#64748b',
+                    bgLight: '#f1f5f9',
+                    border: '#cbd5e1',
+                    textColor: '#334155',
+                  };
 
                   return (
                     <tr key={site.id} className="hover:bg-slate-50/80 transition-colors">
@@ -249,9 +260,19 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span>{site.sector}</span>
                           {canEditRecord(site) ? (
-                            <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-full border border-emerald-200">
-                              تعديل
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (onEditSite) {
+                                  onClose();
+                                  onEditSite(site.siteCode);
+                                }
+                              }}
+                              className="text-[10px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                              title="تعديل هذا الموقع وفقاً لصلاحيات قطاعك"
+                            >
+                              <span>تعديل ✏️</span>
+                            </button>
                           ) : (
                             <span className="text-[10px] font-medium bg-slate-100 text-slate-500 px-1.5 py-0.2 rounded-full inline-flex items-center gap-0.5">
                               <Lock className="w-2.5 h-2.5" />
@@ -273,13 +294,26 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                           </span>
                         )}
                       </td>
+                      <td className="py-2.5 px-3 text-slate-700 min-w-[220px]">
+                        {site.notes && site.notes.trim() ? (
+                          <div className="bg-amber-50/90 border border-amber-200 rounded-lg p-2 text-xs text-amber-950 shadow-2xs leading-relaxed">
+                            <div className="flex items-center gap-1 text-[10px] text-amber-700 font-bold mb-0.5">
+                              <FileText className="w-3 h-3 text-amber-600 shrink-0" />
+                              <span>ملاحظات الموقع:</span>
+                            </div>
+                            <p className="whitespace-pre-wrap font-medium">{site.notes}</p>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-[11px] italic">لا توجد ملاحظات مسجلة</span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
 
                 {pagedSites.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="text-center py-8 text-slate-400">
+                    <td colSpan={9} className="text-center py-8 text-slate-400">
                       لا توجد مواقع مطابقة للبحث أو التصفية الحالية
                     </td>
                   </tr>
