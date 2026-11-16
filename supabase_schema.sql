@@ -1,12 +1,21 @@
--- ============================================================
--- FTTS Plan Dashboard - Supabase Schema for WE Records
--- Run this in Supabase SQL Editor:
--- https://supabase.com/dashboard/project/fzdmdvgmorzifysygkhp/sql/new
--- ============================================================
+-- ==============================================================================
+-- FTTS & Availability Dashboard - Complete Database Schema & Storage Configuration
+-- Project: ljwflhbaiszapocyqbqt
+-- Run this script in the Supabase SQL Editor:
+-- https://supabase.com/dashboard/project/ljwflhbaiszapocyqbqt/sql/new
+-- ==============================================================================
 
+-- Enable extensions
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ==============================================================================
+-- 1. WE CENTRAL RECORDS TABLE (public.we_records)
+-- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.we_records (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "site code" TEXT NOT NULL,
+    site_code TEXT NOT NULL DEFAULT '',
+    "site code" TEXT NOT NULL DEFAULT '',
     "Exc Sectores" TEXT DEFAULT '',
     "Sectores" TEXT DEFAULT '',
     "Exc sector" TEXT DEFAULT '',
@@ -31,26 +40,224 @@ CREATE TABLE IF NOT EXISTS public.we_records (
     "تكلفة التوصيل على المسار التراسلى بالجنيه" TEXT DEFAULT '',
     "المستند" TEXT DEFAULT '',
     "المسئولية" TEXT DEFAULT '',
+    data JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     created_by TEXT DEFAULT 'user'
 );
 
--- Index on site code for fast lookup
-CREATE INDEX IF NOT EXISTS idx_we_records_site_code ON public.we_records("site code");
+-- Indexes for WE Records
+CREATE INDEX IF NOT EXISTS idx_we_records_site_code ON public.we_records(site_code);
+CREATE INDEX IF NOT EXISTS idx_we_records_site_code_quoted ON public.we_records("site code");
+CREATE INDEX IF NOT EXISTS idx_we_records_sectore ON public.we_records("Sectore");
+CREATE INDEX IF NOT EXISTS idx_we_records_status ON public.we_records("Site Status");
+CREATE INDEX IF NOT EXISTS idx_we_records_tasneef ON public.we_records("التصنيف");
 
--- Enable Row Level Security (RLS)
+-- RLS for WE Records
 ALTER TABLE public.we_records ENABLE ROW LEVEL SECURITY;
 
--- Allow public read & write access with the publishable/anon key
-DROP POLICY IF EXISTS "Allow public read" ON public.we_records;
-CREATE POLICY "Allow public read" ON public.we_records FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read we_records" ON public.we_records;
+CREATE POLICY "Allow public read we_records" ON public.we_records FOR SELECT USING (true);
 
-DROP POLICY IF EXISTS "Allow public insert" ON public.we_records;
-CREATE POLICY "Allow public insert" ON public.we_records FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow public insert we_records" ON public.we_records;
+CREATE POLICY "Allow public insert we_records" ON public.we_records FOR INSERT WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Allow public update" ON public.we_records;
-CREATE POLICY "Allow public update" ON public.we_records FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Allow public update we_records" ON public.we_records;
+CREATE POLICY "Allow public update we_records" ON public.we_records FOR UPDATE USING (true);
 
-DROP POLICY IF EXISTS "Allow public delete" ON public.we_records;
-CREATE POLICY "Allow public delete" ON public.we_records FOR DELETE USING (true);
+DROP POLICY IF EXISTS "Allow public delete we_records" ON public.we_records;
+CREATE POLICY "Allow public delete we_records" ON public.we_records FOR DELETE USING (true);
+
+-- ==============================================================================
+-- 2. VODAFONE RECORDS TABLE (public.vodafone_records)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.vodafone_records (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    site_code TEXT NOT NULL DEFAULT '',
+    "site code" TEXT DEFAULT '',
+    "Site code" TEXT DEFAULT '',
+    " Site code" TEXT DEFAULT '',
+    central TEXT DEFAULT '',
+    sector TEXT DEFAULT '',
+    general_admin TEXT DEFAULT '',
+    competent_admin TEXT DEFAULT '',
+    status TEXT DEFAULT '',
+    classification TEXT DEFAULT '',
+    "التصنيف" TEXT DEFAULT '',
+    "الملاحظات" TEXT DEFAULT '',
+    "مسئولية التنفيذ" TEXT DEFAULT '',
+    "احدثيات خط الطول" TEXT DEFAULT '',
+    "احدثيات خط العرض" TEXT DEFAULT '',
+    data JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by TEXT DEFAULT 'user'
+);
+
+-- Indexes for Vodafone Records
+CREATE INDEX IF NOT EXISTS idx_vodafone_site_code ON public.vodafone_records(site_code);
+CREATE INDEX IF NOT EXISTS idx_vodafone_sector ON public.vodafone_records(sector);
+
+-- RLS for Vodafone Records
+ALTER TABLE public.vodafone_records ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read vodafone_records" ON public.vodafone_records;
+CREATE POLICY "Allow public read vodafone_records" ON public.vodafone_records FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow public insert vodafone_records" ON public.vodafone_records;
+CREATE POLICY "Allow public insert vodafone_records" ON public.vodafone_records FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public update vodafone_records" ON public.vodafone_records;
+CREATE POLICY "Allow public update vodafone_records" ON public.vodafone_records FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "Allow public delete vodafone_records" ON public.vodafone_records;
+CREATE POLICY "Allow public delete vodafone_records" ON public.vodafone_records FOR DELETE USING (true);
+
+-- ==============================================================================
+-- 3. ORANGE RECORDS TABLE (public.orange_records)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.orange_records (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    site_code TEXT NOT NULL DEFAULT '',
+    "site code" TEXT DEFAULT '',
+    "Site code" TEXT DEFAULT '',
+    " Site code" TEXT DEFAULT '',
+    central TEXT DEFAULT '',
+    sector TEXT DEFAULT '',
+    general_admin TEXT DEFAULT '',
+    competent_admin TEXT DEFAULT '',
+    status TEXT DEFAULT '',
+    classification TEXT DEFAULT '',
+    "التصنيف" TEXT DEFAULT '',
+    "الملاحظات" TEXT DEFAULT '',
+    "مسئولية التنفيذ" TEXT DEFAULT '',
+    "مستند الموقف" TEXT DEFAULT '',
+    data JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by TEXT DEFAULT 'user'
+);
+
+-- Indexes for Orange Records
+CREATE INDEX IF NOT EXISTS idx_orange_site_code ON public.orange_records(site_code);
+CREATE INDEX IF NOT EXISTS idx_orange_sector ON public.orange_records(sector);
+
+-- RLS for Orange Records
+ALTER TABLE public.orange_records ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read orange_records" ON public.orange_records;
+CREATE POLICY "Allow public read orange_records" ON public.orange_records FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow public insert orange_records" ON public.orange_records;
+CREATE POLICY "Allow public insert orange_records" ON public.orange_records FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public update orange_records" ON public.orange_records;
+CREATE POLICY "Allow public update orange_records" ON public.orange_records FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "Allow public delete orange_records" ON public.orange_records;
+CREATE POLICY "Allow public delete orange_records" ON public.orange_records FOR DELETE USING (true);
+
+-- ==============================================================================
+-- 4. AVAILABILITY & ETAHA RECORDS TABLE (public.etaha_records)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.etaha_records (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code TEXT NOT NULL DEFAULT '',
+    client_name TEXT DEFAULT '',
+    branch_name TEXT DEFAULT '',
+    address TEXT DEFAULT '',
+    sector TEXT DEFAULT '',
+    governorate TEXT DEFAULT '',
+    central TEXT DEFAULT '',
+    status TEXT DEFAULT '',
+    classification TEXT DEFAULT '',
+    "التصنيف" TEXT DEFAULT '',
+    "اسم العميل" TEXT DEFAULT '',
+    "اسم الفرع" TEXT DEFAULT '',
+    "العنوان" TEXT DEFAULT '',
+    "المحافظة" TEXT DEFAULT '',
+    "سنترال الربط" TEXT DEFAULT '',
+    project_type TEXT DEFAULT 'إتاحة',
+    data JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by TEXT DEFAULT 'user'
+);
+
+-- Indexes for Etaha Records
+CREATE INDEX IF NOT EXISTS idx_etaha_code ON public.etaha_records(code);
+CREATE INDEX IF NOT EXISTS idx_etaha_sector ON public.etaha_records(sector);
+CREATE INDEX IF NOT EXISTS idx_etaha_project_type ON public.etaha_records(project_type);
+
+-- RLS for Etaha Records
+ALTER TABLE public.etaha_records ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read etaha_records" ON public.etaha_records;
+CREATE POLICY "Allow public read etaha_records" ON public.etaha_records FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow public insert etaha_records" ON public.etaha_records;
+CREATE POLICY "Allow public insert etaha_records" ON public.etaha_records FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public update etaha_records" ON public.etaha_records FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "Allow public delete etaha_records" ON public.etaha_records FOR DELETE USING (true);
+
+-- ==============================================================================
+-- 5. UPLOADED CUSTOM DATASETS TABLE (public.uploaded_datasets)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.uploaded_datasets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    file_name TEXT NOT NULL,
+    sheet_name TEXT DEFAULT '',
+    total_rows INT DEFAULT 0,
+    scope TEXT DEFAULT 'CUSTOM',
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by TEXT DEFAULT 'user'
+);
+
+ALTER TABLE public.uploaded_datasets ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read uploaded_datasets" ON public.uploaded_datasets;
+CREATE POLICY "Allow public read uploaded_datasets" ON public.uploaded_datasets FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow public insert uploaded_datasets" ON public.uploaded_datasets;
+CREATE POLICY "Allow public insert uploaded_datasets" ON public.uploaded_datasets FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public update uploaded_datasets" ON public.uploaded_datasets;
+CREATE POLICY "Allow public update uploaded_datasets" ON public.uploaded_datasets FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "Allow public delete uploaded_datasets" ON public.uploaded_datasets;
+CREATE POLICY "Allow public delete uploaded_datasets" ON public.uploaded_datasets FOR DELETE USING (true);
+
+-- ==============================================================================
+-- 6. STORAGE BUCKETS CONFIGURATION (public storage for documents & attachments)
+-- ==============================================================================
+
+-- Create buckets
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES 
+    ('site-attachments', 'site-attachments', true, 52428800, null),
+    ('excel-uploads', 'excel-uploads', true, 52428800, null)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- Storage Objects Policies
+DROP POLICY IF EXISTS "Allow Public Read Storage" ON storage.objects;
+CREATE POLICY "Allow Public Read Storage" ON storage.objects
+    FOR SELECT USING (bucket_id IN ('site-attachments', 'excel-uploads'));
+
+DROP POLICY IF EXISTS "Allow Public Insert Storage" ON storage.objects;
+CREATE POLICY "Allow Public Insert Storage" ON storage.objects
+    FOR INSERT WITH CHECK (bucket_id IN ('site-attachments', 'excel-uploads'));
+
+DROP POLICY IF EXISTS "Allow Public Update Storage" ON storage.objects;
+CREATE POLICY "Allow Public Update Storage" ON storage.objects
+    FOR UPDATE USING (bucket_id IN ('site-attachments', 'excel-uploads'));
+
+DROP POLICY IF EXISTS "Allow Public Delete Storage" ON storage.objects;
+CREATE POLICY "Allow Public Delete Storage" ON storage.objects
+    FOR DELETE USING (bucket_id IN ('site-attachments', 'excel-uploads'));
+
+-- ==============================================================================
+-- Schema configuration completed successfully!
+-- ==============================================================================

@@ -8,6 +8,8 @@
     "server": "node server/index.js",
     "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
     "build": "vite build",
+    "verify:supabase": "node scripts/verify-live-supabase.mjs",
+    "seed:supabase": "node scripts/seed-all-to-supabase.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },
