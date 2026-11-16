@@ -1,16 +1,17 @@
 import { useState } from 'react';
-import { 
-  ArrowUpDown, 
-  ArrowUp, 
-  ArrowDown, 
-  Search, 
-  Table as TableIcon, 
-  Eye, 
-  CheckCircle2 
+import {
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Search,
+  Table as TableIcon,
+  Eye,
+  CheckCircle2
 } from 'lucide-react';
 
 import type { StatusSummary } from '../types/dashboard';
 import { toFilterArray } from '../utils/filterUtils';
+import { SiteActionDropdown } from './SiteActionDropdown';
 
 interface SummaryTableProps {
   data: StatusSummary[];
@@ -19,6 +20,10 @@ interface SummaryTableProps {
   activeStatusFilter?: string | string[];
   onSelectStatus: (status: string) => void;
   onOpenDetailsModal?: (status?: string) => void;
+  onAddNewSite?: () => void;
+  onEditSite?: () => void;
+  onDeleteSite?: () => void;
+  companyVariant?: 'orange' | 'vodafone' | 'we' | 'etaha' | 'default';
 }
 
 type SortField = 'status' | 'sitesCount' | 'linksCount';
@@ -31,6 +36,10 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
   activeStatusFilter,
   onSelectStatus,
   onOpenDetailsModal,
+  onAddNewSite,
+  onEditSite,
+  onDeleteSite,
+  companyVariant,
 }) => {
   const [sortField, setSortField] = useState<SortField>('sitesCount');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -97,6 +106,15 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onAddNewSite && onEditSite && onDeleteSite && (
+              <SiteActionDropdown
+                variant={companyVariant || 'default'}
+                label="إدارة المواقع"
+                onAdd={onAddNewSite}
+                onEdit={onEditSite}
+                onDelete={onDeleteSite}
+              />
+            )}
             {onOpenDetailsModal && (
               <button
                 onClick={() => {
@@ -173,11 +191,10 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
                     key={row.status}
                     id={`table-row-${row.status.replace(/\s+/g, '-')}`}
                     onClick={() => onSelectStatus(isSelected ? '' : row.status)}
-                    className={`cursor-pointer transition-colors duration-150 group ${
-                      isSelected
+                    className={`cursor-pointer transition-colors duration-150 group ${isSelected
                         ? 'bg-sky-50/90 font-semibold text-sky-950 ring-1 ring-inset ring-sky-300'
                         : 'hover:bg-slate-50/80 text-slate-700'
-                    }`}
+                      }`}
                   >
                     {/* Status Column */}
                     <td className="py-2 px-3">

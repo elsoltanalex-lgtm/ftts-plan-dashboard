@@ -33,6 +33,7 @@ import { VodafoneBulkImportModal } from '../components/VodafoneBulkImportModal';
 import { useEtahaAPI } from '../hooks/useEtahaAPI';
 import { EtahaBulkImportModal } from '../components/EtahaBulkImportModal';
 import { WeExecutiveReportView } from '../components/WeExecutiveReportView';
+import { SiteActionDropdown } from '../components/SiteActionDropdown';
 
 
 import {
@@ -1131,49 +1132,28 @@ export const Dashboard: React.FC = () => {
                         <span>تحليل Orange (Orange Analysis)</span>
                       </button>
 
-                      {/* 2. زر إضافة موقع جديد */}
-                      <button
-                        className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                        onClick={() => {
+                      {/* 2. زر موحد لإدارة وعمليات المواقع (إضافة / تعديل / حذف) */}
+                      <SiteActionDropdown
+                        variant="orange"
+                        label="إدارة وعمليات المواقع"
+                        onAdd={() => {
                           setOrangeEditingSiteCode(undefined);
                           setOrangeEditingRecord(null);
                           setOrangeModalMode('add');
                           setIsOrangeAddDataOpen(true);
                         }}
-                        title="إدخال وإضافة موقع جديد لـ Orange يدوياً في قاعدة البيانات"
-                      >
-                        <PlusCircle className="w-3.5 h-3.5" />
-                        <span>إضافة موقع جديد (Add New Site)</span>
-                      </button>
-
-                      {/* 3. زر تعديل البيانات */}
-                      <button
-                        className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                        onClick={() => {
+                        onEdit={() => {
                           setOrangeEditingSiteCode(undefined);
                           setOrangeEditingRecord(null);
                           setOrangeModalMode('edit');
                           setIsOrangeAddDataOpen(true);
                         }}
-                        title="تعديل بيانات موقع Orange حالي مع حماية الثوابت غير القابلة للتعديل"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        <span>تعديل البيانات (Edit Site Data)</span>
-                      </button>
-
-                      {/* 4. زر إلغاء أو حذف موقع */}
-                      <button
-                        className="px-4 py-2 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-700 hover:to-red-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                        onClick={() => {
+                        onDelete={() => {
                           setIsQuickDeleteModalOpen(true);
                         }}
-                        title="إلغاء أو حذف موقع Orange مع رسالة تأكيد الحذف"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>إلغاء أو حذف موقع (Delete Site)</span>
-                      </button>
+                      />
 
-                      {/* 5. زر الرفع الجماعي عبر شيت الإكسيل */}
+                      {/* 3. زر الرفع الجماعي عبر شيت الإكسيل */}
                       <button
                         className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-700 hover:from-teal-700 hover:to-emerald-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
                         onClick={() => setIsOrangeBulkImportOpen(true)}
@@ -1196,45 +1176,24 @@ export const Dashboard: React.FC = () => {
                         <span>الرفع الجماعي عبر إكسيل (Bulk Import)</span>
                       </button>
 
-                      {/* 2. زر إضافة موقع جديد */}
-                      <button
-                        className="px-4 py-2 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                        onClick={() => {
+                      {/* 2. زر موحد لإدارة وعمليات المواقع (إضافة / تعديل / حذف) */}
+                      <SiteActionDropdown
+                        variant="vodafone"
+                        label="إدارة وعمليات المواقع"
+                        onAdd={() => {
                           setEditingSiteCode(undefined);
                           setEditingRecord(null);
                           setWeModalMode('add');
                           setIsWeAddDataOpen(true);
                         }}
-                        title="إضافة موقع جديد لفودافون"
-                      >
-                        <PlusCircle className="w-3.5 h-3.5" />
-                        <span>إضافة موقع جديد (Add New Site)</span>
-                      </button>
-
-                      {/* 3. زر تعديل البيانات */}
-                      <button
-                        className="px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                        onClick={() => {
+                        onEdit={() => {
                           setEditingSiteCode(undefined);
                           setEditingRecord(null);
                           setWeModalMode('edit');
                           setIsWeAddDataOpen(true);
                         }}
-                        title="تعديل بيانات موقع فودافون"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        <span>تعديل البيانات (Edit Site Data)</span>
-                      </button>
-
-                      {/* 4. زر حذف موقع */}
-                      <button
-                        className="px-4 py-2 bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                        onClick={() => setIsQuickDeleteModalOpen(true)}
-                        title="إلغاء أو حذف موقع فودافون"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>إلغاء أو حذف موقع (Delete Site)</span>
-                      </button>
+                        onDelete={() => setIsQuickDeleteModalOpen(true)}
+                      />
                     </div>
                   ) : (
                     /* WE & Default Buttons Group */
@@ -1249,49 +1208,28 @@ export const Dashboard: React.FC = () => {
                         <span>تحليل WE (WE Analysis)</span>
                       </button>
 
-                      {/* 2. زر إضافة موقع جديد */}
-                      <button
-                        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                        onClick={() => {
+                      {/* 2. زر موحد لإدارة وعمليات المواقع (إضافة / تعديل / حذف) */}
+                      <SiteActionDropdown
+                        variant="we"
+                        label="إدارة وعمليات المواقع"
+                        onAdd={() => {
                           setEditingSiteCode(undefined);
                           setEditingRecord(null);
                           setWeModalMode('add');
                           setIsWeAddDataOpen(true);
                         }}
-                        title="إدخال وإضافة موقع جديد يدوياً في قاعدة البيانات"
-                      >
-                        <PlusCircle className="w-3.5 h-3.5" />
-                        <span>إضافة موقع جديد (Add New Site)</span>
-                      </button>
-
-                      {/* 3. زر تعديل البيانات */}
-                      <button
-                        className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                        onClick={() => {
+                        onEdit={() => {
                           setEditingSiteCode(undefined);
                           setEditingRecord(null);
                           setWeModalMode('edit');
                           setIsWeAddDataOpen(true);
                         }}
-                        title="تعديل بيانات موقع حالي مع حماية الثوابت غير القابلة للتعديل"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        <span>تعديل البيانات (Edit Site Data)</span>
-                      </button>
-
-                      {/* 4. زر إلغاء أو حذف موقع */}
-                      <button
-                        className="px-4 py-2 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-700 hover:to-red-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                        onClick={() => {
+                        onDelete={() => {
                           setIsQuickDeleteModalOpen(true);
                         }}
-                        title="إلغاء أو حذف موقع مع رسالة تأكيد الحذف"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>إلغاء أو حذف موقع (Delete Site)</span>
-                      </button>
+                      />
 
-                      {/* 5. زر الرفع الجماعي عبر شيت الإكسيل */}
+                      {/* 3. زر الرفع الجماعي عبر شيت الإكسيل */}
                       <button
                         className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-700 hover:from-teal-700 hover:to-emerald-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
                         onClick={() => setIsBulkImportOpen(true)}
@@ -1301,7 +1239,7 @@ export const Dashboard: React.FC = () => {
                         <span>رفع جماعي عبر إكسيل (Bulk Excel)</span>
                       </button>
 
-                      {/* 6. زر تصدير CSV */}
+                      {/* 4. زر تصدير CSV */}
                       <button
                         className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
                         onClick={() => exportToCSV()}
@@ -1311,7 +1249,7 @@ export const Dashboard: React.FC = () => {
                         <span>تصدير CSV</span>
                       </button>
 
-                      {/* 7. إدارة وحذف متقدم */}
+                      {/* 5. إدارة وحذف متقدم */}
                       <button
                         className="px-3.5 py-2 bg-purple-700 hover:bg-purple-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
                         onClick={() => setIsWeManagerOpen(true)}
@@ -1358,45 +1296,25 @@ export const Dashboard: React.FC = () => {
                       <span>الرفع الجماعي عبر إكسيل (Bulk Import)</span>
                     </button>
 
-                    {/* 2. زر إضافة مشروع جديد */}
-                    <button
-                      className="px-4 py-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                      onClick={() => {
+                    {/* 2. زر موحد لإدارة وعمليات المشروعات (إضافة / تعديل / حذف) */}
+                    <SiteActionDropdown
+                      variant="etaha"
+                      label="إدارة وعمليات المشروعات"
+                      itemTypeLabel="مشروع"
+                      onAdd={() => {
                         setEditingSiteCode(undefined);
                         setEditingRecord(null);
                         setWeModalMode('add');
                         setIsWeAddDataOpen(true);
                       }}
-                      title="إدخال وإضافة مشروع جديد للإتاحة يدوياً"
-                    >
-                      <PlusCircle className="w-3.5 h-3.5" />
-                      <span>إضافة مشروع جديد (Add New Project)</span>
-                    </button>
-
-                    {/* 3. زر تعديل البيانات */}
-                    <button
-                      className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                      onClick={() => {
+                      onEdit={() => {
                         setEditingSiteCode(undefined);
                         setEditingRecord(null);
                         setWeModalMode('edit');
                         setIsWeAddDataOpen(true);
                       }}
-                      title="تعديل بيانات مشروع إتاحة مع حماية الثوابت"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                      <span>تعديل البيانات (Edit Project Data)</span>
-                    </button>
-
-                    {/* 4. زر إلغاء أو حذف مشروع */}
-                    <button
-                      className="px-4 py-2 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-700 hover:to-red-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                      onClick={() => setIsQuickDeleteModalOpen(true)}
-                      title="إلغاء أو حذف مشروع إتاحة"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>إلغاء أو حذف مشروع (Delete Project)</span>
-                    </button>
+                      onDelete={() => setIsQuickDeleteModalOpen(true)}
+                    />
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -1496,6 +1414,40 @@ export const Dashboard: React.FC = () => {
                       activeStatusFilter={filters.status}
                       onSelectStatus={handleStatusSelect}
                       onOpenDetailsModal={handleOpenDetails}
+                      companyVariant={
+                        filters.company === 'Orange' ? 'orange' :
+                        filters.company === 'Vodafone' ? 'vodafone' :
+                        activeScope === 'ETAHA' ? 'etaha' : 'we'
+                      }
+                      onAddNewSite={() => {
+                        if (filters.company === 'Orange') {
+                          setOrangeEditingSiteCode(undefined);
+                          setOrangeEditingRecord(null);
+                          setOrangeModalMode('add');
+                          setIsOrangeAddDataOpen(true);
+                        } else {
+                          setEditingSiteCode(undefined);
+                          setEditingRecord(null);
+                          setWeModalMode('add');
+                          setIsWeAddDataOpen(true);
+                        }
+                      }}
+                      onEditSite={() => {
+                        if (filters.company === 'Orange') {
+                          setOrangeEditingSiteCode(undefined);
+                          setOrangeEditingRecord(null);
+                          setOrangeModalMode('edit');
+                          setIsOrangeAddDataOpen(true);
+                        } else {
+                          setEditingSiteCode(undefined);
+                          setEditingRecord(null);
+                          setWeModalMode('edit');
+                          setIsWeAddDataOpen(true);
+                        }
+                      }}
+                      onDeleteSite={() => {
+                        setIsQuickDeleteModalOpen(true);
+                      }}
                     />
                   </div>
                 </div>
