@@ -236,13 +236,16 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
       parts.push(`شركة ${filters.company}`);
     }
     if (filters.sector && filters.sector !== 'ALL' && filters.sector !== 'All') {
-      parts.push(filters.sector);
+      const secStr = Array.isArray(filters.sector) ? filters.sector.join(' + ') : filters.sector;
+      if (secStr) parts.push(secStr);
     }
     if (filters.generalAdmin) {
-      parts.push(filters.generalAdmin);
+      const gaStr = Array.isArray(filters.generalAdmin) ? filters.generalAdmin.join(' + ') : filters.generalAdmin;
+      if (gaStr) parts.push(gaStr);
     }
     if (filters.competentAdmin) {
-      parts.push(`إدارة: ${filters.competentAdmin}`);
+      const caStr = Array.isArray(filters.competentAdmin) ? filters.competentAdmin.join(' + ') : filters.competentAdmin;
+      if (caStr) parts.push(`إدارة: ${caStr}`);
     }
     if (filters.central) {
       parts.push(filters.central);

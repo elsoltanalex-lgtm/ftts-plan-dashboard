@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Building2,
   CheckCircle2,
@@ -9,22 +9,29 @@ import {
   FileText,
   AlertOctagon,
   AlertTriangle,
+  RotateCcw,
+  CheckSquare,
 } from 'lucide-react';
 
 import type { KpiData } from '../types/dashboard';
+import { toFilterArray } from '../utils/filterUtils';
 
 interface KpiCardsProps {
   kpis: KpiData;
-  activeStatusFilter: string;
+  activeStatusFilter: string | string[];
   onSelectStatusFilter: (status: string) => void;
+  onClearStatusFilters?: () => void;
 }
 
 export const KpiCards: React.FC<KpiCardsProps> = ({
   kpis,
   activeStatusFilter,
   onSelectStatusFilter,
+  onClearStatusFilters,
 }) => {
   const total = kpis.totalSites || 1;
+  const activeList = useMemo(() => toFilterArray(activeStatusFilter), [activeStatusFilter]);
+  const isAllActive = activeList.length === 0 || activeList.includes('All');
 
   const cards = [
     {
@@ -40,7 +47,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       borderColor: 'border-blue-200',
       ringColor: 'ring-blue-500',
       filterTarget: 'All',
-      isActive: activeStatusFilter === 'All' || activeStatusFilter === '',
+      isActive: isAllActive,
     },
     {
       id: 'kpi-completed',
@@ -55,7 +62,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       borderColor: 'border-emerald-200',
       ringColor: 'ring-emerald-500',
       filterTarget: 'تم الانتهاء',
-      isActive: activeStatusFilter === 'تم الانتهاء',
+      isActive: activeList.includes('تم الانتهاء'),
     },
     {
       id: 'kpi-fiber-active',
@@ -70,7 +77,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       borderColor: 'border-cyan-200',
       ringColor: 'ring-cyan-500',
       filterTarget: 'تم التشغيل فايبر',
-      isActive: activeStatusFilter === 'تم التشغيل فايبر',
+      isActive: activeList.includes('تم التشغيل فايبر'),
     },
     {
       id: 'kpi-civil-done',
@@ -85,7 +92,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       borderColor: 'border-teal-200',
       ringColor: 'ring-teal-500',
       filterTarget: 'تم مدني',
-      isActive: activeStatusFilter === 'تم مدني',
+      isActive: activeList.includes('تم مدني'),
     },
     {
       id: 'kpi-in-progress',
@@ -100,7 +107,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       borderColor: 'border-amber-200',
       ringColor: 'ring-amber-500',
       filterTarget: 'جاري العمل',
-      isActive: activeStatusFilter === 'جاري العمل',
+      isActive: activeList.includes('جاري العمل'),
     },
     {
       id: 'kpi-survey',
@@ -115,7 +122,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       borderColor: 'border-purple-200',
       ringColor: 'ring-purple-500',
       filterTarget: 'جاري المعاينة',
-      isActive: activeStatusFilter === 'جاري المعاينة',
+      isActive: activeList.includes('جاري المعاينة'),
     },
     {
       id: 'kpi-permits',
@@ -130,7 +137,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       borderColor: 'border-sky-200',
       ringColor: 'ring-sky-500',
       filterTarget: 'جاري تصريح',
-      isActive: activeStatusFilter === 'جاري تصريح',
+      isActive: activeList.includes('جاري تصريح'),
     },
     {
       id: 'kpi-stalled',
@@ -145,7 +152,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       borderColor: 'border-rose-200',
       ringColor: 'ring-rose-500',
       filterTarget: 'متعذر',
-      isActive: activeStatusFilter === 'متعذر',
+      isActive: activeList.includes('متعذر'),
     },
     {
       id: 'kpi-obstacles',
@@ -160,78 +167,118 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       borderColor: 'border-red-200',
       ringColor: 'ring-red-500',
       filterTarget: 'معوقات',
-      isActive: activeStatusFilter === 'معوقات',
+      isActive: activeList.includes('معوقات'),
     },
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2.5 mb-6">
-      {cards.map((card) => {
-        const IconComponent = card.icon;
-        const isClickable = Boolean(card.filterTarget);
-
-        return (
-          <div
-            key={card.id}
-            id={card.id}
-            onClick={() => {
-              if (card.filterTarget) {
-                onSelectStatusFilter(card.filterTarget);
-              }
-            }}
-            className={`pbi-card p-3 flex flex-col justify-between relative overflow-hidden transition-all duration-200 select-none ${card.bgColor
-              } ${card.borderColor} ${isClickable ? 'cursor-pointer hover:-translate-y-0.5' : ''} ${card.isActive && card.filterTarget !== 'All'
-                ? 'ring-2 ring-offset-1 ' + card.ringColor + ' shadow-md scale-[1.02]'
-                : card.isActive && card.filterTarget === 'All'
-                  ? 'ring-2 ring-offset-1 ring-blue-500 shadow-xs'
-                  : 'opacity-90 hover:opacity-100 hover:shadow-xs'
-              }`}
-          >
-            {/* Top decorative gradient bar */}
-            <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${card.color}`} />
-
-            <div className="flex items-start justify-between gap-1 mb-1.5">
-              <div className="min-w-0">
-                <span className="text-[10px] font-medium text-slate-500 block truncate leading-tight">
-                  {card.titleEn}
+    <div className="mb-6">
+      {/* Active Multi-Select Summary Banner */}
+      {activeList.length > 1 && (
+        <div className="mb-2.5 px-3 py-1.5 bg-gradient-to-r from-indigo-50 via-sky-50 to-blue-50 border border-indigo-200/90 rounded-xl flex items-center justify-between text-xs text-indigo-950 font-bold shadow-2xs flex-wrap gap-2 animate-in fade-in duration-150">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <CheckSquare className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+            <span>تحديد متعدد نشط ({activeList.length} تصنيفات):</span>
+            <div className="flex items-center gap-1 flex-wrap">
+              {activeList.map((st) => (
+                <span
+                  key={st}
+                  className="bg-indigo-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-2xs"
+                >
+                  {st}
                 </span>
-                <h3 className="text-xs font-bold text-slate-800 tracking-tight truncate leading-snug">
-                  {card.title}
-                </h3>
-              </div>
-              <div
-                className={`w-6 h-6 rounded-md flex-shrink-0 flex items-center justify-center bg-white shadow-2xs border border-slate-100 ${card.textColor}`}
-              >
-                <IconComponent className="w-3.5 h-3.5" />
-              </div>
-            </div>
-
-            <div className="mt-1">
-              <div className="flex items-baseline justify-between gap-1">
-                <span className={`text-xl sm:text-2xl font-black font-sans tracking-tight ${card.textColor}`}>
-                  {card.value.toLocaleString()}
-                </span>
-                {card.filterTarget && (
-                  <span
-                    className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${card.isActive && card.filterTarget !== 'All'
-                        ? 'bg-slate-900 text-white'
-                        : 'bg-white/80 text-slate-500'
-                      }`}
-                  >
-                    {card.isActive && card.filterTarget !== 'All' ? 'محدد' : 'تصفية'}
-                  </span>
-                )}
-              </div>
-              <p
-                className="text-[10px] text-slate-500 mt-0.5 font-medium truncate"
-                title={card.subValue}
-              >
-                {card.subValue}
-              </p>
+              ))}
             </div>
           </div>
-        );
-      })}
+          <button
+            onClick={() => (onClearStatusFilters ? onClearStatusFilters() : onSelectStatusFilter('All'))}
+            className="text-[11px] text-rose-700 hover:text-rose-900 bg-white hover:bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200 flex items-center gap-1 font-bold cursor-pointer transition"
+          >
+            <RotateCcw className="w-3 h-3 text-rose-600" />
+            <span>إلغاء التحديد وعرض الجميع</span>
+          </button>
+        </div>
+      )}
+
+      {/* Grid of Status KPI Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2.5">
+        {cards.map((card) => {
+          const IconComponent = card.icon;
+          const isClickable = Boolean(card.filterTarget);
+
+          return (
+            <div
+              key={card.id}
+              id={card.id}
+              onClick={() => {
+                if (card.filterTarget) {
+                  onSelectStatusFilter(card.filterTarget);
+                }
+              }}
+              title={
+                card.filterTarget === 'All'
+                  ? 'عرض إجمالي كافة المواقع وإلغاء أي تصفية'
+                  : `انقر لتحديد أو إلغاء تحديد ${card.title} (يدعم التحديد المتعدد)`
+              }
+              className={`pbi-card p-3 flex flex-col justify-between relative overflow-hidden transition-all duration-200 select-none cursor-pointer ${
+                card.bgColor
+              } ${card.borderColor} ${isClickable ? 'hover:-translate-y-0.5' : ''} ${
+                card.isActive && card.filterTarget !== 'All'
+                  ? 'ring-2 ring-offset-1 ' + card.ringColor + ' shadow-md scale-[1.02] border-indigo-400'
+                  : card.isActive && card.filterTarget === 'All'
+                  ? 'ring-2 ring-offset-1 ring-blue-500 shadow-xs'
+                  : 'opacity-85 hover:opacity-100 hover:shadow-xs'
+              }`}
+            >
+              {/* Top decorative gradient bar */}
+              <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${card.color}`} />
+
+              <div className="flex items-start justify-between gap-1 mb-1.5">
+                <div className="min-w-0">
+                  <span className="text-[10px] font-medium text-slate-500 block truncate leading-tight">
+                    {card.titleEn}
+                  </span>
+                  <h3 className="text-xs font-bold text-slate-800 tracking-tight truncate leading-snug">
+                    {card.title}
+                  </h3>
+                </div>
+                <div
+                  className={`w-6 h-6 rounded-md flex-shrink-0 flex items-center justify-center bg-white shadow-2xs border border-slate-100 ${card.textColor}`}
+                >
+                  <IconComponent className="w-3.5 h-3.5" />
+                </div>
+              </div>
+
+              <div className="mt-1">
+                <div className="flex items-baseline justify-between gap-1">
+                  <span className={`text-xl sm:text-2xl font-black font-sans tracking-tight ${card.textColor}`}>
+                    {card.value.toLocaleString()}
+                  </span>
+                  {card.filterTarget && (
+                    <span
+                      className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full transition-colors ${
+                        card.isActive && card.filterTarget !== 'All'
+                          ? 'bg-slate-900 text-white'
+                          : card.isActive && card.filterTarget === 'All'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white/80 text-slate-500'
+                      }`}
+                    >
+                      {card.isActive && card.filterTarget !== 'All' ? '✓ محدد' : card.filterTarget === 'All' ? 'الكل' : 'اختيار'}
+                    </span>
+                  )}
+                </div>
+                <p
+                  className="text-[10px] text-slate-500 mt-0.5 font-medium truncate"
+                  title={card.subValue}
+                >
+                  {card.subValue}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

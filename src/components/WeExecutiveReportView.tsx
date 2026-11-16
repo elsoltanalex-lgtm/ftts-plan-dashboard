@@ -42,7 +42,7 @@ export interface WeExecutiveReportViewProps {
   sites: SiteRecord[];
   onSelectSector?: (sector: string) => void;
   onOpenDetailsModal?: (status?: string, sector?: string) => void;
-  selectedSector?: string;
+  selectedSector?: string | string[];
 }
 
 export type ExecutiveCategoryKey =
@@ -301,9 +301,10 @@ export const WeExecutiveReportView: React.FC<WeExecutiveReportViewProps> = ({
 
   // Synchronize when external sector filter changes
   React.useEffect(() => {
-    if (selectedSector && selectedSector !== 'All' && selectedSector !== 'ALL') {
-      setDrilledSector(selectedSector);
-      setExpandedSectors((prev) => ({ ...prev, [selectedSector]: true }));
+    const firstSec = Array.isArray(selectedSector) ? selectedSector[0] : selectedSector;
+    if (firstSec && firstSec !== 'All' && firstSec !== 'ALL') {
+      setDrilledSector(firstSec);
+      setExpandedSectors((prev) => ({ ...prev, [firstSec]: true }));
     }
   }, [selectedSector]);
 

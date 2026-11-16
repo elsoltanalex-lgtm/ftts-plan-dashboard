@@ -73,16 +73,16 @@ export interface StatusSummary {
 
 export interface FilterState {
   company: CompanyType;
-  sector: string;
-  generalAdmin: string;
-  competentAdmin: string;
-  central: string;
-  classification: string;
-  obstacleReason: string;
-  status: string; // 'All' or specific status
+  sector: string | string[];
+  generalAdmin: string | string[];
+  competentAdmin: string | string[];
+  central: string | string[];
+  classification: string | string[];
+  obstacleReason: string | string[];
+  status: string | string[]; // 'All' or specific status or array of statuses
   expectedDate: string;
   searchQuery: string;
-  subSector?: string; // الإدارة المختصة (القطاع) for Orange 4-tier hierarchy
+  subSector?: string | string[]; // الإدارة المختصة (القطاع) for Orange 4-tier hierarchy
 }
 
 export interface KpiData {

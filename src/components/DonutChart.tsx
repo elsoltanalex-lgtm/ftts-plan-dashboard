@@ -14,14 +14,15 @@ import {
 import type { StatusSummary, SiteRecord } from '../types/dashboard';
 import { getSiteClassification } from '../data/dashboardData';
 import { isRecordInSector } from '../utils/sectorPermissions';
+import { toFilterArray } from '../utils/filterUtils';
 
 interface DonutChartProps {
   data: StatusSummary[];
   totalSites: number;
-  activeStatusFilter: string;
+  activeStatusFilter?: string | string[];
   onSelectStatus: (status: string) => void;
   sitesData?: SiteRecord[];
-  activeSector?: string;
+  activeSector?: string | string[];
   onSelectSector?: (sector: string) => void;
   onSelectGeneralAdmin?: (admin: string) => void;
   onSelectCompetentAdmin?: (admin: string) => void;
@@ -104,8 +105,12 @@ export const DonutChart: React.FC<DonutChartProps> = ({
   }, [activeSector]);
 
   // Synchronize when status filter is cleared from outside
+  const activeStatusList = useMemo(() => toFilterArray(activeStatusFilter), [activeStatusFilter]);
+  const activeSectors = useMemo(() => toFilterArray(activeSector), [activeSector]);
+  const isSectorAll = activeSectors.length === 0 || activeSectors.includes('ALL') || activeSectors.includes('All');
+
   useEffect(() => {
-    if (!activeStatusFilter && drillLevel > 0) {
+    if (activeStatusList.length === 0 && drillLevel > 0) {
       setDrillLevel(0);
       setDrilledStatus('');
       setDrilledSector('');
@@ -113,34 +118,32 @@ export const DonutChart: React.FC<DonutChartProps> = ({
       setDrilledCompetentAdmin('');
       setHoveredSlice(null);
     }
-  }, [activeStatusFilter]);
-
-  const isSectorAll = !activeSector || activeSector === 'ALL' || activeSector === 'All' || activeSector.trim() === '';
+  }, [activeStatusList, drillLevel]);
 
   // Separate "المتعذرات" and "المعوقات" for independent dedicated sections (Requirement 7)
   const stalledSummary = useMemo(() => {
     const item = data.find((d) => d.status === 'متعذر' || d.status.includes('متعذر') || d.status.includes('تعذر'));
     const count = item ? item.sitesCount : sitesData.filter((s) => {
       const matchCat = getSiteClassification(s).includes('متعذر') || getSiteClassification(s).includes('تعذر');
-      const matchSec = isSectorAll || isRecordInSector(activeSector, s);
+      const matchSec = isSectorAll || activeSectors.some((sec) => isRecordInSector(sec, s));
       return matchCat && matchSec;
     }).length;
     const total = totalSites || 1;
     const pct = Number(((count / total) * 100).toFixed(1));
     return { count, pct };
-  }, [data, sitesData, totalSites, isSectorAll, activeSector]);
+  }, [data, sitesData, totalSites, isSectorAll, activeSectors]);
 
   const obstaclesSummary = useMemo(() => {
     const item = data.find((d) => d.status === 'معوقات' || d.status.includes('معوق'));
     const count = item ? item.sitesCount : sitesData.filter((s) => {
       const matchCat = getSiteClassification(s).includes('معوق');
-      const matchSec = isSectorAll || isRecordInSector(activeSector, s);
+      const matchSec = isSectorAll || activeSectors.some((sec) => isRecordInSector(sec, s));
       return matchCat && matchSec;
     }).length;
     const total = totalSites || 1;
     const pct = Number(((count / total) * 100).toFixed(1));
     return { count, pct };
-  }, [data, sitesData, totalSites, isSectorAll, activeSector]);
+  }, [data, sitesData, totalSites, isSectorAll, activeSectors]);
 
   // Compute active dataset based on drill level
   const currentLevelItems = useMemo(() => {
@@ -488,7 +491,7 @@ export const DonutChart: React.FC<DonutChartProps> = ({
                   <span>إلغاء التدرج</span>
                 </button>
               </div>
-            ) : activeStatusFilter ? (
+            ) : activeStatusList.length > 0 ? (
               <button
                 onClick={() => onSelectStatus('')}
                 className="flex items-center gap-1 text-xs font-semibold px-2 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-md hover:bg-amber-100 transition cursor-pointer"
@@ -578,7 +581,7 @@ export const DonutChart: React.FC<DonutChartProps> = ({
             {/* Slices */}
             {slices.map((slice) => {
               const isHovered = hoveredSlice?.label === slice.label;
-              const isSelected = activeStatusFilter === slice.label && drillLevel === 0;
+              const isSelected = activeStatusList.includes(slice.label) && drillLevel === 0;
               const outerR = isHovered || isSelected ? 142 : 135;
               const innerR = isHovered || isSelected ? 84 : 88;
 

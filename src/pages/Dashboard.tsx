@@ -15,8 +15,9 @@ import { WeeklyPerformanceLineChart } from '../components/WeeklyPerformanceLineC
 import { WeBulkImportModal } from '../components/WeBulkImportModal';
 import { LoginModal } from '../components/LoginModal';
 import { useAuth } from '../context/AuthContext';
-import { ShieldCheck, Building2, Eye, LogIn, Lock, LogOut, Globe, Trash2, PlusCircle, Edit3, X, Search, AlertTriangle, Landmark, Mail, PieChart } from 'lucide-react';
+import { ShieldCheck, Building2, Eye, LogIn, Lock, LogOut, Globe, Trash2, PlusCircle, Edit3, X, Search, AlertTriangle, Landmark, Mail, PieChart, ChevronRight } from 'lucide-react';
 import { isRecordInSector, toCanonicalSector } from '../utils/sectorPermissions';
+import { toFilterArray } from '../utils/filterUtils';
 import { getSiteCompetentAdmin } from '../data/siteAdminMapping';
 import { useWeRecords, useWeSiteCodes, exportToCSV, deleteRecord } from '../hooks/useWeAPI';
 import type { WeRecord } from '../config/fieldConfig';
@@ -410,8 +411,17 @@ export const Dashboard: React.FC = () => {
     return [...new Set(sectorSites.map((s) => s.siteCode))].sort();
   }, [weCentralCodes, liveWeSites, user]);
 
-  // Dynamic filter application across authorized scope
+  // Dynamic filter application across authorized scope (Supports Multi-Select & Search)
   const filteredSites = useMemo(() => {
+    const activeStatuses = toFilterArray(filters.status);
+    const activeSectors = toFilterArray(filters.sector);
+    const activeGeneralAdmins = toFilterArray(filters.generalAdmin);
+    const activeSubSectors = toFilterArray(filters.subSector);
+    const activeCompetentAdmins = toFilterArray(filters.competentAdmin);
+    const activeClassifications = toFilterArray(filters.classification);
+    const activeObstacles = toFilterArray(filters.obstacleReason);
+    const searchQuery = (filters.searchQuery || '').toLowerCase().trim();
+
     return authorizedScopeData.filter((site) => {
       // 1. Company / Category Filter
       if (filters.company !== 'All') {
@@ -432,58 +442,89 @@ export const Dashboard: React.FC = () => {
         }
       }
 
-      // 2. Status / Exact Excel Classification Filter
-      if (filters.status && filters.status !== 'All') {
-        const fs = filters.status.trim();
+      // 2. Status / Exact Excel Classification Filter (Multi-Select)
+      if (activeStatuses.length > 0) {
         const siteCat = getSiteClassification(site);
+        const siteStatus = String(site.status || '').trim();
+        const siteCls = String(site.classification || '').trim();
 
-        if (siteCat === fs || site.status === fs || site.classification === fs) {
-          // exact match
-        } else if (fs === 'المكتمل' || fs === 'Completed') {
-          if (!isClassificationCompleted(siteCat)) return false;
-        } else if (fs === 'متعذر / معوقات' || fs === 'Blocked / On Hold') {
-          if (!isClassificationBlocked(siteCat)) return false;
-        } else {
+        const match = activeStatuses.some((fs) => {
+          if (siteCat === fs || siteStatus === fs || siteCls === fs) return true;
+          if (fs === 'المكتمل' || fs === 'Completed') return isClassificationCompleted(siteCat);
+          if (fs === 'متعذر / معوقات' || fs === 'Blocked / On Hold') return isClassificationBlocked(siteCat);
           return false;
-        }
+        });
+        if (!match) return false;
       }
+
       // 3. Expected Date Filter
       if (filters.expectedDate && site.expectedDate > filters.expectedDate) {
         return false;
       }
-      // 4. Sector Filter
-      if (filters.sector && filters.sector !== 'All') {
-        if (!isRecordInSector(filters.sector, site)) {
-          return false;
-        }
+
+      // 4. Sector Multi-Select Filter
+      if (activeSectors.length > 0) {
+        const matchSector = activeSectors.some(
+          (sec) => isRecordInSector(sec, site) || String(site.sector || '').trim() === sec
+        );
+        if (!matchSector) return false;
       }
-      // 5. General Admin Filter
-      if (filters.generalAdmin && String(site.generalAdmin || '').trim() !== String(filters.generalAdmin).trim()) {
-        return false;
+
+      // 5. General Admin Multi-Select Filter
+      if (activeGeneralAdmins.length > 0) {
+        const ga = String(site.generalAdmin || '').trim();
+        if (!activeGeneralAdmins.includes(ga)) return false;
       }
-      // 5.5 SubSector / الإدارة المختصة Filter (Orange 4-tier hierarchy)
-      if (filters.subSector && String(site.subSector || '').trim() !== String(filters.subSector).trim()) {
-        return false;
+
+      // 5.5 SubSector / الإدارة المختصة Filter (Orange Multi-Select)
+      if (activeSubSectors.length > 0) {
+        const sub = String(site.subSector || '').trim();
+        if (!activeSubSectors.includes(sub)) return false;
       }
-      // 6. Competent Admin Filter
-      if (filters.competentAdmin && String(site.competentAdmin || '').trim() !== String(filters.competentAdmin).trim()) {
-        return false;
+
+      // 6. Competent Admin Multi-Select Filter
+      if (activeCompetentAdmins.length > 0) {
+        const ca = String(site.competentAdmin || '').trim();
+        if (!activeCompetentAdmins.includes(ca)) return false;
       }
+
       // 7. Central / Exchange Filter
       if (filters.central && String(site.central || '').trim() !== String(filters.central).trim()) {
         return false;
       }
-      // 8. Classification Filter (Strict Excel Match)
-      if (filters.classification && filters.classification !== 'All') {
+
+      // 8. Classification Multi-Select Filter
+      if (activeClassifications.length > 0) {
         const siteCat = getSiteClassification(site);
-        const fc = filters.classification.trim();
-        if (siteCat !== fc && String(site.classification || '').trim() !== fc) {
-          return false;
-        }
+        const rawCls = String(site.classification || '').trim();
+        const matchCls = activeClassifications.some((fc) => siteCat === fc || rawCls === fc);
+        if (!matchCls) return false;
       }
-      // 9. Obstacle Reason Filter
-      if (filters.obstacleReason && String(site.obstacleReason || '').trim() !== String(filters.obstacleReason).trim()) {
-        return false;
+
+      // 9. Obstacle Reason Multi-Select Filter
+      if (activeObstacles.length > 0) {
+        const obs = String(site.obstacleReason || '').trim();
+        if (!activeObstacles.includes(obs)) return false;
+      }
+
+      // 10. Quick Site Search Query (Site ID, Site Code, Site Name, Central)
+      if (searchQuery) {
+        const code = (site.siteCode || '').toLowerCase();
+        const id = (site.id || '').toLowerCase();
+        const name = (site.siteName || '').toLowerCase();
+        const central = (site.central || '').toLowerCase();
+        const sector = (site.sector || '').toLowerCase();
+        const notes = (site.notes || '').toLowerCase();
+
+        const matchSearch =
+          code.includes(searchQuery) ||
+          id.includes(searchQuery) ||
+          name.includes(searchQuery) ||
+          central.includes(searchQuery) ||
+          sector.includes(searchQuery) ||
+          notes.includes(searchQuery);
+
+        if (!matchSearch) return false;
       }
 
       return true;
@@ -495,8 +536,15 @@ export const Dashboard: React.FC = () => {
     return calculateStatusSummaries(filteredSites);
   }, [filteredSites]);
 
-  // Scope dataset for KPI cards & Status Tabs (scoped to sector/admin/search, without status filter)
+  // Scope dataset for KPI cards & Status Tabs (scoped to sector/admin/search, without status filter so tabs reflect active distribution)
   const kpiScopeSites = useMemo(() => {
+    const activeSectors = toFilterArray(filters.sector);
+    const activeGeneralAdmins = toFilterArray(filters.generalAdmin);
+    const activeSubSectors = toFilterArray(filters.subSector);
+    const activeCompetentAdmins = toFilterArray(filters.competentAdmin);
+    const activeObstacles = toFilterArray(filters.obstacleReason);
+    const searchQuery = (filters.searchQuery || '').toLowerCase().trim();
+
     return authorizedScopeData.filter((site) => {
       // 1. Company Filter
       if (filters.company !== 'All') {
@@ -516,33 +564,50 @@ export const Dashboard: React.FC = () => {
       }
       // 2. Expected Date Filter
       if (filters.expectedDate && site.expectedDate > filters.expectedDate) return false;
-      // 3. Sector Filter
-      if (filters.sector && filters.sector !== 'All') {
-        if (!isRecordInSector(filters.sector, site)) return false;
+      // 3. Sector Multi-Select Filter
+      if (activeSectors.length > 0) {
+        const matchSector = activeSectors.some(
+          (sec) => isRecordInSector(sec, site) || String(site.sector || '').trim() === sec
+        );
+        if (!matchSector) return false;
       }
-      // 4. General Admin Filter
-      if (filters.generalAdmin && String(site.generalAdmin || '').trim() !== String(filters.generalAdmin).trim()) {
-        return false;
+      // 4. General Admin Multi-Select Filter
+      if (activeGeneralAdmins.length > 0) {
+        const ga = String(site.generalAdmin || '').trim();
+        if (!activeGeneralAdmins.includes(ga)) return false;
       }
-      // 5. SubSector Filter
-      if (filters.subSector && String(site.subSector || '').trim() !== String(filters.subSector).trim()) {
-        return false;
+      // 5. SubSector Multi-Select Filter
+      if (activeSubSectors.length > 0) {
+        const sub = String(site.subSector || '').trim();
+        if (!activeSubSectors.includes(sub)) return false;
       }
-      // 6. Competent Admin Filter
-      if (filters.competentAdmin && String(site.competentAdmin || '').trim() !== String(filters.competentAdmin).trim()) {
-        return false;
+      // 6. Competent Admin Multi-Select Filter
+      if (activeCompetentAdmins.length > 0) {
+        const ca = String(site.competentAdmin || '').trim();
+        if (!activeCompetentAdmins.includes(ca)) return false;
       }
       // 7. Central Filter
       if (filters.central && String(site.central || '').trim() !== String(filters.central).trim()) {
         return false;
       }
       // 8. Obstacle Reason Filter
-      if (filters.obstacleReason && String(site.obstacleReason || '').trim() !== String(filters.obstacleReason).trim()) {
-        return false;
+      if (activeObstacles.length > 0) {
+        const obs = String(site.obstacleReason || '').trim();
+        if (!activeObstacles.includes(obs)) return false;
+      }
+      // 9. Quick Search Query
+      if (searchQuery) {
+        const code = (site.siteCode || '').toLowerCase();
+        const id = (site.id || '').toLowerCase();
+        const name = (site.siteName || '').toLowerCase();
+        const central = (site.central || '').toLowerCase();
+        if (!code.includes(searchQuery) && !id.includes(searchQuery) && !name.includes(searchQuery) && !central.includes(searchQuery)) {
+          return false;
+        }
       }
       return true;
     });
-  }, [authorizedScopeData, filters.company, filters.expectedDate, filters.sector, filters.generalAdmin, filters.subSector, filters.competentAdmin, filters.central, filters.obstacleReason, activeScope]);
+  }, [authorizedScopeData, filters.company, filters.expectedDate, filters.sector, filters.generalAdmin, filters.subSector, filters.competentAdmin, filters.central, filters.obstacleReason, filters.searchQuery, activeScope]);
 
   // Compute live KPIs reflecting the exact 8 Excel classifications dynamically
   const kpis: KpiData = useMemo(() => {
@@ -609,14 +674,15 @@ export const Dashboard: React.FC = () => {
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (filters.company !== 'All') count++;
-    if (filters.status) count++;
+    if (toFilterArray(filters.status).length > 0) count++;
     if (filters.expectedDate) count++;
-    if (filters.sector) count++;
-    if (filters.generalAdmin) count++;
-    if (filters.subSector) count++;
-    if (filters.competentAdmin) count++;
-    if (filters.classification) count++;
-    if (filters.obstacleReason) count++;
+    if (toFilterArray(filters.sector).length > 0) count++;
+    if (toFilterArray(filters.generalAdmin).length > 0) count++;
+    if (toFilterArray(filters.subSector).length > 0) count++;
+    if (toFilterArray(filters.competentAdmin).length > 0) count++;
+    if (toFilterArray(filters.classification).length > 0) count++;
+    if (toFilterArray(filters.obstacleReason).length > 0) count++;
+    if (filters.searchQuery) count++;
     return count;
   }, [filters]);
 
@@ -644,10 +710,20 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleStatusSelect = (status: string) => {
-    setFilters((prev) => ({
-      ...prev,
-      status: prev.status === status || status === 'All' ? '' : status,
-    }));
+    setFilters((prev) => {
+      if (status === 'All' || !status) {
+        return { ...prev, status: '' };
+      }
+      const currentList = toFilterArray(prev.status);
+      const nextList = currentList.includes(status)
+        ? currentList.filter((s) => s !== status)
+        : [...currentList, status];
+      return { ...prev, status: nextList.length === 0 ? '' : nextList };
+    });
+  };
+
+  const handleClearStatusFilters = () => {
+    setFilters((prev) => ({ ...prev, status: '' }));
   };
 
   const handleOpenDetails = (status?: string) => {
@@ -936,6 +1012,94 @@ export const Dashboard: React.FC = () => {
                 activeStatusFilter={filters.status}
                 onSelectStatusFilter={handleStatusSelect}
               />
+            </div>
+
+            {/* Quick Site Search Bar (شريط البحث السريع المباشر بكود أو اسم الموقع) */}
+            <div className="mb-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-900/70 rounded-2xl p-3.5 shadow-md text-white">
+              <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                <div className="flex-1 relative">
+                  <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none text-sky-400">
+                    <Search className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    id="quick-site-search-input"
+                    value={filters.searchQuery || ''}
+                    onChange={(e) => handleFilterChange('searchQuery', e.target.value)}
+                    placeholder="🔍 بحث سريع ومباشر بكود الموقع أو اسمه (Site ID / Site Code / Site Name / Central)..."
+                    className="w-full pr-10 pl-9 py-2 text-xs sm:text-sm bg-white/10 hover:bg-white/15 focus:bg-white/20 border border-white/20 focus:border-sky-400 rounded-xl text-white placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-400/40 transition-all font-sans"
+                  />
+                  {filters.searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => handleFilterChange('searchQuery', '')}
+                      className="absolute inset-y-0 left-2.5 flex items-center text-slate-300 hover:text-white cursor-pointer"
+                      title="مسح البحث"
+                    >
+                      <X className="w-4 h-4 bg-white/20 hover:bg-white/30 rounded-full p-0.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
+                  {filters.searchQuery ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 ${
+                        filteredSites.length > 0 
+                          ? 'bg-sky-500/20 text-sky-200 border border-sky-400/30' 
+                          : 'bg-rose-500/20 text-rose-200 border border-rose-400/30'
+                      }`}>
+                        <span>النتائج:</span>
+                        <strong className="text-white font-mono text-sm">{filteredSites.length}</strong>
+                        <span>موقع</span>
+                      </span>
+                      {filteredSites.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDetails()}
+                          className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm cursor-pointer transition hover:scale-105"
+                          title="عرض تفاصيل وداتا المواقع المطابقة في نافذة تفصيلية"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>عرض داتا المواقع المطابقة ({filteredSites.length})</span>
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-300 font-medium">
+                      <span className="bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded text-[10px] font-mono border border-sky-400/30 font-bold">
+                        ⚡ بحث فوري
+                      </span>
+                      <span>اكتب كود أو اسم أي موقع لتصفيته وعرض داتا الموقع فوراً</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Instant Site Card Preview when 1 site matches */}
+              {filters.searchQuery && filteredSites.length === 1 && (
+                <div className="mt-2.5 pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs bg-white/5 p-2.5 rounded-xl">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono font-black text-sky-300 text-sm tracking-wide bg-sky-950/80 px-2 py-0.5 rounded border border-sky-500/30">
+                      {filteredSites[0].siteCode}
+                    </span>
+                    <span className="text-slate-100 font-bold">{filteredSites[0].siteName}</span>
+                    <span className="bg-white/15 px-2 py-0.5 rounded text-[11px] text-slate-200">{filteredSites[0].company}</span>
+                    <span className="bg-white/10 px-2 py-0.5 rounded text-[11px] text-slate-300">{filteredSites[0].sector}</span>
+                    <span className="bg-white/10 px-2 py-0.5 rounded text-[11px] text-slate-300">{filteredSites[0].central}</span>
+                    <span className="bg-emerald-500/25 text-emerald-300 border border-emerald-400/40 px-2 py-0.5 rounded text-[11px] font-bold">
+                      {getSiteClassification(filteredSites[0])}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenDetails()}
+                    className="text-xs text-sky-300 hover:text-white font-bold underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>فتح الشيت والبيانات الكاملة للموقع ←</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* 5. Interactive Filtering Row (فلاتر التصفية التفاعلية الهرمية) */}

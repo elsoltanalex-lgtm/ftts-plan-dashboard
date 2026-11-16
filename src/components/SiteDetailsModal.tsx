@@ -27,7 +27,7 @@ interface SiteDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   sites: SiteRecord[];
-  activeStatusFilter?: string;
+  activeStatusFilter?: string | string[];
   onEditSite?: (siteCode: string) => void;
   onAddNewSite?: () => void;
   onDeleteSite?: (site: SiteRecord) => Promise<boolean | void> | void;
@@ -163,7 +163,7 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                 </h3>
                 {activeStatusFilter && (
                   <span className="text-xs bg-sky-500/30 text-sky-200 px-2.5 py-0.5 rounded-full border border-sky-400/30 font-medium">
-                    {activeStatusFilter}
+                    {Array.isArray(activeStatusFilter) ? activeStatusFilter.join(' + ') : activeStatusFilter}
                   </span>
                 )}
               </div>

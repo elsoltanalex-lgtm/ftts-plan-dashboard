@@ -10,12 +10,13 @@ import {
 } from 'lucide-react';
 
 import type { StatusSummary } from '../types/dashboard';
+import { toFilterArray } from '../utils/filterUtils';
 
 interface SummaryTableProps {
   data: StatusSummary[];
   totalSites: number;
   totalLinks: number;
-  activeStatusFilter: string;
+  activeStatusFilter?: string | string[];
   onSelectStatus: (status: string) => void;
   onOpenDetailsModal?: (status?: string) => void;
 }
@@ -98,7 +99,10 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
           <div className="flex items-center gap-2">
             {onOpenDetailsModal && (
               <button
-                onClick={() => onOpenDetailsModal(activeStatusFilter || undefined)}
+                onClick={() => {
+                  const list = toFilterArray(activeStatusFilter);
+                  onOpenDetailsModal(list.length > 0 ? list[0] : undefined);
+                }}
                 className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-lg transition-colors cursor-pointer"
               >
                 <Eye className="w-3.5 h-3.5" />
@@ -159,7 +163,8 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {sortedData.map((row) => {
-                const isSelected = activeStatusFilter === row.status;
+                const activeList = toFilterArray(activeStatusFilter);
+                const isSelected = activeList.includes(row.status);
                 const siteBarWidth = Math.round((row.sitesCount / maxSites) * 100);
                 const linkBarWidth = Math.round((row.linksCount / maxLinks) * 100);
 
