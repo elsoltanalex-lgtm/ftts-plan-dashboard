@@ -179,15 +179,13 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
                 onSelectStatusFilter(card.filterTarget);
               }
             }}
-            className={`pbi-card p-3 flex flex-col justify-between relative overflow-hidden transition-all duration-200 select-none ${
-              card.bgColor
-            } ${card.borderColor} ${isClickable ? 'cursor-pointer hover:-translate-y-0.5' : ''} ${
-              card.isActive && card.filterTarget !== 'All'
+            className={`pbi-card p-3 flex flex-col justify-between relative overflow-hidden transition-all duration-200 select-none ${card.bgColor
+              } ${card.borderColor} ${isClickable ? 'cursor-pointer hover:-translate-y-0.5' : ''} ${card.isActive && card.filterTarget !== 'All'
                 ? 'ring-2 ring-offset-1 ' + card.ringColor + ' shadow-md scale-[1.02]'
                 : card.isActive && card.filterTarget === 'All'
-                ? 'ring-2 ring-offset-1 ring-blue-500 shadow-xs'
-                : 'opacity-90 hover:opacity-100 hover:shadow-xs'
-            }`}
+                  ? 'ring-2 ring-offset-1 ring-blue-500 shadow-xs'
+                  : 'opacity-90 hover:opacity-100 hover:shadow-xs'
+              }`}
           >
             {/* Top decorative gradient bar */}
             <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${card.color}`} />
@@ -215,11 +213,10 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
                 </span>
                 {card.filterTarget && (
                   <span
-                    className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
-                      card.isActive && card.filterTarget !== 'All'
+                    className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${card.isActive && card.filterTarget !== 'All'
                         ? 'bg-slate-900 text-white'
                         : 'bg-white/80 text-slate-500'
-                    }`}
+                      }`}
                   >
                     {card.isActive && card.filterTarget !== 'All' ? 'محدد' : 'تصفية'}
                   </span>
