@@ -9,9 +9,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function testFetch() {
   console.log('Testing connectivity to tables...\n');
-  
+
   const tables = ['we_records', 'vodafone_records', 'orange_records', 'etaha_records', 'uploaded_datasets'];
-  
+
   for (const table of tables) {
     const { data, error, count } = await supabase
       .from(table)

@@ -437,12 +437,12 @@ export const Dashboard: React.FC = () => {
         const fs = filters.status.trim();
         const siteCat = getSiteClassification(site);
 
-        if (fs === 'المكتمل' || fs === 'Completed') {
+        if (siteCat === fs || site.status === fs || site.classification === fs) {
+          // exact match
+        } else if (fs === 'المكتمل' || fs === 'Completed') {
           if (!isClassificationCompleted(siteCat)) return false;
         } else if (fs === 'متعذر / معوقات' || fs === 'Blocked / On Hold') {
           if (!isClassificationBlocked(siteCat)) return false;
-        } else if (siteCat === fs || site.status === fs || site.classification === fs) {
-          // exact match
         } else {
           return false;
         }
@@ -495,43 +495,93 @@ export const Dashboard: React.FC = () => {
     return calculateStatusSummaries(filteredSites);
   }, [filteredSites]);
 
-  // Compute live KPIs reflecting the exact Excel classifications dynamically
+  // Scope dataset for KPI cards & Status Tabs (scoped to sector/admin/search, without status filter)
+  const kpiScopeSites = useMemo(() => {
+    return authorizedScopeData.filter((site) => {
+      // 1. Company Filter
+      if (filters.company !== 'All') {
+        if (activeScope === 'FTTS') {
+          if (site.company !== filters.company) return false;
+        } else if (activeScope === 'ETAHA') {
+          if (filters.company === 'التعليم' && !site.siteName.includes('التربية والتعليم') && !site.classification.includes('تعليم')) return false;
+          if (filters.company === 'البنوك' && !site.siteName.includes('بنك') && !site.siteName.includes('مصرف') && !site.siteName.includes('الأهلي') && !site.siteName.includes('مصر')) return false;
+          if (filters.company === 'الجمارك والضرائب' && !site.siteName.includes('جمارك') && !site.siteName.includes('ضرائب')) return false;
+        } else if (activeScope === 'TAHAWOL') {
+          if (filters.company === 'الداخلية' && !site.siteName.includes('الداخلية') && !site.classification.includes('الداخلية')) return false;
+          if (filters.company === 'العدل' && !site.siteName.includes('العدل') && !site.classification.includes('العدل')) return false;
+          if (filters.company === 'الصحة' && !site.siteName.includes('الصحة') && !site.classification.includes('الصحة')) return false;
+        } else if (site.company !== filters.company) {
+          return false;
+        }
+      }
+      // 2. Expected Date Filter
+      if (filters.expectedDate && site.expectedDate > filters.expectedDate) return false;
+      // 3. Sector Filter
+      if (filters.sector && filters.sector !== 'All') {
+        if (!isRecordInSector(filters.sector, site)) return false;
+      }
+      // 4. General Admin Filter
+      if (filters.generalAdmin && String(site.generalAdmin || '').trim() !== String(filters.generalAdmin).trim()) {
+        return false;
+      }
+      // 5. SubSector Filter
+      if (filters.subSector && String(site.subSector || '').trim() !== String(filters.subSector).trim()) {
+        return false;
+      }
+      // 6. Competent Admin Filter
+      if (filters.competentAdmin && String(site.competentAdmin || '').trim() !== String(filters.competentAdmin).trim()) {
+        return false;
+      }
+      // 7. Central Filter
+      if (filters.central && String(site.central || '').trim() !== String(filters.central).trim()) {
+        return false;
+      }
+      // 8. Obstacle Reason Filter
+      if (filters.obstacleReason && String(site.obstacleReason || '').trim() !== String(filters.obstacleReason).trim()) {
+        return false;
+      }
+      return true;
+    });
+  }, [authorizedScopeData, filters.company, filters.expectedDate, filters.sector, filters.generalAdmin, filters.subSector, filters.competentAdmin, filters.central, filters.obstacleReason, activeScope]);
+
+  // Compute live KPIs reflecting the exact 8 Excel classifications dynamically
   const kpis: KpiData = useMemo(() => {
-    const totalSites = filteredSites.length;
-    const totalLinks = filteredSites.reduce((sum, s) => sum + s.linksCount, 0);
+    const totalSites = kpiScopeSites.length;
+    const totalLinks = kpiScopeSites.reduce((sum, s) => sum + (s.linksCount || 1), 0);
 
-    const completedSites = filteredSites.filter((s) => isClassificationCompleted(getSiteClassification(s))).length;
-    const inProgressSites = filteredSites.filter((s) => isClassificationInProgress(getSiteClassification(s))).length;
-    const plannedSites = filteredSites.filter((s) => isClassificationPlanned(getSiteClassification(s))).length;
-    const blockedSites = filteredSites.filter((s) => isClassificationBlocked(getSiteClassification(s))).length;
+    const completedSites = kpiScopeSites.filter((s) => getSiteClassification(s) === 'تم الانتهاء').length;
+    const fiberActiveSites = kpiScopeSites.filter((s) => getSiteClassification(s) === 'تم التشغيل فايبر').length;
+    const civilDoneSites = kpiScopeSites.filter((s) => getSiteClassification(s) === 'تم مدني').length;
+    const inProgressSites = kpiScopeSites.filter((s) => getSiteClassification(s) === 'جاري العمل').length;
+    const surveySites = kpiScopeSites.filter((s) => getSiteClassification(s) === 'جاري المعاينة').length;
+    const permitsSites = kpiScopeSites.filter((s) => getSiteClassification(s) === 'جاري تصريح').length;
+    const stalledSites = kpiScopeSites.filter((s) => getSiteClassification(s) === 'متعذر').length;
+    const obstaclesSites = kpiScopeSites.filter((s) => getSiteClassification(s) === 'معوقات').length;
 
-    const permitsCount = filteredSites.filter((s) => isClassificationPermits(getSiteClassification(s))).length;
-    const obstaclesCount = filteredSites.filter((s) => {
-      const c = getSiteClassification(s);
-      return c.includes('معوق') || String(s.status || '').includes('معوق');
-    }).length;
-    const stalledCount = filteredSites.filter((s) => {
-      const c = getSiteClassification(s);
-      return c.includes('متعذر') || c.includes('تعذر') || c.includes('متعثر') || String(s.status || '').includes('متعذر');
-    }).length;
-
+    const achieved = completedSites + fiberActiveSites + civilDoneSites;
     const completionRate = totalSites > 0
-      ? Number(((completedSites / totalSites) * 100).toFixed(1))
+      ? Number(((achieved / totalSites) * 100).toFixed(1))
       : 0;
 
     return {
       totalSites,
       totalLinks,
       completedSites,
+      fiberActiveSites,
+      civilDoneSites,
       inProgressSites,
-      plannedSites,
-      blockedSites,
-      permitsCount,
-      obstaclesCount,
-      stalledCount,
+      surveySites,
+      permitsSites,
+      stalledSites,
+      obstaclesSites,
+      plannedSites: surveySites,
+      blockedSites: stalledSites + obstaclesSites,
+      permitsCount: permitsSites,
+      obstaclesCount: obstaclesSites,
+      stalledCount: stalledSites,
       completionRate,
     };
-  }, [filteredSites]);
+  }, [kpiScopeSites]);
 
   // FTTS Operator cards stats scoped to user's authorized dataset
   const companyStats = useMemo(() => {
@@ -596,7 +646,7 @@ export const Dashboard: React.FC = () => {
   const handleStatusSelect = (status: string) => {
     setFilters((prev) => ({
       ...prev,
-      status: prev.status === status ? '' : status,
+      status: prev.status === status || status === 'All' ? '' : status,
     }));
   };
 

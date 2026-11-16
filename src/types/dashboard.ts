@@ -88,13 +88,21 @@ export interface FilterState {
 export interface KpiData {
   totalSites: number;
   totalLinks: number;
-  completedSites: number;
-  inProgressSites: number;
-  plannedSites: number;
-  blockedSites: number;
-  permitsCount: number;
-  obstaclesCount: number;
-  stalledCount: number;
+  // Exact 8 Excel classifications
+  completedSites: number;     // تم الانتهاء
+  fiberActiveSites: number;   // تم التشغيل فايبر
+  civilDoneSites: number;     // تم مدني
+  inProgressSites: number;    // جاري العمل
+  surveySites: number;        // جاري المعاينة
+  permitsSites: number;       // جاري تصريح
+  stalledSites: number;       // متعذر
+  obstaclesSites: number;     // معوقات
+  // Backward-compatibility aliases
+  plannedSites?: number;
+  blockedSites?: number;
+  permitsCount?: number;
+  obstaclesCount?: number;
+  stalledCount?: number;
   completionRate: number;
 }
 

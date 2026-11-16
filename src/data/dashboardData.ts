@@ -10,7 +10,7 @@ export const STATUS_CONFIG: Record<
     textColor: string;
   }
 > = {
-  // ── 7 Exact Execution Status Categories for WE (Overall View) ──
+  // ── 8 Exact Execution Status Categories from Excel ──
   'تم الانتهاء': {
     en: 'Completed',
     color: '#16a34a', // Emerald Green
@@ -25,33 +25,89 @@ export const STATUS_CONFIG: Record<
     border: '#34d399',
     textColor: '#047857',
   },
+  'تم التشغيل فيبر': {
+    en: 'Fiber Activated',
+    color: '#059669',
+    bgLight: '#d1fae5',
+    border: '#34d399',
+    textColor: '#047857',
+  },
+  'تم مدني': {
+    en: 'Civil Completed',
+    color: '#0d9488', // Teal
+    bgLight: '#ccfbf1',
+    border: '#2dd4bf',
+    textColor: '#0f766e',
+  },
+  'تم مدنى': {
+    en: 'Civil Completed',
+    color: '#0d9488',
+    bgLight: '#ccfbf1',
+    border: '#2dd4bf',
+    textColor: '#0f766e',
+  },
+  'جاري العمل': {
+    en: 'In Progress',
+    color: '#4f46e5', // Indigo Blue
+    bgLight: '#e0e7ff',
+    border: '#818cf8',
+    textColor: '#3730a3',
+  },
+  'جارى العمل': {
+    en: 'In Progress',
+    color: '#4f46e5',
+    bgLight: '#e0e7ff',
+    border: '#818cf8',
+    textColor: '#3730a3',
+  },
   'جاري العمل مدني': {
     en: 'Civil Works in Progress',
-    color: '#4f46e5', // Indigo Blue
+    color: '#4f46e5',
     bgLight: '#e0e7ff',
     border: '#818cf8',
     textColor: '#3730a3',
   },
   'جاري المعاينة': {
     en: 'Under Inspection',
-    color: '#0d9488', // Teal
-    bgLight: '#ccfbf1',
-    border: '#2dd4bf',
-    textColor: '#0f766e',
+    color: '#7c3aed', // Purple
+    bgLight: '#f5f3ff',
+    border: '#c4b5fd',
+    textColor: '#6d28d9',
   },
-  'جاري تصاريح': {
+  'جارى المعاينة': {
+    en: 'Under Inspection',
+    color: '#7c3aed',
+    bgLight: '#f5f3ff',
+    border: '#c4b5fd',
+    textColor: '#6d28d9',
+  },
+  'جاري تصريح': {
     en: 'Permits in Progress',
     color: '#0284c7', // Sky Blue
     bgLight: '#e0f2fe',
     border: '#38bdf8',
     textColor: '#0369a1',
   },
-  'جاري كهرباء': {
-    en: 'Electricity in Progress',
-    color: '#d97706', // Amber Gold
-    bgLight: '#fef3c7',
-    border: '#fcd34d',
-    textColor: '#b45309',
+  'جاري تصاريح': {
+    en: 'Permits in Progress',
+    color: '#0284c7',
+    bgLight: '#e0f2fe',
+    border: '#38bdf8',
+    textColor: '#0369a1',
+  },
+  'جارى تصاريح': {
+    en: 'Permits in Progress',
+    color: '#0284c7',
+    bgLight: '#e0f2fe',
+    border: '#38bdf8',
+    textColor: '#0369a1',
+  },
+  'جاري  تصاريح': {
+    en: 'Permits in Progress',
+    color: '#0284c7',
+    bgLight: '#e0f2fe',
+    border: '#38bdf8',
+    textColor: '#0369a1',
   },
   'متعذر': {
     en: 'Stalled / Blocked',
@@ -239,12 +295,71 @@ export const CENTRALS = [
   'سنترال الزقازيق',
 ];
 
+export const CANONICAL_CLASSIFICATIONS = [
+  'تم الانتهاء',
+  'تم التشغيل فايبر',
+  'تم مدني',
+  'جاري العمل',
+  'جاري المعاينة',
+  'جاري تصريح',
+  'متعذر',
+  'معوقات',
+] as const;
+
+export type CanonicalClassification = typeof CANONICAL_CLASSIFICATIONS[number];
+
 export const CLASSIFICATIONS = [
-  'VIP / فائق الأهمية',
-  'استراتيجي / Strategic',
-  'مسار رئيسي / Backbone',
-  'مشروع اعتيادي / Standard',
+  'تم الانتهاء',
+  'تم التشغيل فايبر',
+  'تم مدني',
+  'جاري العمل',
+  'جاري المعاينة',
+  'جاري تصريح',
+  'متعذر',
+  'معوقات',
 ];
+
+export function normalizeToCanonicalClassification(raw: string): string {
+  if (!raw) return 'جاري العمل';
+  const s = String(raw).trim()
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي');
+
+  // 1. تم التشغيل فايبر
+  if (s.includes('تشغيل') || s.includes('فيبر') || s.includes('فايبر')) {
+    return 'تم التشغيل فايبر';
+  }
+  // 2. تم مدني
+  if (s.includes('تم مدني') || s.includes('تم خارجي') || s.includes('متوقف علي العميل') || s.includes('مدنى') || s.includes('مدني')) {
+    if (s.startsWith('تم') || s.includes('تم')) return 'تم مدني';
+  }
+  // 3. تم الانتهاء / تم التسليم
+  if (s.includes('تم الانتهاء') || s.includes('تم التسليم') || s.includes('تسليم')) {
+    return 'تم الانتهاء';
+  }
+  // 4. معوقات
+  if (s.includes('معوق')) {
+    return 'معوقات';
+  }
+  // 5. متعذر
+  if (s.includes('متعذر') || s.includes('تعذر') || s.includes('متعثر')) {
+    return 'متعذر';
+  }
+  // 6. جاري تصريح
+  if (s.includes('تصريح') || s.includes('تصاريح')) {
+    return 'جاري تصريح';
+  }
+  // 7. جاري المعاينة
+  if (s.includes('معاين') || s.includes('مخطط')) {
+    return 'جاري المعاينة';
+  }
+  // 8. جاري العمل
+  if (s.includes('عمل') || s.includes('تنفيذ') || s.includes('خارجي') || s.includes('كهرب') || s.includes('جاري') || s.includes('جار')) {
+    return 'جاري العمل';
+  }
+  return raw.trim() || 'جاري العمل';
+}
 
 export const OBSTACLE_REASONS = [
   'لا يوجد تعذر',
@@ -468,23 +583,19 @@ export const BASELINE_TOTAL_LINKS = 185;
  * without any hardcoded overrides or artificial reclassifications.
  */
 export function getSiteClassification(site: SiteRecord): string {
+  let raw = '';
   if (site.rawRecord && site.rawRecord['التصنيف']) {
-    const raw = String(site.rawRecord['التصنيف']).trim();
-    if (raw) return raw;
-  }
-  const cls = site.classification;
-  if (cls && typeof cls === 'string') {
-    const trimmed = cls.trim();
+    raw = String(site.rawRecord['التصنيف']).trim();
+  } else if (site.classification && typeof site.classification === 'string') {
+    const trimmed = site.classification.trim();
     if (trimmed && trimmed !== 'Sharing' && trimmed !== 'New' && trimmed !== 'GD') {
-      return trimmed;
+      raw = trimmed;
     }
+  } else if (site.status && typeof site.status === 'string') {
+    raw = site.status.trim();
   }
-  const st = site.status;
-  if (st && typeof st === 'string') {
-    const trimmed = st.trim();
-    if (trimmed) return trimmed;
-  }
-  return 'غير محدد';
+  if (!raw) return 'غير محدد';
+  return normalizeToCanonicalClassification(raw);
 }
 
 /**

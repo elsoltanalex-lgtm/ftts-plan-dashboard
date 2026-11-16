@@ -86,6 +86,10 @@ const SingleFilterDropdown: React.FC<FilterDropdownProps> = ({
     if (filterKey === 'sector') {
       return sitesData.filter((s) => isRecordInSector(optVal, s) || String(s.sector || '').trim() === String(optVal).trim()).length;
     }
+    if (filterKey === 'classification') {
+      const targetTrimmed = String(optVal).trim();
+      return sitesData.filter((s) => getSiteClassification(s) === targetTrimmed || String(s.classification || '').trim() === targetTrimmed).length;
+    }
     const targetTrimmed = String(optVal).trim();
     return sitesData.filter((s) => String(s[filterKey] || '').trim() === targetTrimmed).length;
   };
@@ -434,8 +438,25 @@ export const Filters: React.FC<FiltersProps> = ({
           .map((s) => getSiteClassification(s))
           .filter((c) => Boolean(c) && c !== 'غير محدد')
       )
-    ).sort((a, b) => a.localeCompare(b, 'ar'));
-    return list;
+    );
+    const canonicalOrder = [
+      'تم الانتهاء',
+      'تم التشغيل فايبر',
+      'تم مدني',
+      'جاري العمل',
+      'جاري المعاينة',
+      'جاري تصريح',
+      'متعذر',
+      'معوقات',
+    ];
+    return list.sort((a, b) => {
+      const idxA = canonicalOrder.indexOf(a);
+      const idxB = canonicalOrder.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b, 'ar');
+    });
   }, [competentScopedSites]);
 
   useEffect(() => {
@@ -506,7 +527,7 @@ export const Filters: React.FC<FiltersProps> = ({
             <p className="text-xs text-slate-400 mt-0.5">
               {isOrange
                 ? 'تصفية المواقع طبقاً للهيكل الإداري لـ Orange: رئاسة القطاعات ← الإدارة العامة للتنفيذ ← الإدارة المختصة ← إدارة المنطقة'
-                : 'تصفية المؤشرات طبقاً للهيكل الإداري المتسلسل: القطاع ← الإدارة العامة ← إدارة التنفيذ المختصة ← النوع'}
+                : 'تصفية المؤشرات طبقاً للهيكل الإداري المتسلسل: القطاع ← الإدارة العامة ← إدارة التنفيذ المختصة ← التصنيف'}
             </p>
           </div>
         </div>
@@ -643,11 +664,11 @@ export const Filters: React.FC<FiltersProps> = ({
             filterKey="competentAdmin"
           />
 
-          {/* 4. Type / التصنيف (Level 3: Type & Classification) */}
+          {/* 4. التصنيف (Level 3: Classification) */}
           <SingleFilterDropdown
             id="filter-classification"
-            label="Type / النوع"
-            labelEn="Type"
+            label="التصنيف"
+            labelEn="Classification"
             icon={Tag}
             value={filters.classification}
             options={dynamicClassifications}
