@@ -1,0 +1,16 @@
+<USER_REQUEST>
+
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-11-12T10:23:23+02:00.
+
+The user's current state is as follows:
+Active Document: c:\Users\Sherif\Desktop\ftts-plan-dashboard\src\hooks\useWeAPI.ts (LANGUAGE_UNSPECIFIED)
+Cursor is on line: 1
+Other open documents:
+- c:\Users\Sherif\Desktop\ftts-plan-dashboard\src\components\OrangeAddDataModal.tsx (LANGUAGE_UNSPECIFIED)
+- c:\Users\Sherif\Desktop\ftts-plan-dashboard\src\hooks\useOrangeAPI.ts (LANGUAGE_UNSPECIFIED)
+- c:\Users\Sherif\Desktop\ftts-plan-dashboard\src\utils\orangeBulkExcelService.ts (LANGUAGE_UNSPECIFIED)
+- c:\Users\Sherif\Desktop\ftts-plan-dashboard\src\utils\sectorPermissions.ts (LANGUAGE_UNSPECIFIED)
+- c:\Users\Sherif\Desktop\ftts-plan-dashboard\src\types\orange.ts (LANGUAGE_UNSPECIFIED)
+</ADDITIONAL_METADATA>

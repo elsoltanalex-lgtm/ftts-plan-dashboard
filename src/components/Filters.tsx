@@ -1,6 +1,4 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-
-
 import {
   Filter,
   ChevronDown,
@@ -24,7 +22,8 @@ import {
   GENERAL_ADMINS,
   COMPETENT_ADMINS,
   CLASSIFICATIONS,
-  OBSTACLE_REASONS
+  OBSTACLE_REASONS,
+  getSiteClassification
 } from '../data/dashboardData';
 
 interface FiltersProps {
@@ -32,6 +31,7 @@ interface FiltersProps {
   onChangeFilter: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void;
   onResetFilters: () => void;
   sitesData: SiteRecord[];
+  selectedCompany?: string;
 }
 
 interface FilterDropdownProps {
@@ -84,9 +84,10 @@ const SingleFilterDropdown: React.FC<FilterDropdownProps> = ({
   const getOptionCount = (optVal: string) => {
     if (!optVal) return sitesData.length;
     if (filterKey === 'sector') {
-      return sitesData.filter((s) => isRecordInSector(optVal, s)).length;
+      return sitesData.filter((s) => isRecordInSector(optVal, s) || String(s.sector || '').trim() === String(optVal).trim()).length;
     }
-    return sitesData.filter((s) => s[filterKey] === optVal).length;
+    const targetTrimmed = String(optVal).trim();
+    return sitesData.filter((s) => String(s[filterKey] || '').trim() === targetTrimmed).length;
   };
 
   const isSelected = Boolean(value);
@@ -132,14 +133,14 @@ const SingleFilterDropdown: React.FC<FilterDropdownProps> = ({
         onClick={() => !disabled && setIsOpen(!isOpen)}
         title={disabled ? (lockedNote || 'نطاق مقيد بحسب صلاحيات حسابك') : undefined}
         className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xl border transition-all text-right shadow-2xs ${disabled
-            ? 'bg-slate-100/90 border-slate-300 text-slate-600 font-semibold cursor-not-allowed opacity-90'
-            : isSelected
-              ? 'bg-sky-50 border-sky-400 text-sky-900 font-semibold ring-1 ring-sky-300 cursor-pointer'
-              : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50/50 cursor-pointer'
+          ? 'bg-slate-100/90 border-slate-300 text-slate-600 font-semibold cursor-not-allowed opacity-90'
+          : isSelected
+            ? 'bg-sky-50 border-sky-400 text-sky-900 font-semibold ring-1 ring-sky-300 cursor-pointer'
+            : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50/50 cursor-pointer'
           }`}
       >
         <span className="truncate flex-1">
-          {isSelected ? value : `الكل (${labelEn})`}
+          {isSelected ? value : 'الكل (عرض الجميع)'}
         </span>
         {disabled ? (
           <Lock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
@@ -177,8 +178,8 @@ const SingleFilterDropdown: React.FC<FilterDropdownProps> = ({
                 setSearchTerm('');
               }}
               className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${!value
-                  ? 'bg-sky-100 text-sky-900 font-bold'
-                  : 'hover:bg-slate-100 text-slate-700'
+                ? 'bg-sky-100 text-sky-900 font-bold'
+                : 'hover:bg-slate-100 text-slate-700'
                 }`}
             >
               <div className="flex items-center gap-1.5">
@@ -192,7 +193,7 @@ const SingleFilterDropdown: React.FC<FilterDropdownProps> = ({
 
             {/* Individual Options */}
             {filteredOptions.map((opt) => {
-              const isOptionActive = value === opt;
+              const isOptionActive = String(value || '').trim() === String(opt || '').trim();
               const count = getOptionCount(opt);
 
               return (
@@ -204,8 +205,8 @@ const SingleFilterDropdown: React.FC<FilterDropdownProps> = ({
                     setSearchTerm('');
                   }}
                   className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${isOptionActive
-                      ? 'bg-sky-100 text-sky-900 font-bold'
-                      : 'hover:bg-slate-100 text-slate-700'
+                    ? 'bg-sky-100 text-sky-900 font-bold'
+                    : 'hover:bg-slate-100 text-slate-700'
                     }`}
                 >
                   <div className="flex items-center gap-1.5 truncate">
@@ -214,8 +215,8 @@ const SingleFilterDropdown: React.FC<FilterDropdownProps> = ({
                   </div>
                   <span
                     className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isOptionActive
-                        ? 'bg-sky-200/60 text-sky-900 font-bold'
-                        : 'bg-slate-100 text-slate-500'
+                      ? 'bg-sky-200/60 text-sky-900 font-bold'
+                      : 'bg-slate-100 text-slate-500'
                       }`}
                   >
                     {count}
@@ -241,44 +242,245 @@ export const Filters: React.FC<FiltersProps> = ({
   onChangeFilter,
   onResetFilters,
   sitesData,
+  selectedCompany,
 }) => {
   const { user } = useAuth();
   const isSectorLocked = Boolean(user && user.role !== 'admin' && user.sector !== 'ALL');
+  const isOrange = (selectedCompany || filters.company) === 'Orange';
 
-  const activeCount = [
-    !isSectorLocked && filters.sector,
-    filters.generalAdmin,
-    filters.competentAdmin,
-    filters.classification,
-    filters.obstacleReason,
-  ].filter(Boolean).length;
+  // Base dataset: when specific operator is selected, strictly scope to those sites
+  const baseSites = useMemo(() => {
+    const comp = selectedCompany || filters.company;
+    if (comp && comp !== 'All') {
+      const filtered = sitesData.filter((s) => s.company === comp);
+      return filtered.length > 0 ? filtered : sitesData;
+    }
+    return sitesData;
+  }, [sitesData, selectedCompany, filters.company]);
 
+  // Active filters count
+  const activeCount = isOrange
+    ? [
+      !isSectorLocked && filters.sector,
+      filters.generalAdmin,
+      filters.subSector,
+      filters.competentAdmin,
+    ].filter(Boolean).length
+    : [
+      !isSectorLocked && filters.sector,
+      filters.generalAdmin,
+      filters.competentAdmin,
+      filters.classification,
+      filters.obstacleReason,
+    ].filter(Boolean).length;
+
+  // Level 1: Sector / Presidency Filter
   const dynamicSectors = useMemo(() => {
     if (isSectorLocked && user?.sector) {
       return [toCanonicalSector(user.sector)];
     }
-    return SECTORS;
-  }, [user, isSectorLocked]);
+    if (isOrange) {
+      const orangeSecs = Array.from(
+        new Set(baseSites.map((s) => (s.sector || '').trim()).filter(Boolean))
+      );
+      return orangeSecs.length > 0
+        ? orangeSecs
+        : ['المنطقة الجنوبية', 'المنطقة الغربية', 'المنطقة الشرقية', 'القاهرة الكبرى', 'الجيزة و أكتوبر', 'اسكندرية و الساحل'];
+    }
+    const directSecs = Array.from(
+      new Set(baseSites.map((s) => (s.sector || '').trim()).filter(Boolean))
+    );
+    if (directSecs.length > 0) {
+      return directSecs;
+    }
+    const presentCanonical = new Set(
+      baseSites.map((s) => toCanonicalSector(s.sector)).filter(Boolean)
+    );
+    const ordered = SECTORS.filter((sec) => presentCanonical.has(sec));
+    return ordered.length > 0 ? ordered : SECTORS;
+  }, [baseSites, user, isSectorLocked, isOrange]);
 
+  // Level 2: Scoped by chosen Sector -> Feeds General Admin
+  const sectorScopedSites = useMemo(() => {
+    if (filters.sector && filters.sector !== 'All') {
+      return baseSites.filter((s) => isRecordInSector(filters.sector, s) || String(s.sector || '').trim() === String(filters.sector).trim());
+    }
+    return baseSites;
+  }, [baseSites, filters.sector]);
+
+  // Dynamic General Admins belonging strictly to chosen Sector
   const dynamicGeneralAdmins = useMemo(() => {
-    const list = Array.from(new Set(sitesData.map((s) => s.generalAdmin).filter(Boolean)));
-    return list.length > 0 ? list : GENERAL_ADMINS;
-  }, [sitesData]);
+    const list = Array.from(
+      new Set(
+        sectorScopedSites
+          .map((s) => String(s.generalAdmin || '').trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b, 'ar'));
+    return list;
+  }, [sectorScopedSites]);
 
+  // Auto-reset General Admin if chosen sector changes and current general admin is not present in it
+  useEffect(() => {
+    if (
+      filters.generalAdmin &&
+      dynamicGeneralAdmins.length > 0 &&
+      !dynamicGeneralAdmins.some((d) => d === filters.generalAdmin.trim())
+    ) {
+      onChangeFilter('generalAdmin', '');
+    }
+  }, [dynamicGeneralAdmins, filters.generalAdmin, onChangeFilter]);
+
+  // Level 2.5: Scoped by Sector AND Department -> Feeds Competent Admin / SubSector
+  const deptScopedSites = useMemo(() => {
+    if (filters.generalAdmin) {
+      const gTrimmed = filters.generalAdmin.trim();
+      return sectorScopedSites.filter((s) => String(s.generalAdmin || '').trim() === gTrimmed);
+    }
+    return sectorScopedSites;
+  }, [sectorScopedSites, filters.generalAdmin]);
+
+  // ── Orange Hierarchy Specific: Level 3 (الإدارة المختصة - القطاع) ──
+  const dynamicSubSectors = useMemo(() => {
+    if (!isOrange) return [];
+    const list = Array.from(
+      new Set(
+        deptScopedSites
+          .map((s) => String(s.subSector || '').trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b, 'ar'));
+    return list;
+  }, [deptScopedSites, isOrange]);
+
+  // Auto-reset Orange SubSector if no longer valid
+  useEffect(() => {
+    if (
+      isOrange &&
+      filters.subSector &&
+      dynamicSubSectors.length > 0 &&
+      !dynamicSubSectors.some((s) => s === filters.subSector?.trim())
+    ) {
+      onChangeFilter('subSector', '');
+    }
+  }, [isOrange, dynamicSubSectors, filters.subSector, onChangeFilter]);
+
+  // Level 3.5: Scoped by SubSector -> Feeds Area / إدارة المنطقة
+  const subSectorScopedSites = useMemo(() => {
+    if (isOrange && filters.subSector) {
+      const subTrimmed = filters.subSector.trim();
+      return deptScopedSites.filter((s) => String(s.subSector || '').trim() === subTrimmed);
+    }
+    return deptScopedSites;
+  }, [deptScopedSites, filters.subSector, isOrange]);
+
+  // Dynamic Competent Admins / Areas
   const dynamicCompetentAdmins = useMemo(() => {
-    const list = Array.from(new Set(sitesData.map((s) => s.competentAdmin).filter(Boolean)));
-    return list.length > 0 ? list : COMPETENT_ADMINS;
-  }, [sitesData]);
+    if (isOrange) {
+      const list = Array.from(
+        new Set(
+          subSectorScopedSites
+            .map((s) => String(s.competentAdmin || '').trim())
+            .filter(Boolean)
+        )
+      ).sort((a, b) => a.localeCompare(b, 'ar'));
+      return list;
+    }
+    const validSet = new Set(COMPETENT_ADMINS);
+    const set = new Set<string>();
+    deptScopedSites.forEach((s) => {
+      const c = String(s.competentAdmin || '').trim();
+      if (validSet.has(c)) {
+        set.add(c);
+      }
+    });
+    if (set.size === 0) {
+      sectorScopedSites.forEach((s) => {
+        const c = String(s.competentAdmin || '').trim();
+        if (validSet.has(c)) {
+          set.add(c);
+        }
+      });
+    }
+    const list = Array.from(set.size > 0 ? set : validSet);
+    return list.sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [subSectorScopedSites, deptScopedSites, sectorScopedSites, isOrange]);
+
+  // Auto-reset Competent Admin if no longer valid
+  useEffect(() => {
+    if (
+      filters.competentAdmin &&
+      dynamicCompetentAdmins.length > 0 &&
+      !dynamicCompetentAdmins.some((c) => c === filters.competentAdmin.trim())
+    ) {
+      onChangeFilter('competentAdmin', '');
+    }
+  }, [dynamicCompetentAdmins, filters.competentAdmin, onChangeFilter]);
+
+  // ── Standard Levels (WE, Vodafone, Orange, Etaha) ──
+  // Level 3: Classification strictly from the uploaded Excel sheet
+  const competentScopedSites = useMemo(() => {
+    if (filters.competentAdmin) {
+      const cTrimmed = filters.competentAdmin.trim();
+      return deptScopedSites.filter((s) => String(s.competentAdmin || '').trim() === cTrimmed);
+    }
+    return deptScopedSites;
+  }, [deptScopedSites, filters.competentAdmin]);
 
   const dynamicClassifications = useMemo(() => {
-    const list = Array.from(new Set(sitesData.map((s) => s.classification).filter(Boolean)));
-    return list.length > 0 ? list : CLASSIFICATIONS;
-  }, [sitesData]);
+    const list = Array.from(
+      new Set(
+        competentScopedSites
+          .map((s) => getSiteClassification(s))
+          .filter((c) => Boolean(c) && c !== 'غير محدد')
+      )
+    ).sort((a, b) => a.localeCompare(b, 'ar'));
+    return list;
+  }, [competentScopedSites]);
+
+  useEffect(() => {
+    if (
+      filters.classification &&
+      dynamicClassifications.length > 0 &&
+      !dynamicClassifications.some((c) => c === filters.classification.trim())
+    ) {
+      onChangeFilter('classification', '');
+    }
+  }, [dynamicClassifications, filters.classification, onChangeFilter]);
+
+  // Level 4: Obstacle Reasons
+  const typeScopedSites = useMemo(() => {
+    if (filters.classification) {
+      const clTrimmed = filters.classification.trim();
+      return competentScopedSites.filter(
+        (s) => getSiteClassification(s) === clTrimmed
+      );
+    }
+    return competentScopedSites;
+  }, [competentScopedSites, filters.classification]);
 
   const dynamicObstacleReasons = useMemo(() => {
-    const list = Array.from(new Set(sitesData.map((s) => s.obstacleReason).filter(Boolean)));
-    return list.length > 0 ? list : OBSTACLE_REASONS;
-  }, [sitesData]);
+    if (isOrange) return [];
+    const list = Array.from(
+      new Set(
+        typeScopedSites
+          .map((s) => String(s.obstacleReason || '').trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b, 'ar'));
+    return list;
+  }, [typeScopedSites, isOrange]);
+
+  useEffect(() => {
+    if (
+      !isOrange &&
+      filters.obstacleReason &&
+      dynamicObstacleReasons.length > 0 &&
+      !dynamicObstacleReasons.some((o) => o === filters.obstacleReason.trim())
+    ) {
+      onChangeFilter('obstacleReason', '');
+    }
+  }, [isOrange, dynamicObstacleReasons, filters.obstacleReason, onChangeFilter]);
 
   return (
     <div className="pbi-card p-5 mt-6">
@@ -289,96 +491,185 @@ export const Filters: React.FC<FiltersProps> = ({
             <Filter className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-slate-800 leading-tight">
-              فلاتر التصفية التفاعلية (Dashboard Slicers)
-            </h3>
-            <p className="text-xs text-slate-400">
-              تصفية المؤشرات والرسوم البيانية طبقاً للهيكل الإداري والجغرافي
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-base font-bold text-slate-800 leading-tight">
+                {isOrange
+                  ? 'فلاتر التصفية الهرمية لـ Orange (Orange Cascading Filters)'
+                  : 'فلاتر التصفية التفاعلية الهرمية (Hierarchical Cascading Filters)'}
+              </h3>
+              {(filters.sector || filters.generalAdmin || filters.subSector || filters.competentAdmin) && (
+                <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                  <span>⚡ تصفية شجرية متسلسلة نشطة</span>
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {isOrange
+                ? 'تصفية المواقع طبقاً للهيكل الإداري لـ Orange: رئاسة القطاعات ← الإدارة العامة للتنفيذ ← الإدارة المختصة ← إدارة المنطقة'
+                : 'تصفية المؤشرات طبقاً للهيكل الإداري المتسلسل: القطاع ← الإدارة العامة ← إدارة التنفيذ المختصة ← النوع'}
             </p>
           </div>
         </div>
 
-        {activeCount > 0 && (
+        {/* Prominent Header Reset Button - Purple Theme */}
+        {activeCount > 0 ? (
           <button
             onClick={onResetFilters}
-            id="btn-reset-bottom-filters"
-            className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer"
+            id="btn-reset-filters-header"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black text-white bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 hover:from-purple-600 hover:to-indigo-600 shadow-md shadow-purple-500/25 ring-2 ring-purple-400/40 cursor-pointer transition-all hover:scale-105 active:scale-95"
+            title="إلغاء وتصفية جميع الفلاتر والعودة لعرض كافة البيانات"
           >
-            <RotateCcw className="w-3 h-3" />
-            <span>إلغاء تصفية الفلاتر ({activeCount})</span>
+            <RotateCcw className="w-4 h-4" />
+            <span>إلغاء وتصفية الفلاتر</span>
+            <span className="bg-white/25 text-white px-2 py-0.5 rounded-full font-mono font-black text-xs shadow-2xs">
+              {activeCount}
+            </span>
+          </button>
+        ) : (
+          <button
+            disabled
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed opacity-60"
+            title="لا توجد فلاتر نشطة حالياً"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>إلغاء وتصفية الفلاتر</span>
           </button>
         )}
       </div>
 
-      {/* Grid of the 5 Slicers (Central removed, Classification renamed to Type) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
-        {/* 1. القطاع */}
-        <SingleFilterDropdown
-          id="filter-sector"
-          label={isSectorLocked ? `القطاع (${user?.sector})` : 'القطاع'}
-          labelEn="Sector"
-          icon={MapPin}
-          value={isSectorLocked ? (user?.sector || '') : filters.sector}
-          options={dynamicSectors}
-          onChange={(val) => !isSectorLocked && onChangeFilter('sector', val)}
-          sitesData={sitesData}
-          filterKey="sector"
-          disabled={isSectorLocked}
-          lockedNote={`تم حجب باقي القطاعات - مقيد بقطاع ${user?.sector}`}
-        />
+      {/* Grid of Slicers */}
+      {isOrange ? (
+        /* Orange Slicers: Strictly the 4 Hierarchical Filters Requested */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {/* 1. رئاسة القطاعات */}
+          <SingleFilterDropdown
+            id="filter-orange-presidency"
+            label={isSectorLocked ? `رئاسة القطاع (${user?.sector})` : 'رئاسة القطاعات'}
+            labelEn="Presidency"
+            icon={MapPin}
+            value={isSectorLocked ? (user?.sector || '') : filters.sector}
+            options={dynamicSectors}
+            onChange={(val) => !isSectorLocked && onChangeFilter('sector', val)}
+            sitesData={baseSites}
+            filterKey="sector"
+            disabled={isSectorLocked}
+            lockedNote={`تم حجب باقي القطاعات - مقيد بقطاع ${user?.sector}`}
+          />
 
-        {/* 2. الإدارات العامه */}
-        <SingleFilterDropdown
-          id="filter-general-admin"
-          label="الإدارات العامه"
-          labelEn="General Admin"
-          icon={Building}
-          value={filters.generalAdmin}
-          options={dynamicGeneralAdmins}
-          onChange={(val) => onChangeFilter('generalAdmin', val)}
-          sitesData={sitesData}
-          filterKey="generalAdmin"
-        />
+          {/* 2. الإدارة العامة للتنفيذ */}
+          <SingleFilterDropdown
+            id="filter-orange-general-admin"
+            label="الإدارة العامة للتنفيذ"
+            labelEn="General Directorate"
+            icon={Building}
+            value={filters.generalAdmin}
+            options={dynamicGeneralAdmins}
+            onChange={(val) => onChangeFilter('generalAdmin', val)}
+            sitesData={sectorScopedSites}
+            filterKey="generalAdmin"
+          />
 
-        {/* 3. الإدارات المختصة */}
-        <SingleFilterDropdown
-          id="filter-competent-admin"
-          label="الإدارات المختصة"
-          labelEn="Competent Admin"
-          icon={Briefcase}
-          value={filters.competentAdmin}
-          options={dynamicCompetentAdmins}
-          onChange={(val) => onChangeFilter('competentAdmin', val)}
-          sitesData={sitesData}
-          filterKey="competentAdmin"
-        />
+          {/* 3. الإدارة المختصة */}
+          <SingleFilterDropdown
+            id="filter-orange-subsector"
+            label="الإدارة المختصة"
+            labelEn="Competent Admin"
+            icon={Briefcase}
+            value={filters.subSector || ''}
+            options={dynamicSubSectors}
+            onChange={(val) => onChangeFilter('subSector', val)}
+            sitesData={deptScopedSites}
+            filterKey="subSector"
+          />
 
-        {/* 4. Type (renamed from التصنيف) */}
-        <SingleFilterDropdown
-          id="filter-classification"
-          label="Type"
-          labelEn="Type"
-          icon={Tag}
-          value={filters.classification}
-          options={dynamicClassifications}
-          onChange={(val) => onChangeFilter('classification', val)}
-          sitesData={sitesData}
-          filterKey="classification"
-        />
+          {/* 4. إدارة المنطقة */}
+          <SingleFilterDropdown
+            id="filter-orange-area"
+            label="إدارة المنطقة"
+            labelEn="Area Admin"
+            icon={Layers}
+            value={filters.competentAdmin}
+            options={dynamicCompetentAdmins}
+            onChange={(val) => onChangeFilter('competentAdmin', val)}
+            sitesData={subSectorScopedSites}
+            filterKey="competentAdmin"
+          />
+        </div>
+      ) : (
+        /* Standard Multi-operator Slicers (5 Levels) */
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
+          {/* 1. القطاع (Level 1: Sector) */}
+          <SingleFilterDropdown
+            id="filter-sector"
+            label={isSectorLocked ? `القطاع (${user?.sector})` : 'القطاع'}
+            labelEn="Sector"
+            icon={MapPin}
+            value={isSectorLocked ? (user?.sector || '') : filters.sector}
+            options={dynamicSectors}
+            onChange={(val) => !isSectorLocked && onChangeFilter('sector', val)}
+            sitesData={baseSites}
+            filterKey="sector"
+            disabled={isSectorLocked}
+            lockedNote={`تم حجب باقي القطاعات - مقيد بقطاع ${user?.sector}`}
+          />
 
-        {/* 5. أسباب التعذر */}
-        <SingleFilterDropdown
-          id="filter-obstacle-reason"
-          label="أسباب التعذر"
-          labelEn="Stall / Obstacle Reason"
-          icon={AlertCircle}
-          value={filters.obstacleReason}
-          options={dynamicObstacleReasons}
-          onChange={(val) => onChangeFilter('obstacleReason', val)}
-          sitesData={sitesData}
-          filterKey="obstacleReason"
-        />
-      </div>
+          {/* 2. الإدارات العامه (Level 2: Department / General Admin) */}
+          <SingleFilterDropdown
+            id="filter-general-admin"
+            label={
+              filters.sector && filters.sector !== 'All'
+                ? `الإدارة (${filters.sector.replace('قطاع مناطق ', '').replace('قطاع ', '').replace('المنطقة ', '')})`
+                : 'الإدارات العامه'
+            }
+            labelEn="Department"
+            icon={Building}
+            value={filters.generalAdmin}
+            options={dynamicGeneralAdmins}
+            onChange={(val) => onChangeFilter('generalAdmin', val)}
+            sitesData={sectorScopedSites}
+            filterKey="generalAdmin"
+          />
+
+          {/* 3. إدارة التنفيذ المختصة (Level 2.5: Competent Execution Admin) */}
+          <SingleFilterDropdown
+            id="filter-competent-admin"
+            label="إدارة التنفيذ المختصة"
+            labelEn="Execution Admin"
+            icon={Briefcase}
+            value={filters.competentAdmin}
+            options={dynamicCompetentAdmins}
+            onChange={(val) => onChangeFilter('competentAdmin', val)}
+            sitesData={deptScopedSites}
+            filterKey="competentAdmin"
+          />
+
+          {/* 4. Type / التصنيف (Level 3: Type & Classification) */}
+          <SingleFilterDropdown
+            id="filter-classification"
+            label="Type / النوع"
+            labelEn="Type"
+            icon={Tag}
+            value={filters.classification}
+            options={dynamicClassifications}
+            onChange={(val) => onChangeFilter('classification', val)}
+            sitesData={competentScopedSites}
+            filterKey="classification"
+          />
+
+          {/* 5. أسباب التعذر (Level 4: Obstacle Reasons) */}
+          <SingleFilterDropdown
+            id="filter-obstacle-reason"
+            label="أسباب التعذر"
+            labelEn="Stall / Obstacle Reason"
+            icon={AlertCircle}
+            value={filters.obstacleReason}
+            options={dynamicObstacleReasons}
+            onChange={(val) => onChangeFilter('obstacleReason', val)}
+            sitesData={typeScopedSites}
+            filterKey="obstacleReason"
+          />
+        </div>
+      )}
     </div>
   );
 };

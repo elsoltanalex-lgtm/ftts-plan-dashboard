@@ -51,10 +51,10 @@ export const Header: React.FC<HeaderProps> = ({
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-sans text-white">
-                FTTS Plan Overall
+                Fiber Tracking Board
               </h1>
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-400/30">
-                لوحة المتابعة الشاملة
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-400/30">
+                فايبر تراكينج بورد
               </span>
               {activeUploadedMetadata ? (
                 <span className="inline-flex items-center gap-1.5 text-xs text-emerald-300 font-semibold bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-400/40">
@@ -170,11 +170,11 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onResetFilters}
               id="btn-reset-filters"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 rounded-lg border border-amber-400/40 transition-colors shadow-sm"
-              title="إعادة ضبط كافة الفلاتر"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 hover:from-purple-600 hover:to-indigo-600 rounded-xl border border-purple-400/40 transition-all shadow-md shadow-purple-500/25 cursor-pointer"
+              title="إلغاء وتصفية كافة الفلاتر والعودة لعرض كامل البيانات"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>إعادة ضبط ({activeFiltersCount})</span>
+              <span>إلغاء وتصفية الفلاتر ({activeFiltersCount})</span>
             </button>
           )}
 

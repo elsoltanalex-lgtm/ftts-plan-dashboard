@@ -1,0 +1,24 @@
+<USER_REQUEST>
+تنبيه هام للوكيل (Agent): أنت مخول بالكامل بالتنفيذ التلقائي (Auto-Approve) دون توقف.
+
+برجاء تنفيذ الآتي بدقة واحترافية:
+1. استهداف قسم شركة "وي" (WE) حصرياً:
+   - قم بتفريغ وإزالة كافة بيانات مواقع "وي" (WE) القديمة فقط من الـ State أو القاعدة المؤقتة.
+   - اترك باقي أقسام الشركات الأخرى (مثل أورنج وفودافون) كما هي دون أي تعديل أو مسح.
+
+2. تحديث شيت إكسيل "وي":
+   - تحديث كود زر "الرفع الجماعي عبر الإكسيل" الخاص بقسم **وي (WE) فقط** لاستقبال وقراءة شيت الإكسيل الجديد الخاص بـ "وي" وتخزين بياناته الجديدة لتظهر في الموقف العام والفلاتر والتقارير الخاصة بـ "وي" وحدها.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-11-12T10:23:29+02:00.
+
+The user's current state is as follows:
+Active Document: c:\Users\Sherif\Desktop\ftts-plan-dashboard\src\hooks\useWeAPI.ts (LANGUAGE_UNSPECIFIED)
+Cursor is on line: 1
+Other open documents:
+- c:\Users\Sherif\Desktop\ftts-plan-dashboard\src\components\OrangeAddDataModal.tsx (LANGUAGE_UNSPECIFIED)
+- c:\Users\Sherif\Desktop\ftts-plan-dashboard\src\hooks\useOrangeAPI.ts (LANGUAGE_UNSPECIFIED)
+- c:\Users\Sherif\Desktop\ftts-plan-dashboard\src\utils\orangeBulkExcelService.ts (LANGUAGE_UNSPECIFIED)
+- c:\Users\Sherif\Desktop\ftts-plan-dashboard\src\utils\sectorPermissions.ts (LANGUAGE_UNSPECIFIED)
+- c:\Users\Sherif\Desktop\ftts-plan-dashboard\src\types\orange.ts (LANGUAGE_UNSPECIFIED)
+</ADDITIONAL_METADATA>

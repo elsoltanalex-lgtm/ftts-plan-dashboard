@@ -317,47 +317,11 @@ export const APPROVED_CLASSIFICATIONS = [
 export type ApprovedClassification = typeof APPROVED_CLASSIFICATIONS[number];
 
 /**
- * Normalizes any classification string according to business rules:
- * 1. Cancel "تم مدني" completely -> convert to "جاري كهربي"
- * 2. Cancel "جاري العمل" completely -> convert to "جاري مدني"
- * 3. Enforce the 8 approved classifications
+ * Normalizes any classification string strictly returning the trimmed Excel classification
+ * without any hardcoded overrides or artificial reclassifications.
  */
 export function normalizeClassification(raw?: string | null): string {
-  if (!raw) return 'جاري مدني';
-  const trimmed = raw.trim();
-
-  // Rule 1: تم مدني -> جاري كهربي
-  if (trimmed === 'تم مدني' || trimmed === 'تم مدنى' || trimmed.includes('تم مدن')) {
-    return 'جاري كهربي';
-  }
-
-  // Rule 2: جاري العمل -> جاري مدني
-  if (trimmed.includes('كهرب')) {
-    return 'جاري كهربي';
-  }
-  if (
-    trimmed === 'جاري العمل' ||
-    trimmed === 'جارى العمل' ||
-    trimmed === 'جاري العمل مدني' ||
-    trimmed === 'جارى مدنى' ||
-    trimmed === 'جارى مدني'
-  ) {
-    return 'جاري مدني';
-  }
-
-  // Variations to approved names
-  if (trimmed === 'تم التشغيل فيبر' || trimmed === 'تم التشغيل') {
-    return 'تم التشغيل فايبر';
-  }
-  if (trimmed === 'جارى المعاينة') {
-    return 'جاري المعاينة';
-  }
-  if (trimmed === 'جارى تصاريح') {
-    return 'جاري تصاريح';
-  }
-  if (trimmed === 'متعثر' || trimmed === 'متعثرات') {
-    return 'متعذر';
-  }
-
-  return trimmed;
+  if (!raw) return 'غير محدد';
+  const trimmed = String(raw).trim();
+  return trimmed || 'غير محدد';
 }

@@ -1,9 +1,10 @@
-import { 
-  Building2, 
-  GitFork, 
-  CheckCircle2, 
-  FileCheck2, 
-  AlertTriangle 
+import {
+  Building2,
+  GitFork,
+  CheckCircle2,
+  Clock,
+  Compass,
+  AlertTriangle
 } from 'lucide-react';
 
 import type { KpiData } from '../types/dashboard';
@@ -36,6 +37,86 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       isActive: activeStatusFilter === 'All' || activeStatusFilter === '',
     },
     {
+      id: 'kpi-completed-sites',
+      title: 'المكتمل',
+      titleEn: 'Completed',
+      value: kpis.completedSites,
+      subValue: `${kpis.completionRate}% من إجمالي المواقع`,
+      icon: CheckCircle2,
+      color: 'from-emerald-500 to-green-600',
+      textColor: 'text-emerald-700',
+      bgColor: 'bg-emerald-50/80',
+      borderColor: 'border-emerald-200',
+      ringColor: 'ring-emerald-500',
+      filterTarget: 'المكتمل',
+      isActive:
+        activeStatusFilter === 'المكتمل' ||
+        activeStatusFilter === 'Completed' ||
+        activeStatusFilter === 'تم الانتهاء' ||
+        activeStatusFilter === 'تم التشغيل فايبر' ||
+        activeStatusFilter === 'تم التسليم',
+    },
+    {
+      id: 'kpi-in-progress',
+      title: 'جاري التنفيذ',
+      titleEn: 'In Progress',
+      value: kpis.inProgressSites,
+      subValue: `${((kpis.inProgressSites / (kpis.totalSites || 1)) * 100).toFixed(1)}% مدني وكهربي وتصاريح`,
+      icon: Clock,
+      color: 'from-indigo-500 to-blue-600',
+      textColor: 'text-indigo-700',
+      bgColor: 'bg-indigo-50/80',
+      borderColor: 'border-indigo-200',
+      ringColor: 'ring-indigo-500',
+      filterTarget: 'جاري التنفيذ',
+      isActive:
+        activeStatusFilter === 'جاري التنفيذ' ||
+        activeStatusFilter === 'In Progress' ||
+        activeStatusFilter === 'جاري مدني' ||
+        activeStatusFilter === 'جاري كهربي' ||
+        activeStatusFilter === 'جاري تصاريح' ||
+        activeStatusFilter === 'جاري العمل مدني' ||
+        activeStatusFilter === 'جاري العمل كهربى',
+    },
+    {
+      id: 'kpi-planned',
+      title: 'مخطط / معاينة',
+      titleEn: 'Planned',
+      value: kpis.plannedSites,
+      subValue: `${((kpis.plannedSites / (kpis.totalSites || 1)) * 100).toFixed(1)}% جاري المعاينة والتخطيط`,
+      icon: Compass,
+      color: 'from-sky-500 to-teal-600',
+      textColor: 'text-sky-700',
+      bgColor: 'bg-sky-50/80',
+      borderColor: 'border-sky-200',
+      ringColor: 'ring-sky-500',
+      filterTarget: 'مخطط',
+      isActive:
+        activeStatusFilter === 'مخطط' ||
+        activeStatusFilter === 'Planned' ||
+        activeStatusFilter === 'جاري المعاينة',
+    },
+    {
+      id: 'kpi-blocked',
+      title: 'معوقات ومتعذر',
+      titleEn: 'Blocked / On Hold',
+      value: kpis.blockedSites,
+      subValue: `${((kpis.blockedSites / (kpis.totalSites || 1)) * 100).toFixed(1)}% تتطلب تدخلاً ودعماً`,
+      icon: AlertTriangle,
+      color: 'from-rose-500 to-red-600',
+      textColor: 'text-rose-700',
+      bgColor: 'bg-rose-50/80',
+      borderColor: 'border-rose-200',
+      ringColor: 'ring-rose-500',
+      filterTarget: 'معوقات ومتعذر',
+      isActive:
+        activeStatusFilter === 'معوقات ومتعذر' ||
+        activeStatusFilter === 'Blocked / On Hold' ||
+        activeStatusFilter === 'معوقات' ||
+        activeStatusFilter === 'متعذر' ||
+        activeStatusFilter === 'متعثرات',
+    },
+    {
       id: 'kpi-total-links',
       title: 'إجمالي الروابط',
       titleEn: 'Total Links',
@@ -50,55 +131,10 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       filterTarget: null,
       isActive: false,
     },
-    {
-      id: 'kpi-completed-sites',
-      title: 'تم التسليم',
-      titleEn: 'Completed Sites',
-      value: kpis.completedSites,
-      subValue: `${kpis.completionRate}% من المواقع المعتمدة`,
-      icon: CheckCircle2,
-      color: 'from-emerald-500 to-green-600',
-      textColor: 'text-emerald-700',
-      bgColor: 'bg-emerald-50/80',
-      borderColor: 'border-emerald-200',
-      ringColor: 'ring-emerald-500',
-      filterTarget: 'تم التسليم',
-      isActive: activeStatusFilter === 'تم التسليم',
-    },
-    {
-      id: 'kpi-permits',
-      title: 'جاري تصاريح',
-      titleEn: 'Permits in Progress',
-      value: kpis.permitsCount,
-      subValue: `${((kpis.permitsCount / (kpis.totalSites || 1)) * 100).toFixed(1)}% من الإجمالي`,
-      icon: FileCheck2,
-      color: 'from-sky-500 to-blue-600',
-      textColor: 'text-sky-700',
-      bgColor: 'bg-sky-50/80',
-      borderColor: 'border-sky-200',
-      ringColor: 'ring-sky-500',
-      filterTarget: 'جاري تصاريح',
-      isActive: activeStatusFilter === 'جاري تصاريح',
-    },
-    {
-      id: 'kpi-obstacles',
-      title: 'معوقات العمل',
-      titleEn: 'Obstacles',
-      value: kpis.obstaclesCount,
-      subValue: `${((kpis.obstaclesCount / (kpis.totalSites || 1)) * 100).toFixed(1)}% تتطلب متابعة`,
-      icon: AlertTriangle,
-      color: 'from-amber-500 to-rose-600',
-      textColor: 'text-amber-700',
-      bgColor: 'bg-amber-50/80',
-      borderColor: 'border-amber-200',
-      ringColor: 'ring-amber-500',
-      filterTarget: 'معوقات',
-      isActive: activeStatusFilter === 'معوقات',
-    },
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 mb-6">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 mb-6">
       {cards.map((card) => {
         const IconComponent = card.icon;
         const isClickable = Boolean(card.filterTarget);
@@ -112,15 +148,12 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
                 onSelectStatusFilter(card.filterTarget);
               }
             }}
-            className={`pbi-card p-4 flex flex-col justify-between relative overflow-hidden transition-all duration-200 ${
-              card.bgColor
-            } ${card.borderColor} ${
-              isClickable ? 'cursor-pointer hover:-translate-y-0.5' : ''
-            } ${
-              card.isActive && card.filterTarget !== 'All'
+            className={`pbi-card p-4 flex flex-col justify-between relative overflow-hidden transition-all duration-200 ${card.bgColor
+              } ${card.borderColor} ${isClickable ? 'cursor-pointer hover:-translate-y-0.5' : ''
+              } ${card.isActive && card.filterTarget !== 'All'
                 ? 'ring-2 ring-offset-1 ' + card.ringColor + ' shadow-md'
                 : ''
-            }`}
+              }`}
           >
             {/* Top decorative gradient bar */}
             <div
@@ -154,7 +187,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-slate-500 mt-1 font-medium truncate">
+              <p className="text-[11px] text-slate-500 mt-1 font-medium truncate" title={card.subValue}>
                 {card.subValue}
               </p>
             </div>

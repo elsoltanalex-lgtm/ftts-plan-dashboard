@@ -55,8 +55,8 @@ export function toCanonicalSector(raw?: string | null): string {
     return 'ALL';
   }
 
-  // 1. شرق الدلتا
-  if (norm.includes('شرق الدلتا')) {
+  // 1. شرق الدلتا / المنطقة الشرقية
+  if (norm.includes('شرق')) {
     return 'قطاع شرق الدلتا';
   }
 
@@ -65,8 +65,8 @@ export function toCanonicalSector(raw?: string | null): string {
     return 'قطاع إسكندرية والساحل';
   }
 
-  // 3. غرب الدلتا
-  if (norm.includes('غرب الدلتا')) {
+  // 3. غرب الدلتا / المنطقة الغربية
+  if (norm.includes('غرب')) {
     return 'قطاع مناطق غرب الدلتا';
   }
 
@@ -95,8 +95,8 @@ export function toCanonicalSector(raw?: string | null): string {
     return 'قطاع مناطق الجيزة وأكتوبر';
   }
 
-  // 9. الصعيد / قبلي
-  if (norm.includes('صعيد') || norm.includes('قبلي')) {
+  // 9. الصعيد / قبلي / المنطقة الجنوبية
+  if (norm.includes('صعيد') || norm.includes('قبلي') || norm.includes('جنوب')) {
     return 'قطاع مناطق الصعيد';
   }
 
@@ -174,9 +174,17 @@ export function isRecordInSector(userSector?: string | null, record?: any): bool
   const uCanon = toCanonicalSector(userSector);
 
   // Fast check: Check record sector directly
-  const recordSector = record.sector || record['Sectore'] || record['sector'];
-  if (recordSector && toCanonicalSector(recordSector) === uCanon) {
-    return true;
+  const recordSector = record.sector || record['Sectore'] || record['sector'] || record['رئاسة قطاعات التنفيذ'] || record['رئاسة القطاعات '] || record['رئاسة القطاعات'];
+  if (recordSector) {
+    if (String(recordSector).trim().toLowerCase() === String(userSector).trim().toLowerCase()) {
+      return true;
+    }
+    if (normalizeSectorString(recordSector) === normalizeSectorString(userSector)) {
+      return true;
+    }
+    if (toCanonicalSector(recordSector) === uCanon) {
+      return true;
+    }
   }
 
   const code = (record.siteCode || record['site code'] || (record as any).site_code || '').toString();

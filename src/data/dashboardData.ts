@@ -10,69 +10,7 @@ export const STATUS_CONFIG: Record<
     textColor: string;
   }
 > = {
-  'جاري تصاريح': {
-    en: 'Permits in Progress',
-    color: '#0284c7', // Sky Blue
-    bgLight: '#e0f2fe',
-    border: '#38bdf8',
-    textColor: '#0369a1',
-  },
-  'جاري المعاينة': {
-    en: 'Survey in Progress',
-    color: '#0d9488', // Teal
-    bgLight: '#ccfbf1',
-    border: '#2dd4bf',
-    textColor: '#0f766e',
-  },
-  'تم التسليم': {
-    en: 'Handed Over / Completed',
-    color: '#16a34a', // Emerald Green
-    bgLight: '#dcfce7',
-    border: '#4ade80',
-    textColor: '#15803d',
-  },
-  'معوقات': {
-    en: 'Obstacles',
-    color: '#ea580c', // Dark Orange
-    bgLight: '#ffedd5',
-    border: '#fb923c',
-    textColor: '#c2410c',
-  },
-  'جاري العمل مدني': {
-    en: 'Civil Work in Progress',
-    color: '#4f46e5', // Indigo
-    bgLight: '#e0e7ff',
-    border: '#818cf8',
-    textColor: '#3730a3',
-  },
-  'متعثرات': {
-    en: 'Stalled / Defaulted',
-    color: '#dc2626', // Bright Crimson Red
-    bgLight: '#fee2e2',
-    border: '#f87171',
-    textColor: '#b91c1c',
-  },
-  'جاري العمل كهربى': {
-    en: 'Electrical Work in Progress',
-    color: '#d97706', // Amber Gold
-    bgLight: '#fef3c7',
-    border: '#fcd34d',
-    textColor: '#b45309',
-  },
-  'جاري مدني': {
-    en: 'Civil Work in Progress',
-    color: '#4f46e5', // Indigo
-    bgLight: '#e0e7ff',
-    border: '#818cf8',
-    textColor: '#3730a3',
-  },
-  'جاري كهربي': {
-    en: 'Electrical Work in Progress',
-    color: '#d97706', // Amber Gold
-    bgLight: '#fef3c7',
-    border: '#fcd34d',
-    textColor: '#b45309',
-  },
+  // ── 7 Exact Execution Status Categories for WE (Overall View) ──
   'تم الانتهاء': {
     en: 'Completed',
     color: '#16a34a', // Emerald Green
@@ -81,18 +19,111 @@ export const STATUS_CONFIG: Record<
     textColor: '#15803d',
   },
   'تم التشغيل فايبر': {
-    en: 'Fiber Operational',
+    en: 'Fiber Activated',
     color: '#059669', // Emerald
     bgLight: '#d1fae5',
     border: '#34d399',
     textColor: '#047857',
   },
+  'جاري العمل مدني': {
+    en: 'Civil Works in Progress',
+    color: '#4f46e5', // Indigo Blue
+    bgLight: '#e0e7ff',
+    border: '#818cf8',
+    textColor: '#3730a3',
+  },
+  'جاري المعاينة': {
+    en: 'Under Inspection',
+    color: '#0d9488', // Teal
+    bgLight: '#ccfbf1',
+    border: '#2dd4bf',
+    textColor: '#0f766e',
+  },
+  'جاري تصاريح': {
+    en: 'Permits in Progress',
+    color: '#0284c7', // Sky Blue
+    bgLight: '#e0f2fe',
+    border: '#38bdf8',
+    textColor: '#0369a1',
+  },
+  'جاري كهرباء': {
+    en: 'Electricity in Progress',
+    color: '#d97706', // Amber Gold
+    bgLight: '#fef3c7',
+    border: '#fcd34d',
+    textColor: '#b45309',
+  },
   'متعذر': {
-    en: 'Stalled / Stumbled',
-    color: '#dc2626', // Crimson Red
-    bgLight: '#fee2e2',
-    border: '#f87171',
-    textColor: '#b91c1c',
+    en: 'Stalled / Blocked',
+    color: '#e11d48', // Crimson Red
+    bgLight: '#ffe4e6',
+    border: '#fb7185',
+    textColor: '#be123c',
+  },
+  'معوقات': {
+    en: 'Obstacles / On Hold',
+    color: '#ea580c', // Dark Orange / Amber
+    bgLight: '#ffedd5',
+    border: '#fdba74',
+    textColor: '#c2410c',
+  },
+  'متعذر / معوقات': {
+    en: 'Blocked / Obstacles',
+    color: '#e11d48', // Crimson Red
+    bgLight: '#ffe4e6',
+    border: '#fb7185',
+    textColor: '#be123c',
+  },
+
+  // ── Backward Compatibility Aliases ──
+  'تم التسليم': {
+    en: 'Completed',
+    color: '#16a34a',
+    bgLight: '#dcfce7',
+    border: '#4ade80',
+    textColor: '#15803d',
+  },
+  'جاري مدني': {
+    en: 'Civil Works in Progress',
+    color: '#4f46e5',
+    bgLight: '#e0e7ff',
+    border: '#818cf8',
+    textColor: '#3730a3',
+  },
+  'جاري كهربي': {
+    en: 'Electricity in Progress',
+    color: '#d97706',
+    bgLight: '#fef3c7',
+    border: '#fcd34d',
+    textColor: '#b45309',
+  },
+  'جاري العمل كهربى': {
+    en: 'Electricity in Progress',
+    color: '#d97706',
+    bgLight: '#fef3c7',
+    border: '#fcd34d',
+    textColor: '#b45309',
+  },
+  'متعذر': {
+    en: 'Blocked / Obstacles',
+    color: '#e11d48',
+    bgLight: '#ffe4e6',
+    border: '#fb7185',
+    textColor: '#be123c',
+  },
+  'معوقات': {
+    en: 'Blocked / Obstacles',
+    color: '#e11d48',
+    bgLight: '#ffe4e6',
+    border: '#fb7185',
+    textColor: '#be123c',
+  },
+  'متعثرات': {
+    en: 'Blocked / Obstacles',
+    color: '#e11d48',
+    bgLight: '#ffe4e6',
+    border: '#fb7185',
+    textColor: '#be123c',
   },
 };
 
@@ -170,12 +201,29 @@ export const GENERAL_ADMINS = [
   'الإدارة العامة للتشغيل ومراقبة الجودة',
 ];
 
+// Exact administrations from the attached Excel sheet (media_1793612157416_abb63ac5.xlsx)
 export const COMPETENT_ADMINS = [
-  'إدارة التراخيص والتصاريح',
-  'إدارة المعاينات المساحية والتصميم',
-  'إدارة التنفيذ المدني والمسارات',
-  'إدارة التركيبات الكهروميكانيكية',
-  'إدارة تسليم وتشغيل المواقع',
+  'أولى ساحل',
+  'اسكندرية الأولى',
+  'اسكندرية الثالثة',
+  'اسكندرية الثانية',
+  'الإسماعيلية ومدن القناة',
+  'البحر الأحمر',
+  'البحيرة الاولى',
+  'البحيرة الثانية',
+  'الدقهليه 1',
+  'الدقهليه 2',
+  'السويس وجنوب سيناء',
+  'الشرقيه 1',
+  'الشرقيه 2',
+  'الغربية الأولى',
+  'الغربية الثانية',
+  'القليوبيه',
+  'المنوفية',
+  'دمياط',
+  'ساحل ثالثة',
+  'ساحل ثانية',
+  'كفر الشيخ',
 ];
 
 export const CENTRALS = [
@@ -219,120 +267,120 @@ function generateDetailedSites(): SiteRecord[] {
     obstaclePool: string[];
     defaultDates: string[];
   }[] = [
-    {
-      status: 'جاري العمل كهربى',
-      count: 3,
-      targetLinks: 5, // 2, 2, 1
-      companies: ['WE', 'Vodafone', 'Orange'],
-      obstaclePool: ['لا يوجد تعذر'],
-      defaultDates: ['2026-11-15', '2026-11-20', '2026-12-05'],
-    },
-    {
-      status: 'متعثرات',
-      count: 4,
-      targetLinks: 8, // 2, 2, 2, 2
-      companies: ['WE', 'Orange', 'Vodafone', 'WE'],
-      obstaclePool: [
-        'اعتراضات أهالي ومواطنين',
-        'تأخر تصاريح حي وهيئة الطرق',
-        'تعارض مسار مع خطوط مرافق غاز ومياه',
-        'مشاكل تعاقدية وتوريدات مقاول',
-      ],
-      defaultDates: ['2027-01-30', '2027-02-15', '2027-01-10', '2027-03-01'],
-    },
-    {
-      status: 'جاري العمل مدني',
-      count: 5,
-      targetLinks: 6, // 2, 1, 1, 1, 1
-      companies: ['WE', 'Vodafone', 'Orange', 'WE', 'Vodafone'],
-      obstaclePool: ['لا يوجد تعذر'],
-      defaultDates: ['2026-11-25', '2026-11-30', '2026-12-10', '2026-12-15', '2026-12-20'],
-    },
-    {
-      status: 'معوقات',
-      count: 14,
-      targetLinks: 22, // 8 sites with 2 links (16), 6 sites with 1 link (6) -> 22 links
-      companies: [
-        'WE', 'Orange', 'Vodafone', 'WE', 'Vodafone', 'Orange', 'WE',
-        'Orange', 'Vodafone', 'WE', 'Vodafone', 'Vodafone', 'WE', 'Orange'
-      ],
-      obstaclePool: [
-        'تأخر تصاريح حي وهيئة الطرق',
-        'اعتراضات أهالي ومواطنين',
-        'تعارض مسار مع خطوط مرافق غاز ومياه',
-        'اشتراطات خاصة بالبيئة والآثار',
-        'مشاكل تعاقدية وتوريدات مقاول',
-      ],
-      defaultDates: [
-        '2026-12-15', '2026-12-20', '2027-01-10', '2026-12-30', '2027-01-15',
-        '2027-01-20', '2027-02-01', '2026-12-25', '2027-01-05', '2027-02-10',
-        '2026-12-18', '2027-01-25', '2027-02-05', '2027-01-12'
-      ],
-    },
-    {
-      status: 'تم التسليم',
-      count: 24,
-      targetLinks: 28, // 4 sites with 2 links (8), 20 sites with 1 link (20) -> 28 links
-      companies: [
-        'WE', 'Vodafone', 'Orange', 'WE', 'Vodafone', 'WE', 'Orange', 'Vodafone',
-        'Orange', 'WE', 'Vodafone', 'Orange', 'Vodafone', 'WE', 'Vodafone', 'Orange',
-        'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE'
-      ],
-      obstaclePool: ['لا يوجد تعذر'],
-      defaultDates: [
-        '2026-09-10', '2026-09-15', '2026-09-20', '2026-09-25', '2026-10-01',
-        '2026-10-05', '2026-10-10', '2026-10-12', '2026-10-14', '2026-10-15',
-        '2026-10-18', '2026-10-20', '2026-10-22', '2026-10-25', '2026-10-28',
-        '2026-10-30', '2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04',
-        '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08'
-      ],
-    },
-    {
-      status: 'جاري المعاينة',
-      count: 30,
-      targetLinks: 53, // 23 sites with 2 links (46), 7 sites with 1 link (7) -> 53 links
-      companies: [
-        'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE', 'Orange',
-        'Vodafone', 'WE', 'Orange', 'Vodafone', 'Orange', 'WE', 'Vodafone', 'Orange',
-        'WE', 'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone',
-        'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone'
-      ],
-      obstaclePool: ['لا يوجد تعذر'],
-      defaultDates: [
-        '2026-11-10', '2026-11-12', '2026-11-14', '2026-11-16', '2026-11-18',
-        '2026-11-20', '2026-11-22', '2026-11-24', '2026-11-26', '2026-11-28',
-        '2026-11-30', '2026-12-02', '2026-12-04', '2026-12-06', '2026-12-08',
-        '2026-12-10', '2026-12-12', '2026-12-14', '2026-12-16', '2026-12-18',
-        '2026-12-20', '2026-12-22', '2026-12-24', '2026-12-26', '2026-12-28',
-        '2026-12-30', '2027-01-02', '2027-01-04', '2027-01-06', '2027-01-08'
-      ],
-    },
-    {
-      status: 'جاري تصاريح',
-      count: 41,
-      targetLinks: 63, // 22 sites with 2 links (44), 19 sites with 1 link (19) -> 63 links
-      companies: [
-        'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE',
-        'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone',
-        'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE', 'Orange',
-        'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE',
-        'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone',
-        'WE'
-      ],
-      obstaclePool: ['لا يوجد تعذر'],
-      defaultDates: [
-        '2026-12-01', '2026-12-03', '2026-12-05', '2026-12-07', '2026-12-09',
-        '2026-12-11', '2026-12-13', '2026-12-15', '2026-12-17', '2026-12-19',
-        '2026-12-21', '2026-12-23', '2026-12-25', '2026-12-27', '2026-12-29',
-        '2026-12-31', '2027-01-03', '2027-01-05', '2027-01-07', '2027-01-09',
-        '2027-01-11', '2027-01-13', '2027-01-15', '2027-01-17', '2027-01-19',
-        '2027-01-21', '2027-01-23', '2027-01-25', '2027-01-27', '2027-01-29',
-        '2027-01-31', '2027-02-02', '2027-02-04', '2027-02-06', '2027-02-08',
-        '2027-02-10', '2027-02-12', '2027-02-14', '2027-02-16', '2027-02-18',
-        '2027-02-20'
-      ],
-    },
-  ];
+      {
+        status: 'جاري العمل كهربى',
+        count: 3,
+        targetLinks: 5, // 2, 2, 1
+        companies: ['WE', 'Vodafone', 'Orange'],
+        obstaclePool: ['لا يوجد تعذر'],
+        defaultDates: ['2026-11-15', '2026-11-20', '2026-12-05'],
+      },
+      {
+        status: 'متعثرات',
+        count: 4,
+        targetLinks: 8, // 2, 2, 2, 2
+        companies: ['WE', 'Orange', 'Vodafone', 'WE'],
+        obstaclePool: [
+          'اعتراضات أهالي ومواطنين',
+          'تأخر تصاريح حي وهيئة الطرق',
+          'تعارض مسار مع خطوط مرافق غاز ومياه',
+          'مشاكل تعاقدية وتوريدات مقاول',
+        ],
+        defaultDates: ['2027-01-30', '2027-02-15', '2027-01-10', '2027-03-01'],
+      },
+      {
+        status: 'جاري العمل مدني',
+        count: 5,
+        targetLinks: 6, // 2, 1, 1, 1, 1
+        companies: ['WE', 'Vodafone', 'Orange', 'WE', 'Vodafone'],
+        obstaclePool: ['لا يوجد تعذر'],
+        defaultDates: ['2026-11-25', '2026-11-30', '2026-12-10', '2026-12-15', '2026-12-20'],
+      },
+      {
+        status: 'معوقات',
+        count: 14,
+        targetLinks: 22, // 8 sites with 2 links (16), 6 sites with 1 link (6) -> 22 links
+        companies: [
+          'WE', 'Orange', 'Vodafone', 'WE', 'Vodafone', 'Orange', 'WE',
+          'Orange', 'Vodafone', 'WE', 'Vodafone', 'Vodafone', 'WE', 'Orange'
+        ],
+        obstaclePool: [
+          'تأخر تصاريح حي وهيئة الطرق',
+          'اعتراضات أهالي ومواطنين',
+          'تعارض مسار مع خطوط مرافق غاز ومياه',
+          'اشتراطات خاصة بالبيئة والآثار',
+          'مشاكل تعاقدية وتوريدات مقاول',
+        ],
+        defaultDates: [
+          '2026-12-15', '2026-12-20', '2027-01-10', '2026-12-30', '2027-01-15',
+          '2027-01-20', '2027-02-01', '2026-12-25', '2027-01-05', '2027-02-10',
+          '2026-12-18', '2027-01-25', '2027-02-05', '2027-01-12'
+        ],
+      },
+      {
+        status: 'تم التسليم',
+        count: 24,
+        targetLinks: 28, // 4 sites with 2 links (8), 20 sites with 1 link (20) -> 28 links
+        companies: [
+          'WE', 'Vodafone', 'Orange', 'WE', 'Vodafone', 'WE', 'Orange', 'Vodafone',
+          'Orange', 'WE', 'Vodafone', 'Orange', 'Vodafone', 'WE', 'Vodafone', 'Orange',
+          'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE'
+        ],
+        obstaclePool: ['لا يوجد تعذر'],
+        defaultDates: [
+          '2026-09-10', '2026-09-15', '2026-09-20', '2026-09-25', '2026-10-01',
+          '2026-10-05', '2026-10-10', '2026-10-12', '2026-10-14', '2026-10-15',
+          '2026-10-18', '2026-10-20', '2026-10-22', '2026-10-25', '2026-10-28',
+          '2026-10-30', '2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04',
+          '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08'
+        ],
+      },
+      {
+        status: 'جاري المعاينة',
+        count: 30,
+        targetLinks: 53, // 23 sites with 2 links (46), 7 sites with 1 link (7) -> 53 links
+        companies: [
+          'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE', 'Orange',
+          'Vodafone', 'WE', 'Orange', 'Vodafone', 'Orange', 'WE', 'Vodafone', 'Orange',
+          'WE', 'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone',
+          'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone'
+        ],
+        obstaclePool: ['لا يوجد تعذر'],
+        defaultDates: [
+          '2026-11-10', '2026-11-12', '2026-11-14', '2026-11-16', '2026-11-18',
+          '2026-11-20', '2026-11-22', '2026-11-24', '2026-11-26', '2026-11-28',
+          '2026-11-30', '2026-12-02', '2026-12-04', '2026-12-06', '2026-12-08',
+          '2026-12-10', '2026-12-12', '2026-12-14', '2026-12-16', '2026-12-18',
+          '2026-12-20', '2026-12-22', '2026-12-24', '2026-12-26', '2026-12-28',
+          '2026-12-30', '2027-01-02', '2027-01-04', '2027-01-06', '2027-01-08'
+        ],
+      },
+      {
+        status: 'جاري تصاريح',
+        count: 41,
+        targetLinks: 63, // 22 sites with 2 links (44), 19 sites with 1 link (19) -> 63 links
+        companies: [
+          'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE',
+          'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone',
+          'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE', 'Orange',
+          'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE',
+          'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone', 'WE', 'Orange', 'Vodafone',
+          'WE'
+        ],
+        obstaclePool: ['لا يوجد تعذر'],
+        defaultDates: [
+          '2026-12-01', '2026-12-03', '2026-12-05', '2026-12-07', '2026-12-09',
+          '2026-12-11', '2026-12-13', '2026-12-15', '2026-12-17', '2026-12-19',
+          '2026-12-21', '2026-12-23', '2026-12-25', '2026-12-27', '2026-12-29',
+          '2026-12-31', '2027-01-03', '2027-01-05', '2027-01-07', '2027-01-09',
+          '2027-01-11', '2027-01-13', '2027-01-15', '2027-01-17', '2027-01-19',
+          '2027-01-21', '2027-01-23', '2027-01-25', '2027-01-27', '2027-01-29',
+          '2027-01-31', '2027-02-02', '2027-02-04', '2027-02-06', '2027-02-08',
+          '2027-02-10', '2027-02-12', '2027-02-14', '2027-02-16', '2027-02-18',
+          '2027-02-20'
+        ],
+      },
+    ];
 
   let idCounter = 1;
 
@@ -398,7 +446,7 @@ function generateDetailedSites(): SiteRecord[] {
         expectedDate,
         progressPercent,
         civilContractor: ['المصرية لشبكات الفايبر', 'المقاولون المتحدون', 'مصر للمشروعات الهندسية', 'سيسكو فايبر'][i % 4],
-        notes: group.status === 'معوقات' || group.status === 'متعثرات' 
+        notes: group.status === 'معوقات' || group.status === 'متعثرات'
           ? `متابعة حل ${obstacleReason} مع الجهة المعنية`
           : 'العمل جاري طبقاً للجدول الزمني المعتمد',
       });
@@ -415,54 +463,233 @@ export const INITIAL_SITES_DATA: SiteRecord[] = generateDetailedSites();
 export const BASELINE_TOTAL_SITES = 121;
 export const BASELINE_TOTAL_LINKS = 185;
 
-// Helper to compute status summaries dynamically based on any filtered or uploaded list of sites
+/**
+ * Universal helper: Extracts the EXACT classification strictly from the uploaded Excel sheet
+ * without any hardcoded overrides or artificial reclassifications.
+ */
+export function getSiteClassification(site: SiteRecord): string {
+  if (site.rawRecord && site.rawRecord['التصنيف']) {
+    const raw = String(site.rawRecord['التصنيف']).trim();
+    if (raw) return raw;
+  }
+  const cls = site.classification;
+  if (cls && typeof cls === 'string') {
+    const trimmed = cls.trim();
+    if (trimmed && trimmed !== 'Sharing' && trimmed !== 'New' && trimmed !== 'GD') {
+      return trimmed;
+    }
+  }
+  const st = site.status;
+  if (st && typeof st === 'string') {
+    const trimmed = st.trim();
+    if (trimmed) return trimmed;
+  }
+  return 'غير محدد';
+}
+
+/**
+ * Checks if a classification is Completed / Achieved
+ */
+export function isClassificationCompleted(cat: string): boolean {
+  const c = cat.toLowerCase();
+  return (
+    c.includes('انتهاء') ||
+    c.includes('تسليم') ||
+    c.includes('تشغيل') ||
+    c.includes('فيبر') ||
+    c.includes('فايبر') ||
+    c.includes('on air') ||
+    c.includes('مكتمل')
+  );
+}
+
+/**
+ * Checks if a classification is Blocked / Stalled / Obstacle
+ */
+export function isClassificationBlocked(cat: string): boolean {
+  const c = cat.toLowerCase();
+  return (
+    c.includes('معوق') ||
+    c.includes('متعذر') ||
+    c.includes('تعذر') ||
+    c.includes('متعثر') ||
+    c.includes('مشاكل') ||
+    c.includes('رفض')
+  );
+}
+
+/**
+ * Checks if a classification is Permits
+ */
+export function isClassificationPermits(cat: string): boolean {
+  const c = cat.toLowerCase();
+  return c.includes('تصاريح') || c.includes('تصريح') || c.includes('طرق');
+}
+
+/**
+ * Checks if a classification is In Progress (Civil, Electricity, Execution)
+ */
+export function isClassificationInProgress(cat: string): boolean {
+  const c = cat.toLowerCase();
+  return (
+    c.includes('عمل') ||
+    c.includes('مدني') ||
+    c.includes('كهرب') ||
+    c.includes('تنفيذ') ||
+    c.includes('خارجي') ||
+    (c.includes('جاري') && !c.includes('معاين') && !c.includes('تصاريح')) ||
+    (c.includes('جارى') && !c.includes('معاين') && !c.includes('تصاريح'))
+  );
+}
+
+/**
+ * Checks if a classification is Under Inspection / Planned
+ */
+export function isClassificationPlanned(cat: string): boolean {
+  const c = cat.toLowerCase();
+  return c.includes('معاين') || c.includes('مخطط');
+}
+
+/**
+ * Returns dynamic, consistent color configuration for any classification
+ */
+export function getDynamicStatusConfig(category: string, index = 0): {
+  en: string;
+  color: string;
+  bgLight: string;
+  border: string;
+  textColor: string;
+} {
+  if (STATUS_CONFIG[category]) {
+    return STATUS_CONFIG[category];
+  }
+
+  // Smart keyword mapping
+  if (isClassificationCompleted(category)) {
+    return {
+      en: category,
+      color: '#16a34a',
+      bgLight: '#dcfce7',
+      border: '#4ade80',
+      textColor: '#15803d',
+    };
+  }
+
+  if (category === 'معوقات' || category.includes('معوق')) {
+    return {
+      en: category,
+      color: '#ea580c',
+      bgLight: '#ffedd5',
+      border: '#fb923c',
+      textColor: '#c2410c',
+    };
+  }
+
+  if (category === 'متعذر' || category.includes('متعذر') || category.includes('تعذر')) {
+    return {
+      en: category,
+      color: '#dc2626',
+      bgLight: '#fee2e2',
+      border: '#f87171',
+      textColor: '#b91c1c',
+    };
+  }
+
+  if (isClassificationPermits(category)) {
+    return {
+      en: category,
+      color: '#0284c7',
+      bgLight: '#e0f2fe',
+      border: '#38bdf8',
+      textColor: '#0369a1',
+    };
+  }
+
+  if (category.includes('كهرب')) {
+    return {
+      en: category,
+      color: '#d97706',
+      bgLight: '#fef3c7',
+      border: '#fcd34d',
+      textColor: '#b45309',
+    };
+  }
+
+  if (category.includes('معاين')) {
+    return {
+      en: category,
+      color: '#0d9488',
+      bgLight: '#ccfbf1',
+      border: '#2dd4bf',
+      textColor: '#0f766e',
+    };
+  }
+
+  if (isClassificationInProgress(category)) {
+    return {
+      en: category,
+      color: '#4f46e5',
+      bgLight: '#e0e7ff',
+      border: '#818cf8',
+      textColor: '#3730a3',
+    };
+  }
+
+  // Dynamic distinct color from EXTRA_PALETTE
+  const fallbackColor = EXTRA_PALETTE[index % EXTRA_PALETTE.length];
+  return {
+    en: category,
+    color: fallbackColor,
+    bgLight: '#f8fafc',
+    border: '#cbd5e1',
+    textColor: '#334155',
+  };
+}
+
+/**
+ * Maps any site strictly into its Excel classification
+ * (Backward-compatible: now returns exact Excel classification)
+ */
+export function getWeExactCategory(site: SiteRecord): string {
+  return getSiteClassification(site);
+}
+
+// Backward-compatible alias
+export const getSiteAggregateCategory = getSiteClassification;
+
+/**
+ * Computes status summaries strictly based on the exact classifications present in the uploaded Excel data
+ */
 export function calculateStatusSummaries(sites: SiteRecord[]): StatusSummary[] {
-  const standardOrder: StatusType[] = [
-    'جاري العمل كهربى',
-    'متعثرات',
-    'جاري العمل مدني',
-    'معوقات',
-    'تم التسليم',
-    'جاري المعاينة',
-    'جاري تصاريح',
-  ];
-
-  // Discover all unique statuses in the dataset
-  const uniqueStatusesInSites = Array.from(new Set(sites.map((s) => s.status)));
-  
-  // Combine standard statuses first, then any extra custom statuses found
-  const allStatuses = [
-    ...standardOrder,
-    ...uniqueStatusesInSites.filter((s) => !standardOrder.includes(s)),
-  ];
-
   const totalSites = sites.length || 1;
+  const countMap = new Map<string, { count: number; links: number }>();
 
-  return allStatuses
-    .map((status, idx) => {
-      const matching = sites.filter((s) => s.status === status);
-      const sitesCount = matching.length;
-      const linksCount = matching.reduce((sum, s) => sum + s.linksCount, 0);
-      const percentage = Number(((sitesCount / totalSites) * 100).toFixed(1));
+  sites.forEach((site) => {
+    const category = getSiteClassification(site);
+    if (!category || category === 'غير محدد') return;
 
-      const config = STATUS_CONFIG[status] || {
-        en: status,
-        color: EXTRA_PALETTE[idx % EXTRA_PALETTE.length],
-        bgLight: '#f1f5f9',
-        border: '#cbd5e1',
-        textColor: '#334155',
-      };
+    const entry = countMap.get(category) || { count: 0, links: 0 };
+    entry.count += 1;
+    entry.links += (site.linksCount || 1);
+    countMap.set(category, entry);
+  });
 
-      return {
-        status,
-        statusEn: config.en,
-        sitesCount,
-        linksCount,
-        percentage,
-        color: config.color,
-        badgeBg: config.bgLight,
-        borderColor: config.border,
-      };
-    })
-    .filter((s) => s.sitesCount > 0 || standardOrder.includes(s.status));
+  // Sort by count descending
+  const sorted = Array.from(countMap.entries()).sort((a, b) => b[1].count - a[1].count);
+
+  return sorted.map(([category, data], index) => {
+    const percentage = Number(((data.count / totalSites) * 100).toFixed(1));
+    const config = getDynamicStatusConfig(category, index);
+
+    return {
+      status: category,
+      statusEn: config.en,
+      sitesCount: data.count,
+      linksCount: data.links,
+      percentage,
+      color: config.color,
+      badgeBg: config.bgLight,
+      borderColor: config.border,
+    };
+  });
 }

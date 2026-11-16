@@ -1,10 +1,11 @@
-import { Radio, Globe, Landmark, FileSpreadsheet, Sparkles } from 'lucide-react';
+import { Radio, Globe, Landmark, Mail, Building, FileSpreadsheet, Sparkles } from 'lucide-react';
 
-export type ActiveProjectScope = 'FTTS' | 'ETAHA' | 'TAHAWOL' | 'UPLOADED';
+export type ActiveProjectScope = 'FTTS' | 'AVAILABILITY' | 'ETAHA' | 'TAHAWOL' | 'POST' | 'COMMUNITIES' | 'UPLOADED';
 
 interface ProjectTabsProps {
   activeScope: ActiveProjectScope;
   onChangeScope: (scope: ActiveProjectScope) => void;
+  onShowToast?: (message: string) => void;
   counts: {
     ftts: number;
     etaha: number;
@@ -18,32 +19,44 @@ interface ProjectTabsProps {
 export const ProjectTabs: React.FC<ProjectTabsProps> = ({
   activeScope,
   onChangeScope,
+  onShowToast,
   counts,
   hasUploadedFile,
   uploadedFileName,
 }) => {
+  const handleTabClick = (scopeId: ActiveProjectScope, isComingSoon?: boolean) => {
+    if (isComingSoon && onShowToast) {
+      onShowToast('سيتم التفعيل في التحديثات القادمة');
+    }
+    onChangeScope(scopeId);
+  };
+
   const tabs = [
     {
       id: 'FTTS' as ActiveProjectScope,
-      title: 'خطة FTTS المشغلين',
-      titleEn: 'FTTS Operators (Orange, Vodafone, WE)',
+      title: 'خطة إف تي تي إس للمشغلين',
+      titleEn: 'FTTS Plan (WE, Vodafone, Orange)',
       count: counts.ftts,
       icon: Radio,
       badge: 'ftts.xlsx + We.xlsx',
       activeColor: 'bg-gradient-to-r from-blue-700 to-indigo-900 text-white shadow-md ring-2 ring-blue-500/30',
       tagColor: 'bg-blue-500/20 text-blue-200 border-blue-400/30',
       countColor: 'bg-white/20 text-white',
+      isComingSoon: false,
+      subText: 'مشغلو شبكات المحمول',
     },
     {
-      id: 'ETAHA' as ActiveProjectScope,
-      title: 'مشروع الإتاحة',
-      titleEn: 'Network & FTTH Availability',
+      id: 'AVAILABILITY' as ActiveProjectScope,
+      title: 'الإتاحة (Availability)',
+      titleEn: 'Availability Portal',
       count: counts.etaha,
       icon: Globe,
-      badge: 'الاتاحه .xlsx',
+      badge: 'قاعدة بيانات الإتاحة الرسمية',
       activeColor: 'bg-gradient-to-r from-teal-700 to-emerald-900 text-white shadow-md ring-2 ring-emerald-500/30',
       tagColor: 'bg-emerald-500/20 text-emerald-200 border-emerald-400/30',
       countColor: 'bg-white/20 text-white',
+      isComingSoon: false,
+      subText: '1. الإتاحة • 2. التحول الرقمي • 3. البريد',
     },
     {
       id: 'TAHAWOL' as ActiveProjectScope,
@@ -55,6 +68,34 @@ export const ProjectTabs: React.FC<ProjectTabsProps> = ({
       activeColor: 'bg-gradient-to-r from-amber-700 to-orange-900 text-white shadow-md ring-2 ring-amber-500/30',
       tagColor: 'bg-amber-500/20 text-amber-200 border-amber-400/30',
       countColor: 'bg-white/20 text-white',
+      isComingSoon: false,
+      subText: 'الوزارات والهيئات',
+    },
+    {
+      id: 'POST' as ActiveProjectScope,
+      title: 'البريد المصري',
+      titleEn: 'Egypt Post Project',
+      count: 0,
+      icon: Mail,
+      badge: 'مكاتب البريد',
+      activeColor: 'bg-gradient-to-r from-emerald-700 to-teal-900 text-white shadow-md ring-2 ring-emerald-500/30',
+      tagColor: 'bg-emerald-500/20 text-emerald-200 border-emerald-400/30',
+      countColor: 'bg-white/20 text-white',
+      isComingSoon: true,
+      subText: 'فروع البريد',
+    },
+    {
+      id: 'COMMUNITIES' as ActiveProjectScope,
+      title: 'المجتمعات الحكومية',
+      titleEn: 'Government Communities',
+      count: 0,
+      icon: Building,
+      badge: 'المجتمعات العمرانية',
+      activeColor: 'bg-gradient-to-r from-indigo-700 to-slate-900 text-white shadow-md ring-2 ring-indigo-500/30',
+      tagColor: 'bg-indigo-500/20 text-indigo-200 border-indigo-400/30',
+      countColor: 'bg-white/20 text-white',
+      isComingSoon: true,
+      subText: 'المباني الحكومية',
     },
   ];
 
@@ -86,7 +127,7 @@ export const ProjectTabs: React.FC<ProjectTabsProps> = ({
         </span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeScope === tab.id;
@@ -96,18 +137,16 @@ export const ProjectTabs: React.FC<ProjectTabsProps> = ({
               key={tab.id}
               type="button"
               id={`tab-scope-${tab.id.toLowerCase()}`}
-              onClick={() => onChangeScope(tab.id)}
-              className={`flex items-center justify-between p-3 rounded-xl border text-right transition-all duration-200 cursor-pointer ${
-                isActive
+              onClick={() => handleTabClick(tab.id, tab.isComingSoon)}
+              className={`flex items-center justify-between p-3 rounded-xl border text-right transition-all duration-200 cursor-pointer ${isActive
                   ? tab.activeColor
                   : 'bg-slate-50/80 hover:bg-slate-100 border-slate-200 text-slate-700'
-              }`}
+                }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <div
-                  className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    isActive ? 'bg-white/15' : 'bg-white text-slate-600 shadow-2xs border border-slate-200'
-                  }`}
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isActive ? 'bg-white/15' : 'bg-white text-slate-600 shadow-2xs border border-slate-200'
+                    }`}
                 >
                   <Icon className="w-4 h-4" />
                 </div>
@@ -118,9 +157,8 @@ export const ProjectTabs: React.FC<ProjectTabsProps> = ({
                     </span>
                   </div>
                   <span
-                    className={`text-[10px] block mt-0.5 truncate ${
-                      isActive ? 'text-white/80' : 'text-slate-400'
-                    }`}
+                    className={`text-[10px] block mt-0.5 truncate ${isActive ? 'text-white/80' : 'text-slate-400'
+                      }`}
                   >
                     {tab.titleEn}
                   </span>
@@ -128,20 +166,31 @@ export const ProjectTabs: React.FC<ProjectTabsProps> = ({
               </div>
 
               <div className="text-left flex-shrink-0 mr-1.5">
-                <span
-                  className={`inline-block font-mono text-xs sm:text-sm font-extrabold px-2 py-0.5 rounded-full ${
-                    isActive ? tab.countColor : 'bg-slate-200/80 text-slate-700'
-                  }`}
-                >
-                  {tab.count.toLocaleString()}
-                </span>
-                <span
-                  className={`text-[9px] block text-center mt-0.5 leading-none font-medium ${
-                    isActive ? 'text-white/70' : 'text-slate-400'
-                  }`}
-                >
-                  موقع/فرع
-                </span>
+                {tab.count > 0 ? (
+                  <>
+                    <span
+                      className={`inline-block font-mono text-xs sm:text-sm font-extrabold px-2 py-0.5 rounded-full ${isActive ? tab.countColor : 'bg-slate-200/80 text-slate-700'
+                        }`}
+                    >
+                      {tab.count.toLocaleString()}
+                    </span>
+                    <span
+                      className={`text-[9px] block text-center mt-0.5 leading-none font-medium ${isActive ? 'text-white/70' : 'text-slate-400'
+                        }`}
+                    >
+                      موقع/فرع
+                    </span>
+                  </>
+                ) : (
+                  <span
+                    className={`text-[9px] font-bold px-2 py-0.5 rounded-full block border ${isActive
+                        ? 'bg-white/20 text-white border-white/30'
+                        : 'bg-amber-50 text-amber-800 border-amber-200'
+                      }`}
+                  >
+                    قريباً
+                  </span>
+                )}
               </div>
             </button>
           );

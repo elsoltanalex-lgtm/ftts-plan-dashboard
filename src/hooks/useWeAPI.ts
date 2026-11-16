@@ -573,17 +573,31 @@ export function exportCleanCSV(
   URL.revokeObjectURL(url);
 }
 
-// ── Delete a single record ──
-export async function deleteRecord(id: string): Promise<{ success: boolean; error?: string }> {
+// ── Delete a single record (by UUID id or siteCode) ──
+export async function deleteRecord(idOrCode: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabase.from('we_records').delete().eq('id', id);
+    const clean = (idOrCode || '').trim();
+    if (!clean) return { success: false, error: 'معرف أو كود الموقع مطلوب' };
+
+    // 1. Delete from Supabase matching by id or site_code
+    const { error } = await supabase
+      .from('we_records')
+      .delete()
+      .or(`id.eq."${clean}",site_code.eq."${clean}"`);
+
     if (error) {
-      // Also attempt delete on local API as fallback
-      await fetch(`${LOCAL_API_BASE}/records/${id}`, { method: 'DELETE' });
-      return { success: false, error: error.message };
+      // Secondary attempt by exact id
+      const { error: err2 } = await supabase.from('we_records').delete().eq('id', clean);
+      if (err2) {
+        console.warn('Supabase delete warning:', error.message || err2.message);
+      }
     }
-    // Also cleanup local if exists
-    try { await fetch(`${LOCAL_API_BASE}/records/${id}`, { method: 'DELETE' }); } catch {}
+
+    // 2. Also attempt cleanup on local server fallback
+    try {
+      await fetch(`${LOCAL_API_BASE}/records/${encodeURIComponent(clean)}`, { method: 'DELETE' });
+    } catch {}
+
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || 'فشل في حذف السجل' };

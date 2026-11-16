@@ -95,15 +95,17 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
             </div>
           </div>
 
-          {onOpenDetailsModal && (
-            <button
-              onClick={() => onOpenDetailsModal(activeStatusFilter || undefined)}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-lg transition-colors"
-            >
-              <Eye className="w-3.5 h-3.5" />
-              <span>عرض تفاصيل المواقع</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {onOpenDetailsModal && (
+              <button
+                onClick={() => onOpenDetailsModal(activeStatusFilter || undefined)}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-lg transition-colors cursor-pointer"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>عرض تفاصيل المواقع</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Search Input for Table */}

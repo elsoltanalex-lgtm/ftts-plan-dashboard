@@ -1,0 +1,255 @@
+// src/hooks/useEtahaAPI.ts
+// Live state & persistence API hook for Availability / Etaha project dataset
+
+import { useState, useCallback } from 'react';
+import type { SiteRecord } from '../types/dashboard';
+import { ETAHA_RAW_RECORDS, ETAHA_MASTER_SITES, type EtahaRecord } from '../data/etahaSites';
+
+const STORAGE_KEY = 'availability_etaha_records_v1';
+
+let inMemoryEtahaRecords: EtahaRecord[] = [];
+
+function loadStoredEtahaRecords(): EtahaRecord[] {
+  if (inMemoryEtahaRecords.length > 0) return inMemoryEtahaRecords;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        inMemoryEtahaRecords = parsed;
+        return inMemoryEtahaRecords;
+      }
+    }
+  } catch {
+    // fallback
+  }
+  inMemoryEtahaRecords = [...ETAHA_RAW_RECORDS];
+  return inMemoryEtahaRecords;
+}
+
+function saveStoredEtahaRecords(records: EtahaRecord[]): void {
+  inMemoryEtahaRecords = records;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  } catch {
+    // storage limit fallback
+  }
+}
+
+export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecord {
+  const siteCode = String(r.Code || `ETAH-${index + 1}`).trim();
+  const clientName = String(r['اسم العميل'] || '').trim();
+  const branchName = String(r['اسم الفرع'] || '').trim();
+  const address = String(r['العنوان'] || '').trim();
+  const rawStatus = String(r['التصنيف'] || '').trim();
+
+  let status = 'جاري المعاينة';
+  let executionCategory: 'Completed' | 'In Progress' | 'Blocked / On Hold' | 'Planned' = 'In Progress';
+  let progressPercent = 25;
+
+  if (rawStatus === 'تم الانتهاء والتسليم' || rawStatus === 'تم التسليم' || rawStatus.includes('تسليم')) {
+    status = 'تم الانتهاء';
+    executionCategory = 'Completed';
+    progressPercent = 100;
+  } else if (rawStatus.includes('تم خارجي') || rawStatus.includes('متوقف علي العميل')) {
+    status = 'تم الانتهاء';
+    executionCategory = 'Completed';
+    progressPercent = 85;
+  } else if (rawStatus.includes('تصاريح')) {
+    status = 'جاري تصاريح';
+    executionCategory = 'In Progress';
+    progressPercent = 40;
+  } else if (rawStatus.includes('معوق')) {
+    status = 'معوقات';
+    executionCategory = 'Blocked / On Hold';
+    progressPercent = 30;
+  } else if (rawStatus.includes('تعذر') || rawStatus.includes('متعذر')) {
+    status = 'متعذر';
+    executionCategory = 'Blocked / On Hold';
+    progressPercent = 15;
+  } else if (rawStatus.includes('مدن') || rawStatus.includes('جاري خارجي') || rawStatus.includes('تنفيذ')) {
+    status = 'جاري مدني';
+    executionCategory = 'In Progress';
+    progressPercent = 60;
+  } else if (rawStatus.includes('كهرب')) {
+    status = 'جاري كهربي';
+    executionCategory = 'In Progress';
+    progressPercent = 75;
+  } else if (rawStatus.includes('معاين') || rawStatus.includes('منتظر')) {
+    status = 'جاري المعاينة';
+    executionCategory = 'Planned';
+    progressPercent = 20;
+  }
+
+  let sector = String(r['القطاعات'] || 'القاهرة الكبرى').trim();
+  if (sector.includes('القاهرة')) sector = 'قطاع مناطق القاهرة الكبرى';
+  else if (sector.includes('الشرقية')) sector = 'قطاع شرق الدلتا';
+  else if (sector.includes('الغربية')) sector = 'قطاع مناطق غرب الدلتا';
+  else if (sector.includes('الجنوبية')) sector = 'قطاع مناطق الصعيد';
+
+  const generalAdmin = String(r['الادارة العامة المنفذة'] || 'الإدارة العامة لتنفيذ الشبكات').trim();
+  const competentAdmin = String(r['ادارة التنفيذ'] || r['قطاع التنفيذ'] || 'إدارة التنفيذ المختصة').trim();
+  const governorate = String(r['المحافظة'] || '').trim();
+  const central = String(r['سنترال الربط'] || governorate || 'سنترال رئيسي').trim();
+
+  let clientCategory = 'المؤسسات والشركات';
+  if (clientName.includes('بنك') || clientName.includes('مصرف') || clientName.includes('CIB') || clientName.includes('QNB')) {
+    clientCategory = 'البنوك والقطاع المصرفي';
+  } else if (clientName.includes('تعليم') || clientName.includes('مدرسة') || clientName.includes('جامعة') || clientName.includes('أزهر')) {
+    clientCategory = 'التربية والتعليم والجامعات';
+  } else if (clientName.includes('صحة') || clientName.includes('إسعاف') || clientName.includes('مستشفى') || clientName.includes('بلازما')) {
+    clientCategory = 'الصحة والمستشفيات';
+  } else if (clientName.includes('كهرباء') || clientName.includes('مياه') || clientName.includes('بترول') || clientName.includes('غاز')) {
+    clientCategory = 'المرافق والبنية التحتية';
+  } else if (clientName.includes('ضرائب') || clientName.includes('جمارك') || clientName.includes('شرطة') || clientName.includes('داخلية')) {
+    clientCategory = 'الجهات والوزارات الحكومية';
+  }
+
+  const obstacleReason = String(r['سبب المعوق او التعذر'] || r['ملحوظه في حاله عدم الانتهاء'] || 'لا يوجد تعذر').trim();
+  const expectedDate = r['تاريخ الانتهاء'] || '2026-12-31';
+
+  return {
+    id: `ETAH-${siteCode}`,
+    siteCode,
+    siteName: `${clientName} - ${branchName && branchName !== '0' ? branchName : (address || siteCode)}`,
+    company: clientCategory,
+    status,
+    executionCategory,
+    linksCount: 1,
+    sector,
+    generalAdmin,
+    competentAdmin,
+    executionSector: String(r['قطاع التنفيذ'] || '').trim(),
+    subSector: String(r['ادارة التنفيذ'] || '').trim(),
+    governorate,
+    central,
+    civilContractor: String(r['مسئوليه التنفيذ'] || 'التنفيذ').trim(),
+    responsibility: String(r['مسئوليه التنفيذ'] || 'التنفيذ').trim(),
+    classification: rawStatus || 'إتاحة',
+    obstacleReason,
+    obstacleType: rawStatus.includes('معوق') ? 'معوقات' : rawStatus.includes('تعذر') ? 'تعذر' : '',
+    deliveryArea: r['موقف التسليم'] || '',
+    expectedDate,
+    progressPercent,
+    notes: [r['ملحوظه في حاله عدم الانتهاء'], r['اسم ورقم تليفون مدير الادارة']].filter(Boolean).join(' | '),
+    rawRecord: r,
+  };
+}
+
+export function useEtahaAPI() {
+  const [etahaRecords, setEtahaRecords] = useState<EtahaRecord[]>(() => loadStoredEtahaRecords());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refetchEtahaRecords = useCallback(async () => {
+    setLoading(true);
+    try {
+      const records = loadStoredEtahaRecords();
+      setEtahaRecords([...records]);
+    } catch (err: any) {
+      setError(err?.message || 'Error fetching Etaha records');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const saveEtahaRecord = useCallback(async (record: EtahaRecord): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const code = String(record.Code || record.code || '').trim().toUpperCase();
+      if (!code) return { success: false, error: 'كود المشروع مطلوب' };
+
+      const current = loadStoredEtahaRecords();
+      const idx = current.findIndex((r) => String(r.Code || r.code || '').trim().toUpperCase() === code);
+      let updated: EtahaRecord[];
+
+      const now = new Date().toISOString();
+      const enriched: EtahaRecord = {
+        ...record,
+        Code: code,
+        _updatedAt: now,
+      };
+
+      if (idx >= 0) {
+        updated = [...current];
+        updated[idx] = { ...updated[idx], ...enriched };
+      } else {
+        enriched._createdAt = now;
+        updated = [enriched, ...current];
+      }
+
+      saveStoredEtahaRecords(updated);
+      setEtahaRecords(updated);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'فشل حفظ بيانات المشروع' };
+    }
+  }, []);
+
+  const deleteEtahaRecord = useCallback(async (code: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const norm = (code || '').trim().toUpperCase();
+      const current = loadStoredEtahaRecords();
+      const filtered = current.filter((r) => String(r.Code || r.code || '').trim().toUpperCase() !== norm);
+      saveStoredEtahaRecords(filtered);
+      setEtahaRecords(filtered);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'فشل حذف المشروع' };
+    }
+  }, []);
+
+  const bulkImportEtahaRecords = useCallback(async (recordsToImport: EtahaRecord[]): Promise<{ success: boolean; savedCount: number; error?: string }> => {
+    try {
+      const current = loadStoredEtahaRecords();
+      const recordMap = new Map<string, EtahaRecord>();
+      current.forEach((r) => {
+        const c = String(r.Code || r.code || '').trim().toUpperCase();
+        if (c) recordMap.set(c, r);
+      });
+
+      const now = new Date().toISOString();
+      let savedCount = 0;
+
+      recordsToImport.forEach((rec) => {
+        const c = String(rec.Code || rec.code || '').trim().toUpperCase();
+        if (!c) return;
+        const existing = recordMap.get(c);
+        if (existing) {
+          recordMap.set(c, {
+            ...existing,
+            ...rec,
+            _updatedAt: now,
+          });
+        } else {
+          recordMap.set(c, {
+            ...rec,
+            _createdAt: now,
+            _updatedAt: now,
+          });
+        }
+        savedCount++;
+      });
+
+      const merged = Array.from(recordMap.values());
+      saveStoredEtahaRecords(merged);
+      setEtahaRecords(merged);
+      return { success: true, savedCount };
+    } catch (err: any) {
+      return { success: false, savedCount: 0, error: err?.message || 'فشل الاستيراد الجماعي' };
+    }
+  }, []);
+
+  const etahaSites = etahaRecords.map((r, i) => mapEtahaRecordToSiteRecord(r, i));
+
+  return {
+    etahaRecords,
+    etahaSites,
+    loading,
+    error,
+    refetchEtahaRecords,
+    saveEtahaRecord,
+    deleteEtahaRecord,
+    bulkImportEtahaRecords,
+  };
+}
+

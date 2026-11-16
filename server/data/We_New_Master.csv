@@ -1,0 +1,5 @@
+Site code,رئاسة قطاعات التنفيذ') && line.includes('LALXA23261')) {
+    console.log('Found full CSV in line index:', i);
+    // Find start of CSV
+    const start = line.indexOf('Site code,رئاسة قطاعات التنفيذ');
+    const end = line.indexOf('

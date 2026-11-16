@@ -1,12 +1,21 @@
 export type StatusType =
-  | 'جاري تصاريح'
-  | 'جاري المعاينة'
-  | 'تم التسليم'
-  | 'معوقات'
+  | 'تم الانتهاء'
+  | 'تم التشغيل فايبر'
   | 'جاري العمل مدني'
-  | 'متعثرات'
+  | 'جاري المعاينة'
+  | 'جاري تصاريح'
+  | 'جاري كهرباء'
+  | 'متعذر / معوقات'
+  | 'تم التسليم'
+  | 'جاري مدني'
+  | 'جاري كهربي'
   | 'جاري العمل كهربى'
+  | 'متعذر'
+  | 'معوقات'
+  | 'متعثرات'
   | string;
+
+export type ExecutionCategory = 'Completed' | 'In Progress' | 'Planned' | 'Blocked / On Hold' | string;
 
 export type CompanyType = 'All' | 'Vodafone' | 'Orange' | 'WE' | string;
 
@@ -16,6 +25,7 @@ export interface SiteRecord {
   siteName: string;
   company: 'Orange' | 'Vodafone' | 'WE' | string;
   status: StatusType;
+  executionCategory?: ExecutionCategory;
   linksCount: number;
   sector: string;
   generalAdmin: string;
@@ -27,6 +37,27 @@ export interface SiteRecord {
   progressPercent: number;
   civilContractor?: string;
   notes?: string;
+  // Orange & detailed attributes
+  subSector?: string;
+  executionSector?: string;
+  governorate?: string;
+  address?: string;
+  responsibility?: string;
+  deliveryArea?: string;
+  deliveryOrange?: string;
+  deliveryNotes?: string;
+  obstacleType?: string;
+  obstacleDetails?: string;
+  documentStatus?: string;
+  documentRef?: string;
+  electricalClassification?: string;
+  electricalStage?: string;
+  lat?: number | string;
+  lng?: number | string;
+  txAvail?: string;
+  executedBy?: string;
+  totalCost?: number | string;
+  rawRecord?: any;
 }
 
 export interface StatusSummary {
@@ -51,17 +82,20 @@ export interface FilterState {
   status: string; // 'All' or specific status
   expectedDate: string;
   searchQuery: string;
+  subSector?: string; // الإدارة المختصة (القطاع) for Orange 4-tier hierarchy
 }
 
 export interface KpiData {
   totalSites: number;
   totalLinks: number;
   completedSites: number;
+  inProgressSites: number;
+  plannedSites: number;
+  blockedSites: number;
   permitsCount: number;
   obstaclesCount: number;
   stalledCount: number;
   completionRate: number;
-  inProgressSites: number;
 }
 
 export interface UploadedFileMetadata {

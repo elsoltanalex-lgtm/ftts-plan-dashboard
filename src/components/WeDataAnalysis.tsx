@@ -6,6 +6,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { DonutChart } from './DonutChart';
 import { SummaryTable } from './SummaryTable';
+import { WeSectorPerformance } from './WeSectorPerformance';
 import type { SiteRecord, StatusType } from '../types/dashboard';
 import { calculateStatusSummaries, STATUS_CONFIG } from '../data/dashboardData';
 import { useAuth } from '../context/AuthContext';
@@ -276,6 +277,18 @@ export const WeDataAnalysis: React.FC<WeDataAnalysisProps> = ({ weSites }) => {
         </div>
       </div>
 
+      {/* ── WE Sector Performance & Key Operational Rates (The 4 Core Metrics per Sector) ── */}
+      <WeSectorPerformance
+        weSites={weSites}
+        selectedSectorFilter={selectedSector !== 'All' ? selectedSector : undefined}
+        onSelectSectorFilter={(sec) => {
+          setSelectedSector(sec === 'ALL' ? 'All' : sec);
+          setSelectedRegion('All');
+          setSelectedCentral('All');
+          setCurrentPage(1);
+        }}
+      />
+
       {/* ── 4 Precision Slicers / Filters Bar ── */}
       <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 shadow-xs">
         <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200">
@@ -330,7 +343,7 @@ export const WeDataAnalysis: React.FC<WeDataAnalysisProps> = ({ weSites }) => {
           <div className="flex flex-col">
             <label className="text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1.5">
               <MapPin className="w-3.5 h-3.5 text-indigo-600" />
-              <span>المنطقة / Zone</span>
+              <span>ادارة التنفيذ المختصة</span>
               {regionOptions.length > 0 && (
                 <span className="text-[10px] text-slate-400">({regionOptions.length})</span>
               )}
@@ -348,7 +361,7 @@ export const WeDataAnalysis: React.FC<WeDataAnalysisProps> = ({ weSites }) => {
                   : 'bg-white border-slate-300 text-slate-800 focus:border-indigo-500'
               }`}
             >
-              <option value="All">📍 كل المناطق (التحليل العام)</option>
+              <option value="All">📍 كل إدارات التنفيذ المختصة (التحليل العام)</option>
               {regionOptions.map((reg) => (
                 <option key={reg} value={reg}>
                   {reg}
@@ -531,7 +544,7 @@ export const WeDataAnalysis: React.FC<WeDataAnalysisProps> = ({ weSites }) => {
               <tr>
                 <th className="p-2.5 font-mono">كود الموقع</th>
                 <th className="p-2.5">السنترال</th>
-                <th className="p-2.5">المنطقة / Zone</th>
+                <th className="p-2.5">ادارة التنفيذ المختصة</th>
                 <th className="p-2.5">القطاع</th>
                 <th className="p-2.5">الموقف العام</th>
                 <th className="p-2.5 font-mono">تاريخ الانتهاء</th>
