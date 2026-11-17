@@ -18,11 +18,12 @@ import { WeeklyPerformanceLineChart } from '../components/WeeklyPerformanceLineC
 import { WeBulkImportModal } from '../components/WeBulkImportModal';
 import { LoginModal } from '../components/LoginModal';
 import { useAuth } from '../context/AuthContext';
-import { ShieldCheck, Building2, Eye, LogIn, Lock, LogOut, Globe, Trash2, PlusCircle, Edit3, X, Search, AlertTriangle, Landmark, Mail, PieChart, ChevronRight, Download, Loader2 } from 'lucide-react';
+import { ShieldCheck, Building2, Eye, LogIn, Lock, LogOut, Globe, Trash2, PlusCircle, Edit3, X, Search, AlertTriangle, Landmark, Mail, PieChart, ChevronRight, Download, Loader2, Database } from 'lucide-react';
 import { isRecordInSector, toCanonicalSector } from '../utils/sectorPermissions';
 import { toFilterArray } from '../utils/filterUtils';
 import { getSiteCompetentAdmin } from '../data/siteAdminMapping';
 import { useWeRecords, useWeSiteCodes, exportToCSV, deleteRecord, deleteRecordsBulk } from '../hooks/useWeAPI';
+import { exportFullDatabaseBackup } from '../utils/backupExportService';
 import type { WeRecord } from '../config/fieldConfig';
 import { normalizeClassification } from '../config/fieldConfig';
 import { useOrangeAPI } from '../hooks/useOrangeAPI';
@@ -1012,16 +1013,43 @@ export const Dashboard: React.FC = () => {
     window.print();
   };
 
+  // State & Handler for Full Database / Supabase Backup Export to Excel (.xlsx)
+  const [isExportingBackup, setIsExportingBackup] = useState(false);
+
+  const handleExportBackup = useCallback(async () => {
+    setIsExportingBackup(true);
+    setToastMessage('جارِ تجميع كافة البيانات الحالية من قاعدة البيانات السحابية Supabase...');
+    try {
+      const res = await exportFullDatabaseBackup({
+        liveWeSites,
+        vodafoneSites,
+        orangeSites,
+        etahaSites,
+        deletedSiteCodes,
+        userName: user?.displayName || 'مدير النظام',
+        userSector: user?.sector || (user?.role === 'admin' ? 'كافة القطاعات' : 'قطاع عام'),
+      });
+      setToastMessage(`✅ تم تحميل النسخة الاحتياطية بنجاح (${res.totalSites.toLocaleString()} موقعاً ومفرزة بكل الجداول)`);
+    } catch (err: any) {
+      console.error('Failed to export backup:', err);
+      setToastMessage(`❌ حدث خطأ أثناء تصدير النسخة الاحتياطية: ${err?.message || 'فشل التصدير'}`);
+    } finally {
+      setIsExportingBackup(false);
+    }
+  }, [liveWeSites, vodafoneSites, orangeSites, etahaSites, deletedSiteCodes, user]);
+
   return (
     <div className="min-h-screen bg-slate-100/70 p-3 sm:p-5 lg:p-7 text-slate-800 font-sans">
       <div className="max-w-[1600px] mx-auto">
-        {/* 1. Header with Upload Action */}
+        {/* 1. Header with Upload Action & Backup Export */}
         <Header
           onResetFilters={handleResetFilters}
           activeFiltersCount={activeFiltersCount}
           totalFilteredSites={filteredSites.length}
           totalBaselineSites={authorizedScopeData.length}
           onExportCsv={handleExportFullCsv}
+          onExportBackup={handleExportBackup}
+          isExportingBackup={isExportingBackup}
           onPrint={handlePrint}
           onOpenUploadModal={() => setIsUploadModalOpen(true)}
           activeUploadedMetadata={uploadedMetadata}
@@ -1374,6 +1402,17 @@ export const Dashboard: React.FC = () => {
                         <span>📤</span>
                         <span>الرفع الجماعي عبر إكسيل (Bulk Import)</span>
                       </button>
+
+                      {/* 4. زر تحميل النسخة الاحتياطية */}
+                      <button
+                        className="px-3.5 py-2 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-700 hover:to-indigo-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-60"
+                        onClick={handleExportBackup}
+                        disabled={isExportingBackup}
+                        title="تحميل نسخة احتياطية شاملة لكافة الجداول والبيانات من Supabase (Excel)"
+                      >
+                        {isExportingBackup ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
+                        <span>تحميل النسخة الاحتياطية (Export Backup)</span>
+                      </button>
                     </div>
                   ) : filters.company === 'Vodafone' ? (
                     /* Vodafone Buttons Group */
@@ -1406,6 +1445,17 @@ export const Dashboard: React.FC = () => {
                         }}
                         onDelete={() => setIsQuickDeleteModalOpen(true)}
                       />
+
+                      {/* 3. زر تحميل النسخة الاحتياطية */}
+                      <button
+                        className="px-3.5 py-2 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-700 hover:to-indigo-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-60"
+                        onClick={handleExportBackup}
+                        disabled={isExportingBackup}
+                        title="تحميل نسخة احتياطية شاملة لكافة الجداول والبيانات من Supabase (Excel)"
+                      >
+                        {isExportingBackup ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
+                        <span>تحميل النسخة الاحتياطية (Export Backup)</span>
+                      </button>
                     </div>
                   ) : (
                     /* WE & Default Buttons Group */
@@ -1470,6 +1520,17 @@ export const Dashboard: React.FC = () => {
                         <span>🧹</span>
                         <span>إدارة وحذف متقدم (CSV)</span>
                       </button>
+
+                      {/* 6. زر تحميل النسخة الاحتياطية */}
+                      <button
+                        className="px-3.5 py-2 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-700 hover:to-indigo-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-60"
+                        onClick={handleExportBackup}
+                        disabled={isExportingBackup}
+                        title="تحميل نسخة احتياطية شاملة لكافة الجداول والبيانات من Supabase (Excel)"
+                      >
+                        {isExportingBackup ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
+                        <span>تحميل النسخة الاحتياطية (Export Backup)</span>
+                      </button>
                     </div>
                   )}
 
@@ -1527,6 +1588,17 @@ export const Dashboard: React.FC = () => {
                       }}
                       onDelete={() => setIsQuickDeleteModalOpen(true)}
                     />
+
+                    {/* 3. زر تحميل النسخة الاحتياطية */}
+                    <button
+                      className="px-3.5 py-2 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-700 hover:to-indigo-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-60"
+                      onClick={handleExportBackup}
+                      disabled={isExportingBackup}
+                      title="تحميل نسخة احتياطية شاملة لكافة مشروعات وجداول البيانات من Supabase (Excel)"
+                    >
+                      {isExportingBackup ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
+                      <span>تحميل النسخة الاحتياطية (Export Backup)</span>
+                    </button>
                   </div>
 
                   <div className="flex items-center gap-2">

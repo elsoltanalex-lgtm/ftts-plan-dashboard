@@ -10,7 +10,9 @@ import {
   LogOut,
   Building2,
   ShieldCheck,
-  Eye
+  Eye,
+  Database,
+  Loader2
 } from 'lucide-react';
 import type { UploadedFileMetadata } from '../types/dashboard';
 import { useAuth } from '../context/AuthContext';
@@ -21,6 +23,8 @@ interface HeaderProps {
   totalFilteredSites: number;
   totalBaselineSites: number;
   onExportCsv: () => void;
+  onExportBackup?: () => void;
+  isExportingBackup?: boolean;
   onPrint: () => void;
   onOpenUploadModal: () => void;
   activeUploadedMetadata?: UploadedFileMetadata | null;
@@ -33,6 +37,8 @@ export const Header: React.FC<HeaderProps> = ({
   totalFilteredSites,
   totalBaselineSites,
   onExportCsv,
+  onExportBackup,
+  isExportingBackup = false,
   onPrint,
   onOpenUploadModal,
   activeUploadedMetadata,
@@ -175,6 +181,29 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>إلغاء وتصفية الفلاتر ({activeFiltersCount})</span>
+            </button>
+          )}
+
+          {/* Export Backup Button */}
+          {onExportBackup && (
+            <button
+              onClick={onExportBackup}
+              id="btn-export-backup"
+              disabled={isExportingBackup}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-700 hover:from-sky-500 hover:to-indigo-600 rounded-lg border border-sky-400/50 transition-all shadow-md hover:shadow-sky-500/20 cursor-pointer disabled:opacity-60"
+              title="تجميع كافة البيانات الحالية من جداول Supabase وتنزيلها تلقائياً كملف إكسيل مرتب ومحدث (Export Backup)"
+            >
+              {isExportingBackup ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-200" />
+                  <span>جارِ تجهيز النسخة الاحتياطية...</span>
+                </>
+              ) : (
+                <>
+                  <Database className="w-3.5 h-3.5 text-sky-200" />
+                  <span>تحميل النسخة الاحتياطية (Export Backup)</span>
+                </>
+              )}
             </button>
           )}
 
