@@ -90,7 +90,8 @@ export interface FilterState {
   subSector?: string | string[]; // الإدارة المختصة (القطاع) for Orange 4-tier hierarchy
   // Etaha-specific 3 axes of classification (Multi-Select)
   externalPath?: string | string[];   // المسار الخارجي
-  excelStatus?: string | string[];    // موقف الإكسيل
+  internalPath?: string | string[];   // المسار الداخلي
+  excelStatus?: string | string[];    // موقف الإكسيل (legacy)
   deliveryStatus?: string | string[]; // موقف التسليم
 }
 

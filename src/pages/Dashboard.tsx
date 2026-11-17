@@ -78,6 +78,7 @@ const initialFilters: FilterState = {
   searchQuery: '',
   subSector: '',
   externalPath: [],
+  internalPath: [],
   excelStatus: [],
   deliveryStatus: [],
 };
@@ -191,6 +192,8 @@ export const Dashboard: React.FC = () => {
   const {
     vodafoneRecords,
     vodafoneSites,
+    deleteVodafoneRecord,
+    deleteVodafoneRecordsBulk,
     bulkImportVodafoneRecords,
     refetchVodafoneRecords,
   } = useVodafoneAPI();
@@ -435,20 +438,20 @@ export const Dashboard: React.FC = () => {
 
   // Matching sites for Quick Delete Modal
   const matchingDeleteSites = useMemo(() => {
-    const q = quickDeleteSearch.toLowerCase().trim();
+    const q = (quickDeleteSearch || '').toLowerCase().trim();
     if (!q) return authorizedScopeData.slice(0, 30);
-    return authorizedScopeData.filter(
-      (s) =>
-        s.siteCode.toLowerCase().includes(q) ||
-        s.siteName.toLowerCase().includes(q) ||
-        s.central.toLowerCase().includes(q) ||
-        s.sector.toLowerCase().includes(q)
-    ).slice(0, 30);
+    return authorizedScopeData.filter((s) => {
+      const code = String(s?.siteCode || '').toLowerCase();
+      const name = String(s?.siteName || '').toLowerCase();
+      const central = String(s?.central || '').toLowerCase();
+      const sector = String(s?.sector || '').toLowerCase();
+      return code.includes(q) || name.includes(q) || central.includes(q) || sector.includes(q);
+    }).slice(0, 30);
   }, [authorizedScopeData, quickDeleteSearch]);
 
   const selectedDeleteSite = useMemo(() => {
     if (!quickDeleteSelectedCode) return null;
-    return authorizedScopeData.find((s) => s.siteCode === quickDeleteSelectedCode) || null;
+    return authorizedScopeData.find((s) => String(s?.siteCode || '').toUpperCase() === quickDeleteSelectedCode.toUpperCase()) || null;
   }, [authorizedScopeData, quickDeleteSelectedCode]);
 
   // Base dataset for interactive filtering (strictly scoped to selected operator, e.g. "WE")
@@ -608,12 +611,18 @@ export const Dashboard: React.FC = () => {
         if (!matchSearch) return false;
       }
 
-      // 11. Etaha-Specific: 3 Classification Axes (المسار الخارجي، موقف الإكسيل، وموقف التسليم)
+      // 11. Etaha-Specific: 3 Classification Axes (المسار الخارجي، المسار الداخلي، وموقف التسليم)
       if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
         const activeExts = toFilterArray(filters.externalPath);
         if (activeExts.length > 0) {
           const siteExt = String(site.externalPath || site.rawRecord?.['المسار الخارجي'] || '').trim();
           if (!activeExts.includes(siteExt)) return false;
+        }
+
+        const activeInts = toFilterArray(filters.internalPath);
+        if (activeInts.length > 0) {
+          const siteInt = String(site.internalPath || site.rawRecord?.['المسار الداخلى'] || site.rawRecord?.['المسار الداخلي'] || site.rawRecord?.['موقف اللحامات'] || '').trim();
+          if (!activeInts.includes(siteInt)) return false;
         }
 
         const activeExcels = toFilterArray(filters.excelStatus);
@@ -716,6 +725,12 @@ export const Dashboard: React.FC = () => {
           if (!activeExts.includes(siteExt)) return false;
         }
 
+        const activeInts = toFilterArray(filters.internalPath);
+        if (activeInts.length > 0) {
+          const siteInt = String(site.internalPath || site.rawRecord?.['المسار الداخلى'] || site.rawRecord?.['المسار الداخلي'] || site.rawRecord?.['موقف اللحامات'] || '').trim();
+          if (!activeInts.includes(siteInt)) return false;
+        }
+
         const activeExcels = toFilterArray(filters.excelStatus);
         if (activeExcels.length > 0) {
           const siteExcel = String(site.excelStatus || site.classification || site.rawRecord?.['التصنيف'] || '').trim();
@@ -731,7 +746,7 @@ export const Dashboard: React.FC = () => {
 
       return true;
     });
-  }, [authorizedScopeData, filters.company, filters.expectedDate, filters.sector, filters.generalAdmin, filters.subSector, filters.competentAdmin, filters.central, filters.obstacleReason, filters.searchQuery, filters.externalPath, filters.excelStatus, filters.deliveryStatus, activeScope]);
+  }, [authorizedScopeData, filters.company, filters.expectedDate, filters.sector, filters.generalAdmin, filters.subSector, filters.competentAdmin, filters.central, filters.obstacleReason, filters.searchQuery, filters.externalPath, filters.internalPath, filters.excelStatus, filters.deliveryStatus, activeScope]);
 
   // Compute live KPIs reflecting the exact 8 Excel classifications dynamically
   const kpis: KpiData = useMemo(() => {
@@ -1208,8 +1223,8 @@ export const Dashboard: React.FC = () => {
                   {filters.searchQuery ? (
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 ${filteredSites.length > 0
-                          ? 'bg-sky-500/20 text-sky-200 border border-sky-400/30'
-                          : 'bg-rose-500/20 text-rose-200 border border-rose-400/30'
+                        ? 'bg-sky-500/20 text-sky-200 border border-sky-400/30'
+                        : 'bg-rose-500/20 text-rose-200 border border-rose-400/30'
                         }`}>
                         <span>النتائج:</span>
                         <strong className="text-white font-mono text-sm">{filteredSites.length}</strong>
@@ -1742,10 +1757,16 @@ export const Dashboard: React.FC = () => {
         }}
         onDeleteSite={async (siteOrCode) => {
           const code = typeof siteOrCode === 'string' ? siteOrCode : siteOrCode.siteCode;
-          const matched = authorizedScopeData.find((s) => s.siteCode.toUpperCase() === code.toUpperCase());
+          const matched = authorizedScopeData.find((s) => String(s?.siteCode || '').toUpperCase() === code.toUpperCase());
           if (matched?.company === 'Orange') {
             await deleteOrangeRecord(code);
             setToastMessage(`تم حذف وإلغاء موقع Orange (${code}) بنجاح ✅`);
+          } else if (matched?.company === 'Vodafone') {
+            await deleteVodafoneRecord(code);
+            setToastMessage(`تم حذف وإلغاء موقع Vodafone (${code}) بنجاح ✅`);
+          } else if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+            await deleteEtahaRecord(code);
+            setToastMessage(`تم حذف وإلغاء مشروع الإتاحة (${code}) بنجاح ✅`);
           } else {
             handleDeleteSite(siteOrCode);
           }
@@ -1759,6 +1780,9 @@ export const Dashboard: React.FC = () => {
             } else if (filters.company === 'Orange') {
               await deleteOrangeRecordsBulk(siteCodes);
               setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Orange ✅`);
+            } else if (filters.company === 'Vodafone') {
+              await deleteVodafoneRecordsBulk(siteCodes);
+              setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Vodafone ✅`);
             } else {
               await deleteRecordsBulk(siteCodes);
               removeRecordsLocally(siteCodes);
@@ -1965,6 +1989,9 @@ export const Dashboard: React.FC = () => {
             } else if (filters.company === 'Orange') {
               await deleteOrangeRecordsBulk(siteCodes);
               setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Orange ✅`);
+            } else if (filters.company === 'Vodafone') {
+              await deleteVodafoneRecordsBulk(siteCodes);
+              setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Vodafone ✅`);
             } else {
               await deleteRecordsBulk(siteCodes);
               removeRecordsLocally(siteCodes);

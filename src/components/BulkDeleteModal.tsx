@@ -70,7 +70,7 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({
   const sitesMap = useMemo(() => {
     const map = new Map<string, SiteRecord>();
     sites.forEach((s) => {
-      const code = (s.siteCode || '').trim().toUpperCase();
+      const code = String(s?.siteCode || '').trim().toUpperCase();
       if (code) map.set(code, s);
     });
     return map;
@@ -78,21 +78,27 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({
 
   // ── Manual Filtered Sites ──
   const filteredManualSites = useMemo(() => {
-    const q = manualSearch.trim().toLowerCase();
+    const q = (manualSearch || '').trim().toLowerCase();
     if (!q) return sites;
     return sites.filter((s) => {
+      const code = String(s?.siteCode || '').toLowerCase();
+      const name = String(s?.siteName || '').toLowerCase();
+      const central = String(s?.central || '').toLowerCase();
+      const sector = String(s?.sector || '').toLowerCase();
+      const company = String(s?.company || '').toLowerCase();
       return (
-        s.siteCode.toLowerCase().includes(q) ||
-        s.siteName.toLowerCase().includes(q) ||
-        s.central.toLowerCase().includes(q) ||
-        s.sector.toLowerCase().includes(q) ||
-        s.company.toLowerCase().includes(q)
+        code.includes(q) ||
+        name.includes(q) ||
+        central.includes(q) ||
+        sector.includes(q) ||
+        company.includes(q)
       );
     });
   }, [sites, manualSearch]);
 
   const handleToggleCode = (code: string) => {
-    const norm = code.trim().toUpperCase();
+    const norm = String(code || '').trim().toUpperCase();
+    if (!norm) return;
     setSelectedCodes((prev) => {
       const next = new Set(prev);
       if (next.has(norm)) {
@@ -108,7 +114,8 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({
     setSelectedCodes((prev) => {
       const next = new Set(prev);
       filteredManualSites.forEach((s) => {
-        next.add(s.siteCode.trim().toUpperCase());
+        const code = String(s?.siteCode || '').trim().toUpperCase();
+        if (code) next.add(code);
       });
       return next;
     });
@@ -125,8 +132,8 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({
       const data = [
         ['كود الموقع (Site Code) - إجباري', 'اسم الموقع (Site Name) - اختياري', 'ملاحظات أو سبب الحذف - اختياري'],
         ...sampleSites.map((s, idx) => [
-          s.siteCode,
-          s.siteName,
+          s?.siteCode || '',
+          s?.siteName || '',
           idx === 0 ? 'موقع مكرر أو ملغي' : 'تم استبداله بموقع بديل',
         ]),
       ];
@@ -377,12 +384,13 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({
 
               {/* Sites List with Checkboxes */}
               <div className="border border-slate-200 rounded-xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-100 bg-white shadow-2xs">
-                {filteredManualSites.map((site) => {
-                  const isChecked = selectedCodes.has(site.siteCode.trim().toUpperCase());
+                {filteredManualSites.map((site, idx) => {
+                  const code = String(site?.siteCode || '').trim().toUpperCase();
+                  const isChecked = code ? selectedCodes.has(code) : false;
                   return (
                     <div
-                      key={site.id}
-                      onClick={() => handleToggleCode(site.siteCode)}
+                      key={site?.id || site?.siteCode || idx}
+                      onClick={() => handleToggleCode(site?.siteCode || '')}
                       className={`p-3 transition-colors flex items-center justify-between text-xs cursor-pointer select-none ${
                         isChecked ? 'bg-rose-50/80 font-medium' : 'hover:bg-slate-50'
                       }`}
@@ -398,24 +406,24 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({
                         <div className="truncate">
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-bold text-indigo-700">
-                              {site.siteCode}
+                              {site?.siteCode || 'بدون كود'}
                             </span>
                             <span className="text-slate-800 font-semibold truncate">
-                              {site.siteName}
+                              {site?.siteName || '-'}
                             </span>
                           </div>
                           <span className="text-[11px] text-slate-400 block mt-0.5">
-                            السنترال: {site.central} • القطاع: {site.sector}
+                            السنترال: {site?.central || '-'} • القطاع: {site?.sector || '-'}
                           </span>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                          {site.company}
+                          {site?.company || '-'}
                         </span>
                         <span className="text-[11px] text-slate-600 font-medium">
-                          {site.status}
+                          {site?.status || '-'}
                         </span>
                       </div>
                     </div>
@@ -543,16 +551,16 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({
                           {excelMatching.matched.length} موقع
                         </span>
                       </div>
-                      {excelMatching.matched.map((site) => (
-                        <div key={site.id} className="p-2.5 text-xs flex items-center justify-between">
+                      {excelMatching.matched.map((site, idx) => (
+                        <div key={site?.id || site?.siteCode || idx} className="p-2.5 text-xs flex items-center justify-between">
                           <div>
                             <span className="font-mono font-bold text-indigo-700 ml-2">
-                              {site.siteCode}
+                              {site?.siteCode || 'بدون كود'}
                             </span>
-                            <span className="text-slate-800 font-medium">{site.siteName}</span>
+                            <span className="text-slate-800 font-medium">{site?.siteName || '-'}</span>
                           </div>
                           <span className="text-[11px] text-slate-400">
-                            {site.company} • {site.sector}
+                            {site?.company || '-'} • {site?.sector || '-'}
                           </span>
                         </div>
                       ))}

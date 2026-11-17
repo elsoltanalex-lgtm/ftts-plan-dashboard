@@ -449,7 +449,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     setDuplicateWarning(null);
 
     const normCode = (code || '').trim();
-    const inMemorySite = sitesData?.find((s) => s.siteCode.toUpperCase() === normCode.toUpperCase());
+    const inMemorySite = sitesData?.find((s) => String(s?.siteCode || '').toUpperCase() === normCode.toUpperCase());
 
     try {
       const record = await fetchSiteRecord(normCode);
@@ -567,7 +567,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       setActiveMode('edit');
 
       const inMemorySite = sitesData?.find(
-        (s) => s.siteCode.toUpperCase() === (initialRecord['site code'] || '').toUpperCase()
+        (s) => String(s?.siteCode || '').toUpperCase() === String(initialRecord['site code'] || '').toUpperCase()
       );
       const recordedTasneef =
         initialRecord['التصنيف'] ||

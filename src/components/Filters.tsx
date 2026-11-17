@@ -101,6 +101,10 @@ const MultiFilterDropdown: React.FC<MultiFilterDropdownProps> = ({
       const targetTrimmed = String(optVal).trim();
       return sitesData.filter((s) => String(s.externalPath || s.rawRecord?.['المسار الخارجي'] || '').trim() === targetTrimmed).length;
     }
+    if (filterKey === 'internalPath') {
+      const targetTrimmed = String(optVal).trim();
+      return sitesData.filter((s) => String(s.internalPath || s.rawRecord?.['المسار الداخلى'] || s.rawRecord?.['موقف اللحامات'] || '').trim() === targetTrimmed).length;
+    }
     if (filterKey === 'excelStatus') {
       const targetTrimmed = String(optVal).trim();
       return sitesData.filter((s) => String(s.excelStatus || s.classification || s.rawRecord?.['التصنيف'] || '').trim() === targetTrimmed).length;
@@ -625,6 +629,26 @@ export const Filters: React.FC<FiltersProps> = ({
     });
   }, [baseSites, isEtaha]);
 
+  const dynamicInternalPaths = useMemo(() => {
+    if (!isEtaha) return [];
+    const list = Array.from(
+      new Set(
+        baseSites
+          .map((s) => String(s.internalPath || s.rawRecord?.['المسار الداخلى'] || s.rawRecord?.['موقف اللحامات'] || '').trim())
+          .filter(Boolean)
+      )
+    );
+    const order = ['تم الانتهاء', 'تم الانتهاء بالكامل', 'لم يتم البدء', 'جاري العمل'];
+    return list.sort((a, b) => {
+      const idxA = order.indexOf(a);
+      const idxB = order.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b, 'ar');
+    });
+  }, [baseSites, isEtaha]);
+
   const dynamicExcelStatuses = useMemo(() => {
     if (!isEtaha) return [];
     const list = Array.from(
@@ -691,6 +715,18 @@ export const Filters: React.FC<FiltersProps> = ({
 
   useEffect(() => {
     if (isEtaha) {
+      const current = toFilterArray(filters.internalPath);
+      if (current.length > 0 && dynamicInternalPaths.length > 0) {
+        const valid = current.filter((x) => dynamicInternalPaths.includes(x));
+        if (valid.length !== current.length) {
+          onChangeFilter('internalPath', valid.length === 1 ? valid[0] : valid);
+        }
+      }
+    }
+  }, [isEtaha, dynamicInternalPaths, filters.internalPath, onChangeFilter]);
+
+  useEffect(() => {
+    if (isEtaha) {
       const current = toFilterArray(filters.deliveryStatus);
       if (current.length > 0 && dynamicDeliveryStatuses.length > 0) {
         const valid = current.filter((x) => dynamicDeliveryStatuses.includes(x));
@@ -727,7 +763,7 @@ export const Filters: React.FC<FiltersProps> = ({
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
               {isEtaha
-                ? 'تصفية مشروعات الإتاحة: القطاع ← الإدارة العامة ← إدارة التنفيذ المختصة ← المحاور الثلاثة (المسار الخارجي، موقف الإكسيل، وموقف التسليم)'
+                ? 'تصفية مشروعات الإتاحة: القطاع ← الإدارة العامة ← إدارة التنفيذ المختصة ← المحاور الثلاثة (المسار الخارجي، المسار الداخلي، وموقف التسليم)'
                 : isOrange
                   ? 'تصفية المواقع طبقاً للهيكل الإداري لـ Orange: رئاسة القطاعات ← الإدارة العامة للتنفيذ ← الإدارة المختصة ← إدارة المنطقة'
                   : 'تصفية المؤشرات طبقاً للهيكل الإداري المتسلسل: القطاع ← الإدارة العامة ← إدارة التنفيذ المختصة ← التصنيف (يدعم تحديد أكثر من خيار)'}
@@ -819,17 +855,17 @@ export const Filters: React.FC<FiltersProps> = ({
             filterKey="externalPath"
           />
 
-          {/* 5. محور 2: موقف الإكسيل */}
+          {/* 5. محور 2: المسار الداخلي */}
           <MultiFilterDropdown
-            id="filter-etaha-excel-status"
-            label="موقف الإكسيل"
-            labelEn="Excel Status"
+            id="filter-etaha-internal-path"
+            label="المسار الداخلي"
+            labelEn="Internal Route"
             icon={Tag}
-            value={filters.excelStatus || []}
-            options={dynamicExcelStatuses}
-            onChange={(val) => onChangeFilter('excelStatus', val)}
+            value={filters.internalPath || []}
+            options={dynamicInternalPaths}
+            onChange={(val) => onChangeFilter('internalPath', val)}
             sitesData={baseSites}
-            filterKey="excelStatus"
+            filterKey="internalPath"
           />
 
           {/* 6. محور 3: موقف التسليم */}

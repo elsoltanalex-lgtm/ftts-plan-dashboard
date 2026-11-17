@@ -1,11 +1,14 @@
 import { Dashboard } from './pages/Dashboard';
 import { AuthProvider } from './context/AuthContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 export function App() {
   return (
-    <AuthProvider>
-      <Dashboard />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Dashboard />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

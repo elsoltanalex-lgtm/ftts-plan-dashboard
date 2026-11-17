@@ -80,17 +80,26 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
   if (!isOpen) return null;
 
   const filteredSites = authorizedSites.filter((site) => {
-    const q = searchTerm.toLowerCase();
+    const q = (searchTerm || '').toLowerCase();
+    const code = String(site?.siteCode || '').toLowerCase();
+    const name = String(site?.siteName || '').toLowerCase();
+    const central = String(site?.central || '').toLowerCase();
+    const sector = String(site?.sector || '').toLowerCase();
+    const company = String(site?.company || '').toLowerCase();
+    const status = String(site?.status || '').toLowerCase();
+    const notes = String(site?.notes || '').toLowerCase();
+    const obstacleReason = String(site?.obstacleReason || '').toLowerCase();
+    const civilContractor = String(site?.civilContractor || '').toLowerCase();
     return (
-      site.siteCode.toLowerCase().includes(q) ||
-      site.siteName.toLowerCase().includes(q) ||
-      site.central.toLowerCase().includes(q) ||
-      site.sector.toLowerCase().includes(q) ||
-      site.company.toLowerCase().includes(q) ||
-      site.status.toLowerCase().includes(q) ||
-      (site.notes && site.notes.toLowerCase().includes(q)) ||
-      (site.obstacleReason && site.obstacleReason.toLowerCase().includes(q)) ||
-      (site.civilContractor && site.civilContractor.toLowerCase().includes(q))
+      code.includes(q) ||
+      name.includes(q) ||
+      central.includes(q) ||
+      sector.includes(q) ||
+      company.includes(q) ||
+      status.includes(q) ||
+      notes.includes(q) ||
+      obstacleReason.includes(q) ||
+      civilContractor.includes(q)
     );
   });
 
@@ -158,7 +167,8 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
 
   // Checkbox selection logic
   const handleToggleSiteSelect = (code: string) => {
-    const norm = code.trim().toUpperCase();
+    const norm = String(code || '').trim().toUpperCase();
+    if (!norm) return;
     setSelectedCodes((prev) => {
       const next = new Set(prev);
       if (next.has(norm)) {
@@ -172,20 +182,26 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
 
   const isAllCurrentPageSelected = useMemo(() => {
     if (pagedSites.length === 0) return false;
-    return pagedSites.every((s) => selectedCodes.has(s.siteCode.trim().toUpperCase()));
+    return pagedSites.every((s) => selectedCodes.has(String(s?.siteCode || '').trim().toUpperCase()));
   }, [pagedSites, selectedCodes]);
 
   const handleToggleSelectAllPage = () => {
     if (isAllCurrentPageSelected) {
       setSelectedCodes((prev) => {
         const next = new Set(prev);
-        pagedSites.forEach((s) => next.delete(s.siteCode.trim().toUpperCase()));
+        pagedSites.forEach((s) => {
+          const code = String(s?.siteCode || '').trim().toUpperCase();
+          if (code) next.delete(code);
+        });
         return next;
       });
     } else {
       setSelectedCodes((prev) => {
         const next = new Set(prev);
-        pagedSites.forEach((s) => next.add(s.siteCode.trim().toUpperCase()));
+        pagedSites.forEach((s) => {
+          const code = String(s?.siteCode || '').trim().toUpperCase();
+          if (code) next.add(code);
+        });
         return next;
       });
     }
@@ -370,25 +386,26 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {pagedSites.map((site) => {
+                {pagedSites.map((site, sIdx) => {
                   const cfg = STATUS_CONFIG[site.status] || {
                     color: '#64748b',
                     bgLight: '#f1f5f9',
                     border: '#cbd5e1',
                     textColor: '#334155',
                   };
+                  const codeNorm = String(site?.siteCode || '').trim().toUpperCase();
 
                   return (
-                    <React.Fragment key={site.id}>
+                    <React.Fragment key={site?.id || site?.siteCode || sIdx}>
                       <tr className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-2.5 px-3 text-center">
                           <button
                             type="button"
-                            onClick={() => handleToggleSiteSelect(site.siteCode)}
+                            onClick={() => handleToggleSiteSelect(site?.siteCode || '')}
                             className="cursor-pointer flex items-center justify-center mx-auto text-rose-600"
-                            title={selectedCodes.has(site.siteCode.trim().toUpperCase()) ? 'إلغاء التحديد' : 'تحديد للحذف'}
+                            title={codeNorm && selectedCodes.has(codeNorm) ? 'إلغاء التحديد' : 'تحديد للحذف'}
                           >
-                            {selectedCodes.has(site.siteCode.trim().toUpperCase()) ? (
+                            {codeNorm && selectedCodes.has(codeNorm) ? (
                               <CheckSquare className="w-4 h-4 text-rose-600" />
                             ) : (
                               <Square className="w-4 h-4 text-slate-300 hover:text-slate-500" />
