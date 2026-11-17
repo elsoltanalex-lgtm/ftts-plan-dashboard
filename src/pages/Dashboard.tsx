@@ -152,6 +152,28 @@ function mapWeRecordToSiteRecord(r: WeRecord, index = 0): SiteRecord {
   };
 }
 
+// Persistent Storage Key for Deleted Site Codes (guarantees survival across page refreshes)
+const FTTS_DELETED_CODES_KEY = 'ftts_deleted_site_codes_v3';
+
+function loadDeletedSiteCodes(): Set<string> {
+  try {
+    const raw = localStorage.getItem(FTTS_DELETED_CODES_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        return new Set(arr.map((c: string) => String(c).trim().toUpperCase()));
+      }
+    }
+  } catch { }
+  return new Set();
+}
+
+function persistDeletedSiteCodes(set: Set<string>) {
+  try {
+    localStorage.setItem(FTTS_DELETED_CODES_KEY, JSON.stringify(Array.from(set)));
+  } catch { }
+}
+
 export const Dashboard: React.FC = () => {
   const { user, isLoginModalOpen, closeLoginModal, openLoginModal, logout } = useAuth();
 
@@ -218,7 +240,7 @@ export const Dashboard: React.FC = () => {
   const [isDeletingQuick, setIsDeletingQuick] = useState(false);
 
   // Set of deleted site codes / IDs for instant optimistic UI reflection across fallback & database
-  const [deletedSiteCodes, setDeletedSiteCodes] = useState<Set<string>>(new Set());
+  const [deletedSiteCodes, setDeletedSiteCodes] = useState<Set<string>>(() => loadDeletedSiteCodes());
 
   // Live WE records and site codes from Supabase cloud database
   const {
@@ -261,7 +283,8 @@ export const Dashboard: React.FC = () => {
       addCodeLocally(code);
       setDeletedSiteCodes((prev) => {
         const next = new Set(prev);
-        next.delete(code);
+        next.delete(String(code).trim().toUpperCase());
+        persistDeletedSiteCodes(next);
         return next;
       });
     }
@@ -282,8 +305,9 @@ export const Dashboard: React.FC = () => {
         // 1. Optimistic instant local removal
         setDeletedSiteCodes((prev) => {
           const next = new Set(prev);
-          next.add(siteCode);
-          if (siteId) next.add(siteId);
+          if (siteCode) next.add(String(siteCode).trim().toUpperCase());
+          if (siteId) next.add(String(siteId).trim().toUpperCase());
+          persistDeletedSiteCodes(next);
           return next;
         });
         _removeRecordLocally(siteCode);
@@ -340,7 +364,11 @@ export const Dashboard: React.FC = () => {
       baseSites = WE_EXCEL_SITES;
     }
     if (deletedSiteCodes.size === 0) return baseSites;
-    return baseSites.filter((s) => !deletedSiteCodes.has(s.siteCode) && !deletedSiteCodes.has(s.id));
+    return baseSites.filter((s) => {
+      const c = String(s.siteCode || '').trim().toUpperCase();
+      const id = String(s.id || '').trim().toUpperCase();
+      return !deletedSiteCodes.has(c) && !deletedSiteCodes.has(id);
+    });
   }, [weCentralRecords, deletedSiteCodes]);
 
   // Combined FTTS dataset: WE (1029 sites) + Vodafone (699 sites) + Orange (480 sites) = Total FTTS Plan (2208 sites)
@@ -428,7 +456,11 @@ export const Dashboard: React.FC = () => {
     if (!user) return [];
     let base = currentScopeData;
     if (deletedSiteCodes.size > 0) {
-      base = base.filter((s) => !deletedSiteCodes.has(s.siteCode) && !deletedSiteCodes.has(s.id));
+      base = base.filter((s) => {
+        const c = String(s.siteCode || '').trim().toUpperCase();
+        const id = String(s.id || '').trim().toUpperCase();
+        return !deletedSiteCodes.has(c) && !deletedSiteCodes.has(id);
+      });
     }
     if (user.role === 'admin' || user.sector === 'ALL') {
       return base;
@@ -1793,7 +1825,8 @@ export const Dashboard: React.FC = () => {
             }
             setDeletedSiteCodes((prev) => {
               const next = new Set(prev);
-              siteCodes.forEach((c) => next.add(c.toUpperCase()));
+              siteCodes.forEach((c) => next.add(String(c).trim().toUpperCase()));
+              persistDeletedSiteCodes(next);
               return next;
             });
           } catch (err: any) {
@@ -2002,7 +2035,8 @@ export const Dashboard: React.FC = () => {
             }
             setDeletedSiteCodes((prev) => {
               const next = new Set(prev);
-              siteCodes.forEach((c) => next.add(c.toUpperCase()));
+              siteCodes.forEach((c) => next.add(String(c).trim().toUpperCase()));
+              persistDeletedSiteCodes(next);
               return next;
             });
             setIsQuickDeleteModalOpen(false);

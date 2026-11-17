@@ -68,9 +68,30 @@ async function fetchAllRowsFromCandidateTables(): Promise<{ rows: any[]; tableNa
   return { rows: [], tableName: 'we' };
 }
 
+const WE_STORAGE_KEY = 'we_records_live_v3';
+
+export function loadStoredWeRecords(): WeRecord[] {
+  try {
+    const raw = localStorage.getItem(WE_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map(normalizeRecord);
+      }
+    }
+  } catch { }
+  return [];
+}
+
+export function saveStoredWeRecords(records: WeRecord[]) {
+  try {
+    localStorage.setItem(WE_STORAGE_KEY, JSON.stringify(records));
+  } catch { }
+}
+
 // ── Fetch all records from Supabase ──
 export function useWeRecords() {
-  const [records, setRecords] = useState<WeRecord[]>([]);
+  const [records, setRecords] = useState<WeRecord[]>(() => loadStoredWeRecords());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,15 +103,36 @@ export function useWeRecords() {
       const { rows } = await fetchAllRowsFromCandidateTables();
 
       if (rows.length > 0) {
-        setRecords(rows.map(normalizeRecord));
+        const cloudRecords = rows.map(normalizeRecord);
+        const local = loadStoredWeRecords();
+        const mergedMap = new Map<string, WeRecord>();
+        local.forEach((r) => {
+          const c = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
+          if (c) mergedMap.set(c, r);
+        });
+        cloudRecords.forEach((r) => {
+          const c = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
+          if (c) mergedMap.set(c, r);
+        });
+        const finalRecords = Array.from(mergedMap.values());
+        saveStoredWeRecords(finalRecords);
+        setRecords(finalRecords);
         return;
       }
 
-      // 2. Fallback to local server if Supabase table is empty or error
+      // 2. Check localStorage if Supabase returned 0 rows
+      const local = loadStoredWeRecords();
+      if (local.length > 0) {
+        setRecords(local);
+        return;
+      }
+
+      // 3. Fallback to local server if Supabase table is empty or error
       try {
         const res = await fetch(`${LOCAL_API_BASE}/records`);
         const localData = await res.json();
         if (localData.success && localData.records && localData.records.length > 0) {
+          saveStoredWeRecords(localData.records);
           setRecords(localData.records);
           return;
         }
@@ -108,45 +150,51 @@ export function useWeRecords() {
   // Instant local optimistic update for immediate dashboard/table reflection
   const updateOrAddRecordLocally = useCallback((newOrUpdated: WeRecord) => {
     setRecords((prev) => {
-      const siteCode = newOrUpdated['site code'] || (newOrUpdated as any).site_code;
-      const id = newOrUpdated._id || (newOrUpdated as any).id;
+      const siteCode = String(newOrUpdated['site code'] || (newOrUpdated as any).site_code || '').trim().toUpperCase();
+      const id = String(newOrUpdated._id || (newOrUpdated as any).id || '').trim().toUpperCase();
 
-      const idx = prev.findIndex((r) =>
-        (id && (r._id === id || (r as any).id === id)) ||
-        (siteCode && (r['site code'] === siteCode || (r as any).site_code === siteCode))
-      );
+      const idx = prev.findIndex((r) => {
+        const rId = String(r._id || (r as any).id || '').trim().toUpperCase();
+        const rCode = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
+        return (id && rId === id) || (siteCode && rCode === siteCode);
+      });
 
+      let next: WeRecord[];
       if (idx >= 0) {
-        const next = [...prev];
+        next = [...prev];
         next[idx] = { ...next[idx], ...newOrUpdated };
-        return next;
       } else {
-        return [newOrUpdated, ...prev];
+        next = [newOrUpdated, ...prev];
       }
+      saveStoredWeRecords(next);
+      return next;
     });
   }, []);
 
   const removeRecordLocally = useCallback((idOrCode: string) => {
-    setRecords((prev) =>
-      prev.filter(
-        (r) =>
-          r._id !== idOrCode &&
-          (r as any).id !== idOrCode &&
-          r['site code'] !== idOrCode &&
-          (r as any).site_code !== idOrCode
-      )
-    );
+    const clean = String(idOrCode || '').trim().toUpperCase();
+    setRecords((prev) => {
+      const next = prev.filter((r) => {
+        const rId = String(r._id || (r as any).id || '').trim().toUpperCase();
+        const rCode = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
+        return rId !== clean && rCode !== clean;
+      });
+      saveStoredWeRecords(next);
+      return next;
+    });
   }, []);
 
   const removeRecordsLocally = useCallback((idsOrCodes: string[]) => {
     const set = new Set(idsOrCodes.map((s) => String(s || '').trim().toUpperCase()));
-    setRecords((prev) =>
-      prev.filter((r) => {
+    setRecords((prev) => {
+      const next = prev.filter((r) => {
         const id = String(r._id || (r as any).id || '').trim().toUpperCase();
         const code = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
         return !set.has(id) && !set.has(code);
-      })
-    );
+      });
+      saveStoredWeRecords(next);
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -492,6 +540,22 @@ export async function saveRecord(
       }
     }
 
+    // Save locally immediately to guarantee persistence on reload
+    const currentStored = loadStoredWeRecords();
+    const cleanCode = (siteCode || '').trim().toUpperCase();
+    const sIdx = currentStored.findIndex((r) => {
+      const c = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
+      return c === cleanCode;
+    });
+    let nextStored: WeRecord[];
+    if (sIdx >= 0) {
+      nextStored = [...currentStored];
+      nextStored[sIdx] = { ...nextStored[sIdx], ...fullData };
+    } else {
+      nextStored = [fullData, ...currentStored];
+    }
+    saveStoredWeRecords(nextStored);
+
     if (cloudSaved && savedRow) {
       return {
         success: true,
@@ -623,7 +687,17 @@ export async function deleteRecord(idOrCode: string): Promise<{ success: boolean
     const clean = (idOrCode || '').trim();
     if (!clean) return { success: false, error: 'معرف أو كود الموقع مطلوب' };
 
-    // 1. Delete from Supabase candidate tables
+    // 1. Delete from local persistent storage immediately
+    const cleanNorm = clean.toUpperCase();
+    const stored = loadStoredWeRecords();
+    const remaining = stored.filter((r) => {
+      const c = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
+      const id = String(r._id || (r as any).id || '').trim().toUpperCase();
+      return c !== cleanNorm && id !== cleanNorm;
+    });
+    saveStoredWeRecords(remaining);
+
+    // 2. Delete from Supabase candidate tables
     for (const table of WE_TABLE_CANDIDATES) {
       try {
         await supabase
@@ -635,7 +709,7 @@ export async function deleteRecord(idOrCode: string): Promise<{ success: boolean
       } catch { }
     }
 
-    // 2. Also attempt cleanup on local server fallback
+    // 3. Also attempt cleanup on local server fallback
     try {
       await fetch(`${LOCAL_API_BASE}/records/${encodeURIComponent(clean)}`, { method: 'DELETE' });
     } catch { }
@@ -652,6 +726,16 @@ export async function deleteRecordsBulk(idsOrCodes: string[]): Promise<{ success
     if (!idsOrCodes || idsOrCodes.length === 0) return { success: true, count: 0 };
     const cleanList = idsOrCodes.map((s) => String(s || '').trim()).filter(Boolean);
     if (cleanList.length === 0) return { success: true, count: 0 };
+
+    // 1. Delete from local persistent storage immediately
+    const cleanNormSet = new Set(cleanList.map((c) => c.toUpperCase()));
+    const stored = loadStoredWeRecords();
+    const remaining = stored.filter((r) => {
+      const c = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
+      const id = String(r._id || (r as any).id || '').trim().toUpperCase();
+      return !cleanNormSet.has(c) && !cleanNormSet.has(id);
+    });
+    saveStoredWeRecords(remaining);
 
     const batchSize = 60;
     for (let i = 0; i < cleanList.length; i += batchSize) {
