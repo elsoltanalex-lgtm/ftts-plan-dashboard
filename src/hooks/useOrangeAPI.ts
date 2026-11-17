@@ -198,6 +198,23 @@ export function useOrangeAPI() {
     }
   }, []);
 
+  const deleteOrangeRecordsBulk = useCallback(async (codes: string[]): Promise<{ success: boolean; count?: number; error?: string }> => {
+    try {
+      if (!codes || codes.length === 0) return { success: true, count: 0 };
+      const codeSet = new Set(codes.map((c) => String(c || '').trim().toUpperCase()));
+      const current = loadStoredOrangeRecords();
+      const filtered = current.filter((r) => {
+        const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
+        return !codeSet.has(c);
+      });
+      saveStoredOrangeRecords(filtered);
+      setOrangeRecords(filtered);
+      return { success: true, count: current.length - filtered.length };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'فشل حذف مواقع Orange' };
+    }
+  }, []);
+
   const bulkImportOrangeRecords = useCallback(async (recordsToImport: OrangeRecord[]): Promise<{ success: boolean; savedCount: number; error?: string }> => {
     try {
       const current = loadStoredOrangeRecords();
@@ -251,6 +268,7 @@ export function useOrangeAPI() {
     refetchOrangeRecords,
     saveOrangeRecord,
     deleteOrangeRecord,
+    deleteOrangeRecordsBulk,
     bulkImportOrangeRecords,
   };
 }

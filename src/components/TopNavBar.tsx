@@ -170,10 +170,10 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
     },
   ];
 
-  // The 3 Sub-navigation Tabs under "الإتاحة" (Availability):
+  // The 3 Sub-navigation Tabs under "الإتاحة":
   // 1. الإتاحة (Availability) - Linked exclusively to the 840 sites Excel sheet
-  // 2. التحول الرقمي (Digital Transformation)
-  // 3. البريد (Egypt Post)
+  // 2. Digital Transformation
+  // 3. Egypt Post
   const availabilitySubTabs = [
     {
       id: 'ETAHA' as ActiveProjectScope,
@@ -190,8 +190,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
     },
     {
       id: 'TAHAWOL' as ActiveProjectScope,
-      name: 'التحول الرقمي',
-      nameEn: 'Digital Transformation',
+      name: 'Digital Transformation',
+      nameEn: '',
       arSubtitle: 'مشروعات الوزارات والهيئات الحكومية',
       icon: Landmark,
       count: 0,
@@ -203,9 +203,9 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
     },
     {
       id: 'POST' as ActiveProjectScope,
-      name: 'البريد',
-      nameEn: 'Egypt Post',
-      arSubtitle: 'فروع ومكاتب البريد المصري',
+      name: 'Egypt Post',
+      nameEn: '',
+      arSubtitle: 'فروع ومكاتب البريد',
       icon: Mail,
       count: 0,
       countLabel: 'مهيأ لاستقبال البيانات',
@@ -254,21 +254,19 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
           {/* Section 1: FTTS Plan */}
           <div ref={fttsRef} className="relative">
             <div
-              className={`flex items-center justify-between p-3 rounded-xl border transition-all duration-200 cursor-pointer ${
-                isFttsActive
+              className={`flex items-center justify-between p-3 rounded-xl border transition-all duration-200 cursor-pointer ${isFttsActive
                   ? 'bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 text-white shadow-md ring-2 ring-blue-500/30 border-blue-600'
                   : 'bg-slate-50/90 hover:bg-slate-100 border-slate-200 text-slate-700'
-              }`}
+                }`}
               onClick={handleSelectFtts}
             >
               {/* Left Content */}
               <div className="flex items-center gap-3 text-left flex-1 min-w-0">
                 <div
-                  className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    isFttsActive
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isFttsActive
                       ? 'bg-white/15 text-white'
                       : 'bg-white text-blue-600 shadow-2xs border border-slate-200'
-                  }`}
+                    }`}
                 >
                   <Radio className="w-5 h-5" />
                 </div>
@@ -278,17 +276,15 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                       FTTS Plan
                     </span>
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        isFttsActive ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700'
-                      }`}
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isFttsActive ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700'
+                        }`}
                     >
                       {stats.allCount.toLocaleString()} Sites
                     </span>
                   </div>
                   <span
-                    className={`text-[11px] block mt-0.5 truncate ${
-                      isFttsActive ? 'text-blue-100' : 'text-slate-400'
-                    }`}
+                    className={`text-[11px] block mt-0.5 truncate ${isFttsActive ? 'text-blue-100' : 'text-slate-400'
+                      }`}
                   >
                     All Operators, WE, Vodafone, Orange
                   </span>
@@ -303,18 +299,16 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                   setIsFttsDropdownOpen((prev) => !prev);
                   setIsAvailabilityDropdownOpen(false);
                 }}
-                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ml-2 ${
-                  isFttsActive
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ml-2 ${isFttsActive
                     ? 'bg-white/15 hover:bg-white/25 text-white border border-white/20'
                     : 'bg-white hover:bg-slate-200/80 text-slate-600 border border-slate-200 shadow-2xs'
-                }`}
+                  }`}
                 title="Open FTTS Operators Dropdown"
               >
                 <span className="hidden sm:inline text-[11px]">Operators (4)</span>
                 <ChevronDown
-                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                    isFttsDropdownOpen ? 'rotate-180' : ''
-                  }`}
+                  className={`w-3.5 h-3.5 transition-transform duration-200 ${isFttsDropdownOpen ? 'rotate-180' : ''
+                    }`}
                 />
               </button>
             </div>
@@ -337,11 +331,10 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                         key={op.id}
                         type="button"
                         onClick={() => handleSelectOperator(op.id)}
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all duration-150 cursor-pointer ${
-                          isSelected
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all duration-150 cursor-pointer ${isSelected
                             ? 'bg-blue-50/90 text-blue-900 border border-blue-200 font-bold'
                             : 'hover:bg-slate-50 text-slate-700 font-medium'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-2.5">
                           <span className={`w-2.5 h-2.5 rounded-full ${op.badgeDot}`} />
@@ -367,45 +360,41 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
           {/* Section 2: Availability (الإتاحة) */}
           <div ref={availabilityRef} className="relative">
             <div
-              className={`flex items-center justify-between p-3 rounded-xl border transition-all duration-200 cursor-pointer ${
-                isAvailabilityActive
+              className={`flex items-center justify-between p-3 rounded-xl border transition-all duration-200 cursor-pointer ${isAvailabilityActive
                   ? 'bg-gradient-to-r from-teal-700 via-emerald-700 to-teal-800 text-white shadow-md ring-2 ring-emerald-500/30 border-teal-600'
                   : 'bg-slate-50/90 hover:bg-slate-100 border-slate-200 text-slate-700'
-              }`}
+                }`}
               onClick={handleSelectAvailability}
             >
               {/* Left Content */}
               <div className="flex items-center gap-3 text-left flex-1 min-w-0">
                 <div
-                  className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    isAvailabilityActive
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isAvailabilityActive
                       ? 'bg-white/15 text-white'
                       : 'bg-white text-emerald-600 shadow-2xs border border-slate-200'
-                  }`}
+                    }`}
                 >
                   <Globe className="w-5 h-5" />
                 </div>
                 <div className="truncate">
                   <div className="flex items-center gap-2">
                     <span className="font-extrabold text-sm sm:text-base leading-tight tracking-tight">
-                      الإتاحة (Availability)
+                      الإتاحة
                     </span>
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                        isAvailabilityActive
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${isAvailabilityActive
                           ? 'bg-white/20 text-white'
                           : 'bg-emerald-100 text-emerald-800'
-                      }`}
+                        }`}
                     >
                       {(stats.etahaCount || 840).toLocaleString()} Projects
                     </span>
                   </div>
                   <span
-                    className={`text-[11px] block mt-0.5 truncate ${
-                      isAvailabilityActive ? 'text-teal-100' : 'text-slate-400'
-                    }`}
+                    className={`text-[11px] block mt-0.5 truncate ${isAvailabilityActive ? 'text-teal-100' : 'text-slate-400'
+                      }`}
                   >
-                    1. الإتاحة • 2. التحول الرقمي • 3. البريد
+                    الإتاحة • Digital Transformation • Egypt Post
                   </span>
                 </div>
               </div>
@@ -418,18 +407,16 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                   setIsAvailabilityDropdownOpen((prev) => !prev);
                   setIsFttsDropdownOpen(false);
                 }}
-                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ml-2 ${
-                  isAvailabilityActive
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ml-2 ${isAvailabilityActive
                     ? 'bg-white/15 hover:bg-white/25 text-white border border-white/20'
                     : 'bg-white hover:bg-slate-200/80 text-slate-600 border border-slate-200 shadow-2xs'
-                }`}
+                  }`}
                 title="فتح قائمة الأقسام الفرعية للإتاحة"
               >
                 <span className="hidden sm:inline text-[11px]">الأقسام (3)</span>
                 <ChevronDown
-                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                    isAvailabilityDropdownOpen ? 'rotate-180' : ''
-                  }`}
+                  className={`w-3.5 h-3.5 transition-transform duration-200 ${isAvailabilityDropdownOpen ? 'rotate-180' : ''
+                    }`}
                 />
               </button>
             </div>
@@ -457,11 +444,10 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                         key={subTab.id}
                         type="button"
                         onClick={() => handleSelectAvailabilitySubTab(subTab.id)}
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all duration-150 cursor-pointer ${
-                          isSelected
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all duration-150 cursor-pointer ${isSelected
                             ? 'bg-teal-50/90 text-teal-900 border border-teal-200 font-bold'
                             : 'hover:bg-slate-50 text-slate-700 font-medium'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-2.5">
                           <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
@@ -469,7 +455,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                           </div>
                           <div>
                             <span className="text-xs sm:text-sm font-bold block">{subTab.name}</span>
-                            <span className="text-[10px] text-slate-400 block">{subTab.nameEn}</span>
+                            {subTab.nameEn ? <span className="text-[10px] text-slate-400 block">{subTab.nameEn}</span> : null}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -493,11 +479,10 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
             <button
               type="button"
               onClick={onSelectUploaded}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeScope === 'UPLOADED'
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeScope === 'UPLOADED'
                   ? 'bg-purple-700 text-white shadow-sm'
                   : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200'
-              }`}
+                }`}
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span>Custom Uploaded File:</span>
@@ -535,11 +520,10 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                     type="button"
                     id={`btn-operator-${op.id.toLowerCase()}`}
                     onClick={() => handleSelectOperator(op.id)}
-                    className={`relative p-3.5 rounded-xl border text-left transition-all duration-200 cursor-pointer group flex flex-col justify-between ${
-                      isSelected
+                    className={`relative p-3.5 rounded-xl border text-left transition-all duration-200 cursor-pointer group flex flex-col justify-between ${isSelected
                         ? op.activeGradient
                         : 'bg-white hover:bg-slate-50/90 border-slate-200/90 text-slate-700 shadow-xs hover:shadow-sm'
-                    }`}
+                      }`}
                   >
                     {/* Top Row: Icon, Title, and Brand dot */}
                     <div className="flex items-start justify-between gap-2 mb-2">
@@ -550,9 +534,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                             {op.name}
                           </h3>
                           <span
-                            className={`text-[10px] font-semibold block mt-0.5 truncate ${
-                              isSelected ? 'text-white/80' : 'text-slate-400'
-                            }`}
+                            className={`text-[10px] font-semibold block mt-0.5 truncate ${isSelected ? 'text-white/80' : 'text-slate-400'
+                              }`}
                           >
                             {op.arSubtitle}
                           </span>
@@ -575,9 +558,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                     <div className="pt-2 border-t border-slate-100/30 flex items-end justify-between">
                       <div>
                         <span
-                          className={`text-[10px] block font-medium ${
-                            isSelected ? 'text-white/70' : 'text-slate-400'
-                          }`}
+                          className={`text-[10px] block font-medium ${isSelected ? 'text-white/70' : 'text-slate-400'
+                            }`}
                         >
                           Total Sites
                         </span>
@@ -588,18 +570,16 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
 
                       <div className="text-right">
                         <span
-                          className={`text-[10px] block font-medium ${
-                            isSelected ? 'text-white/70' : 'text-slate-400'
-                          }`}
+                          className={`text-[10px] block font-medium ${isSelected ? 'text-white/70' : 'text-slate-400'
+                            }`}
                         >
                           Network Links
                         </span>
                         <span
-                          className={`font-mono text-xs font-bold px-2 py-0.5 rounded-md inline-block ${
-                            isSelected
+                          className={`font-mono text-xs font-bold px-2 py-0.5 rounded-md inline-block ${isSelected
                               ? 'bg-white/20 text-white'
                               : 'bg-slate-100 text-slate-700'
-                          }`}
+                            }`}
                         >
                           {op.links.toLocaleString()}
                         </span>
@@ -639,21 +619,19 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                       onChangeScope(subTab.id);
                       setIsAvailabilityDropdownOpen(false);
                     }}
-                    className={`relative p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer group flex flex-col justify-between ${
-                      isSelected
+                    className={`relative p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer group flex flex-col justify-between ${isSelected
                         ? subTab.activeGradient
                         : 'bg-white hover:bg-slate-50/90 border-slate-200/90 text-slate-700 shadow-xs hover:shadow-sm'
-                    }`}
+                      }`}
                   >
                     {/* Top Row: Icon, Title, and Brand dot */}
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                            isSelected
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${isSelected
                               ? 'bg-white/20 text-white'
                               : 'bg-slate-100 text-slate-700 group-hover:bg-teal-50 group-hover:text-teal-700'
-                          }`}
+                            }`}
                         >
                           <Icon className="w-5 h-5" />
                         </div>
@@ -661,13 +639,14 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                           <h3 className="font-black text-sm sm:text-base leading-tight tracking-tight truncate">
                             {subTab.name}
                           </h3>
-                          <span
-                            className={`text-[10px] font-semibold block mt-0.5 truncate ${
-                              isSelected ? 'text-white/80' : 'text-slate-400'
-                            }`}
-                          >
-                            {subTab.nameEn}
-                          </span>
+                          {subTab.nameEn ? (
+                            <span
+                              className={`text-[10px] font-semibold block mt-0.5 truncate ${isSelected ? 'text-white/80' : 'text-slate-400'
+                                }`}
+                            >
+                              {subTab.nameEn}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
 
@@ -684,9 +663,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                     </div>
 
                     <p
-                      className={`text-xs mb-3 font-medium ${
-                        isSelected ? 'text-white/90' : 'text-slate-500'
-                      }`}
+                      className={`text-xs mb-3 font-medium ${isSelected ? 'text-white/90' : 'text-slate-500'
+                        }`}
                     >
                       {subTab.arSubtitle}
                     </p>
@@ -697,9 +675,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                         {subTab.id === 'ETAHA' ? (
                           <>
                             <span
-                              className={`text-[10px] block font-medium ${
-                                isSelected ? 'text-white/70' : 'text-slate-400'
-                              }`}
+                              className={`text-[10px] block font-medium ${isSelected ? 'text-white/70' : 'text-slate-400'
+                                }`}
                             >
                               إجمالي مشروعات الإكسيل
                             </span>
@@ -709,9 +686,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                           </>
                         ) : (
                           <span
-                            className={`text-xs font-bold ${
-                              isSelected ? 'text-white' : 'text-slate-600'
-                            }`}
+                            className={`text-xs font-bold ${isSelected ? 'text-white' : 'text-slate-600'
+                              }`}
                           >
                             {subTab.countLabel}
                           </span>
@@ -719,11 +695,10 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                       </div>
 
                       <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          isSelected
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isSelected
                             ? 'bg-white/20 text-white border border-white/30'
                             : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                        }`}
+                          }`}
                       >
                         {subTab.badge}
                       </span>

@@ -193,6 +193,23 @@ export function useVodafoneAPI() {
     }
   }, []);
 
+  const deleteVodafoneRecordsBulk = useCallback(async (codes: string[]): Promise<{ success: boolean; count?: number; error?: string }> => {
+    try {
+      if (!codes || codes.length === 0) return { success: true, count: 0 };
+      const codeSet = new Set(codes.map((c) => String(c || '').trim().toUpperCase()));
+      const current = loadStoredVodafoneRecords();
+      const filtered = current.filter((r) => {
+        const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
+        return !codeSet.has(c);
+      });
+      saveStoredVodafoneRecords(filtered);
+      setVodafoneRecords(filtered);
+      return { success: true, count: current.length - filtered.length };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'فشل حذف مواقع Vodafone' };
+    }
+  }, []);
+
   const bulkImportVodafoneRecords = useCallback(async (recordsToImport: VodafoneRecord[]): Promise<{ success: boolean; savedCount: number; error?: string }> => {
     try {
       const current = loadStoredVodafoneRecords();
@@ -245,6 +262,7 @@ export function useVodafoneAPI() {
     refetchVodafoneRecords,
     saveVodafoneRecord,
     deleteVodafoneRecord,
+    deleteVodafoneRecordsBulk,
     bulkImportVodafoneRecords,
   };
 }

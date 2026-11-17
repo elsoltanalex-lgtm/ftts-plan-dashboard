@@ -57,6 +57,11 @@ export interface SiteRecord {
   txAvail?: string;
   executedBy?: string;
   totalCost?: number | string;
+  // Etaha attributes
+  externalPath?: string;
+  internalPath?: string;
+  deliveryStatus?: string;
+  excelStatus?: string;
   rawRecord?: any;
 }
 
@@ -83,6 +88,10 @@ export interface FilterState {
   expectedDate: string;
   searchQuery: string;
   subSector?: string | string[]; // الإدارة المختصة (القطاع) for Orange 4-tier hierarchy
+  // Etaha-specific 3 axes of classification (Multi-Select)
+  externalPath?: string | string[];   // المسار الخارجي
+  excelStatus?: string | string[];    // موقف الإكسيل
+  deliveryStatus?: string | string[]; // موقف التسليم
 }
 
 export interface KpiData {

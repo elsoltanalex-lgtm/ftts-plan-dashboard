@@ -4,8 +4,9 @@
 import { useState, useCallback } from 'react';
 import type { SiteRecord } from '../types/dashboard';
 import { ETAHA_RAW_RECORDS, ETAHA_MASTER_SITES, type EtahaRecord } from '../data/etahaSites';
+import { supabase } from '../lib/supabase';
 
-const STORAGE_KEY = 'availability_etaha_records_v1';
+const STORAGE_KEY = 'availability_etaha_records_v2';
 
 let inMemoryEtahaRecords: EtahaRecord[] = [];
 
@@ -128,10 +129,14 @@ export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecor
     classification: rawStatus || 'إتاحة',
     obstacleReason,
     obstacleType: rawStatus.includes('معوق') ? 'معوقات' : rawStatus.includes('تعذر') ? 'تعذر' : '',
-    deliveryArea: r['موقف التسليم'] || '',
+    deliveryArea: r['موقف التسليم'] || r['موقف_التسليم'] || '',
     expectedDate,
     progressPercent,
     notes: [r['ملحوظه في حاله عدم الانتهاء'], r['اسم ورقم تليفون مدير الادارة']].filter(Boolean).join(' | '),
+    externalPath: String(r['المسار الخارجي'] || r['المسار_الخارجي'] || '').trim(),
+    internalPath: String(r['المسار الداخلى'] || r['المسار_الداخلى'] || r['موقف اللحامات'] || r['موقف_اللحامات'] || '').trim(),
+    deliveryStatus: String(r['موقف التسليم'] || r['موقف_التسليم'] || '').trim(),
+    excelStatus: rawStatus || 'إتاحة',
     rawRecord: r,
   };
 }
@@ -192,9 +197,44 @@ export function useEtahaAPI() {
       const filtered = current.filter((r) => String(r.Code || r.code || '').trim().toUpperCase() !== norm);
       saveStoredEtahaRecords(filtered);
       setEtahaRecords(filtered);
+
+      // Attempt deletion in Supabase if etaha table exists
+      for (const table of ['etaha', 'etaha_records', 'availability']) {
+        try {
+          await supabase.from(table).delete().or(`Code.eq."${norm}",code.eq."${norm}",id.eq."${norm}"`);
+        } catch { }
+      }
+
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err?.message || 'فشل حذف المشروع' };
+    }
+  }, []);
+
+  const deleteEtahaRecordsBulk = useCallback(async (codes: string[]): Promise<{ success: boolean; count?: number; error?: string }> => {
+    try {
+      if (!codes || codes.length === 0) return { success: true, count: 0 };
+      const codeSet = new Set(codes.map((c) => String(c || '').trim().toUpperCase()));
+      const current = loadStoredEtahaRecords();
+      const filtered = current.filter((r) => {
+        const c = String(r.Code || r.code || '').trim().toUpperCase();
+        return !codeSet.has(c);
+      });
+      saveStoredEtahaRecords(filtered);
+      setEtahaRecords(filtered);
+
+      // Attempt batch deletion in Supabase
+      const codeArray = Array.from(codeSet);
+      for (const table of ['etaha', 'etaha_records', 'availability']) {
+        try {
+          await supabase.from(table).delete().in('Code', codeArray);
+          await supabase.from(table).delete().in('code', codeArray);
+        } catch { }
+      }
+
+      return { success: true, count: current.length - filtered.length };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'فشل حذف مشاريع الإتاحة' };
     }
   }, []);
 
@@ -249,6 +289,7 @@ export function useEtahaAPI() {
     refetchEtahaRecords,
     saveEtahaRecord,
     deleteEtahaRecord,
+    deleteEtahaRecordsBulk,
     bulkImportEtahaRecords,
   };
 }

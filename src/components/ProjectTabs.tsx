@@ -34,7 +34,7 @@ export const ProjectTabs: React.FC<ProjectTabsProps> = ({
   const tabs = [
     {
       id: 'FTTS' as ActiveProjectScope,
-      title: 'خطة إف تي تي إس للمشغلين',
+      title: 'FTTS Plan',
       titleEn: 'FTTS Plan (WE, Vodafone, Orange)',
       count: counts.ftts,
       icon: Radio,
@@ -47,7 +47,7 @@ export const ProjectTabs: React.FC<ProjectTabsProps> = ({
     },
     {
       id: 'AVAILABILITY' as ActiveProjectScope,
-      title: 'الإتاحة (Availability)',
+      title: 'الإتاحة',
       titleEn: 'Availability Portal',
       count: counts.etaha,
       icon: Globe,
@@ -56,12 +56,12 @@ export const ProjectTabs: React.FC<ProjectTabsProps> = ({
       tagColor: 'bg-emerald-500/20 text-emerald-200 border-emerald-400/30',
       countColor: 'bg-white/20 text-white',
       isComingSoon: false,
-      subText: '1. الإتاحة • 2. التحول الرقمي • 3. البريد',
+      subText: 'الإتاحة • Digital Transformation • Egypt Post',
     },
     {
       id: 'TAHAWOL' as ActiveProjectScope,
-      title: 'بيان التحول الرقمي',
-      titleEn: 'Digital Transformation Project',
+      title: 'Digital Transformation',
+      titleEn: 'Digital Transformation',
       count: counts.tahawol,
       icon: Landmark,
       badge: 'بيان التحول الرقمى.xlsx',
@@ -73,7 +73,7 @@ export const ProjectTabs: React.FC<ProjectTabsProps> = ({
     },
     {
       id: 'POST' as ActiveProjectScope,
-      title: 'البريد المصري',
+      title: 'Egypt Post',
       titleEn: 'Egypt Post Project',
       count: 0,
       icon: Mail,
@@ -139,8 +139,8 @@ export const ProjectTabs: React.FC<ProjectTabsProps> = ({
               id={`tab-scope-${tab.id.toLowerCase()}`}
               onClick={() => handleTabClick(tab.id, tab.isComingSoon)}
               className={`flex items-center justify-between p-3 rounded-xl border text-right transition-all duration-200 cursor-pointer ${isActive
-                  ? tab.activeColor
-                  : 'bg-slate-50/80 hover:bg-slate-100 border-slate-200 text-slate-700'
+                ? tab.activeColor
+                : 'bg-slate-50/80 hover:bg-slate-100 border-slate-200 text-slate-700'
                 }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
@@ -184,8 +184,8 @@ export const ProjectTabs: React.FC<ProjectTabsProps> = ({
                 ) : (
                   <span
                     className={`text-[9px] font-bold px-2 py-0.5 rounded-full block border ${isActive
-                        ? 'bg-white/20 text-white border-white/30'
-                        : 'bg-amber-50 text-amber-800 border-amber-200'
+                      ? 'bg-white/20 text-white border-white/30'
+                      : 'bg-amber-50 text-amber-800 border-amber-200'
                       }`}
                   >
                     قريباً

@@ -1,10 +1,13 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { toPng } from 'html-to-image';
 import { Header } from '../components/Header';
 import { KpiCards } from '../components/KpiCards';
+import { EtahaKpiCards } from '../components/EtahaKpiCards';
 import { DonutChart } from '../components/DonutChart';
 import { SummaryTable } from '../components/SummaryTable';
 import { Filters } from '../components/Filters';
 import { SiteDetailsModal } from '../components/SiteDetailsModal';
+import { BulkDeleteModal } from '../components/BulkDeleteModal';
 import { ExcelUploaderModal } from '../components/ExcelUploaderModal';
 import { TopNavBar } from '../components/TopNavBar';
 import type { ActiveProjectScope } from '../components/TopNavBar';
@@ -15,11 +18,11 @@ import { WeeklyPerformanceLineChart } from '../components/WeeklyPerformanceLineC
 import { WeBulkImportModal } from '../components/WeBulkImportModal';
 import { LoginModal } from '../components/LoginModal';
 import { useAuth } from '../context/AuthContext';
-import { ShieldCheck, Building2, Eye, LogIn, Lock, LogOut, Globe, Trash2, PlusCircle, Edit3, X, Search, AlertTriangle, Landmark, Mail, PieChart, ChevronRight } from 'lucide-react';
+import { ShieldCheck, Building2, Eye, LogIn, Lock, LogOut, Globe, Trash2, PlusCircle, Edit3, X, Search, AlertTriangle, Landmark, Mail, PieChart, ChevronRight, Download, Loader2 } from 'lucide-react';
 import { isRecordInSector, toCanonicalSector } from '../utils/sectorPermissions';
 import { toFilterArray } from '../utils/filterUtils';
 import { getSiteCompetentAdmin } from '../data/siteAdminMapping';
-import { useWeRecords, useWeSiteCodes, exportToCSV, deleteRecord } from '../hooks/useWeAPI';
+import { useWeRecords, useWeSiteCodes, exportToCSV, deleteRecord, deleteRecordsBulk } from '../hooks/useWeAPI';
 import type { WeRecord } from '../config/fieldConfig';
 import { normalizeClassification } from '../config/fieldConfig';
 import { useOrangeAPI } from '../hooks/useOrangeAPI';
@@ -74,6 +77,9 @@ const initialFilters: FilterState = {
   expectedDate: '',
   searchQuery: '',
   subSector: '',
+  externalPath: [],
+  excelStatus: [],
+  deliveryStatus: [],
 };
 
 // Helper: Map a dynamic WeRecord from Supabase to SiteRecord format for dashboard strictly based on Excel
@@ -196,6 +202,7 @@ export const Dashboard: React.FC = () => {
     etahaSites,
     saveEtahaRecord,
     deleteEtahaRecord,
+    deleteEtahaRecordsBulk,
     bulkImportEtahaRecords,
     refetchEtahaRecords,
   } = useEtahaAPI();
@@ -216,7 +223,8 @@ export const Dashboard: React.FC = () => {
     loading: weRecordsLoading,
     refetch: refetchWeRecords,
     updateOrAddRecordLocally,
-    removeRecordLocally: _removeRecordLocally
+    removeRecordLocally: _removeRecordLocally,
+    removeRecordsLocally,
   } = useWeRecords();
   const {
     codes: weCentralCodes,
@@ -231,6 +239,7 @@ export const Dashboard: React.FC = () => {
     orangeSites,
     saveOrangeRecord,
     deleteOrangeRecord,
+    deleteOrangeRecordsBulk,
     bulkImportOrangeRecords,
     refetchOrangeRecords,
   } = useOrangeAPI();
@@ -358,6 +367,38 @@ export const Dashboard: React.FC = () => {
   const [modalFilterStatus, setModalFilterStatus] = useState<string | undefined>(undefined);
   // View mode toggle for Overall Sites Execution Status: 'graphical' (Donut + Summary Table) vs 'executive' (Detailed Rollout Report)
   const [executionViewMode, setExecutionViewMode] = useState<'graphical' | 'executive'>('graphical');
+  const [isExportingImage, setIsExportingImage] = useState(false);
+  const executionSectionRef = useRef<HTMLDivElement>(null);
+
+  const handleExportChartImage = useCallback(async () => {
+    if (!executionSectionRef.current) return;
+    setIsExportingImage(true);
+    try {
+      const dataUrl = await toPng(executionSectionRef.current, {
+        quality: 0.98,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        filter: (node: HTMLElement) => {
+          if (node?.id === 'btn-export-chart-image') return false;
+          return true;
+        },
+      });
+
+      const link = document.createElement('a');
+      const filename = executionViewMode === 'executive'
+        ? `Executive_Rollout_Report_${new Date().toISOString().slice(0, 10)}.png`
+        : `Execution_Status_Chart_${new Date().toISOString().slice(0, 10)}.png`;
+      link.download = filename;
+      link.href = dataUrl;
+      link.click();
+      setToastMessage('تم تحميل الرسم البياني بنجاح كصورة عالية الدقة 📸');
+    } catch (err) {
+      console.error('Failed to export chart image:', err);
+      setToastMessage('حدث خطأ أثناء تصدير الصورة، يرجى المحاولة مرة أخرى');
+    } finally {
+      setIsExportingImage(false);
+    }
+  }, [executionViewMode]);
 
   // Active base dataset according to selected project scope
   const currentScopeData = useMemo(() => {
@@ -471,6 +512,24 @@ export const Dashboard: React.FC = () => {
         const siteCls = String(site.classification || '').trim();
 
         const match = activeStatuses.some((fs) => {
+          if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+            if (fs === 'تم الانتهاء داخلي') {
+              const intVal = String(site.internalPath || site.rawRecord?.['المسار الداخلى'] || site.rawRecord?.['موقف اللحامات'] || '').trim();
+              const del = String(site.deliveryStatus || site.deliveryArea || site.rawRecord?.['موقف التسليم'] || '').trim();
+              const cls = String(site.excelStatus || site.classification || site.rawRecord?.['التصنيف'] || '').trim();
+              return intVal === 'تم الانتهاء' || intVal === 'تم الانتهاء بالكامل' || del === 'تم التسليم' || cls === 'تم الانتهاء والتسليم';
+            }
+            if (fs === 'تم الانتهاء خارجي') {
+              const ext = String(site.externalPath || site.rawRecord?.['المسار الخارجي'] || '').trim();
+              const cls = String(site.excelStatus || site.classification || site.rawRecord?.['التصنيف'] || '').trim();
+              return ext === 'تم الانتهاء' || cls === 'تم الانتهاء والتسليم' || cls.includes('تم خارجي');
+            }
+            if (fs === 'تم التسليم') {
+              const del = String(site.deliveryStatus || site.deliveryArea || site.rawRecord?.['موقف التسليم'] || '').trim();
+              const cls = String(site.excelStatus || site.classification || site.rawRecord?.['التصنيف'] || '').trim();
+              return del === 'تم التسليم' || cls === 'تم الانتهاء والتسليم';
+            }
+          }
           if (siteCat === fs || siteStatus === fs || siteCls === fs) return true;
           if (fs === 'المكتمل' || fs === 'Completed') return isClassificationCompleted(siteCat);
           if (fs === 'متعذر / معوقات' || fs === 'Blocked / On Hold') return isClassificationBlocked(siteCat);
@@ -547,6 +606,27 @@ export const Dashboard: React.FC = () => {
           notes.includes(searchQuery);
 
         if (!matchSearch) return false;
+      }
+
+      // 11. Etaha-Specific: 3 Classification Axes (المسار الخارجي، موقف الإكسيل، وموقف التسليم)
+      if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+        const activeExts = toFilterArray(filters.externalPath);
+        if (activeExts.length > 0) {
+          const siteExt = String(site.externalPath || site.rawRecord?.['المسار الخارجي'] || '').trim();
+          if (!activeExts.includes(siteExt)) return false;
+        }
+
+        const activeExcels = toFilterArray(filters.excelStatus);
+        if (activeExcels.length > 0) {
+          const siteExcel = String(site.excelStatus || site.classification || site.rawRecord?.['التصنيف'] || '').trim();
+          if (!activeExcels.includes(siteExcel)) return false;
+        }
+
+        const activeDels = toFilterArray(filters.deliveryStatus);
+        if (activeDels.length > 0) {
+          const siteDel = String(site.deliveryStatus || site.deliveryArea || site.rawRecord?.['موقف التسليم'] || '').trim();
+          if (!activeDels.includes(siteDel)) return false;
+        }
       }
 
       return true;
@@ -627,9 +707,31 @@ export const Dashboard: React.FC = () => {
           return false;
         }
       }
+
+      // 10. Etaha-Specific: 3 Classification Axes
+      if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+        const activeExts = toFilterArray(filters.externalPath);
+        if (activeExts.length > 0) {
+          const siteExt = String(site.externalPath || site.rawRecord?.['المسار الخارجي'] || '').trim();
+          if (!activeExts.includes(siteExt)) return false;
+        }
+
+        const activeExcels = toFilterArray(filters.excelStatus);
+        if (activeExcels.length > 0) {
+          const siteExcel = String(site.excelStatus || site.classification || site.rawRecord?.['التصنيف'] || '').trim();
+          if (!activeExcels.includes(siteExcel)) return false;
+        }
+
+        const activeDels = toFilterArray(filters.deliveryStatus);
+        if (activeDels.length > 0) {
+          const siteDel = String(site.deliveryStatus || site.deliveryArea || site.rawRecord?.['موقف التسليم'] || '').trim();
+          if (!activeDels.includes(siteDel)) return false;
+        }
+      }
+
       return true;
     });
-  }, [authorizedScopeData, filters.company, filters.expectedDate, filters.sector, filters.generalAdmin, filters.subSector, filters.competentAdmin, filters.central, filters.obstacleReason, filters.searchQuery, activeScope]);
+  }, [authorizedScopeData, filters.company, filters.expectedDate, filters.sector, filters.generalAdmin, filters.subSector, filters.competentAdmin, filters.central, filters.obstacleReason, filters.searchQuery, filters.externalPath, filters.excelStatus, filters.deliveryStatus, activeScope]);
 
   // Compute live KPIs reflecting the exact 8 Excel classifications dynamically
   const kpis: KpiData = useMemo(() => {
@@ -668,6 +770,33 @@ export const Dashboard: React.FC = () => {
       stalledCount: stalledSites,
       completionRate,
     };
+  }, [kpiScopeSites]);
+
+  // Compute Etaha KPI statistics (Total Sites, Internal Done, External Done, Delivered)
+  const etahaKpis = useMemo(() => {
+    const totalSites = kpiScopeSites.length;
+    let internalDone = 0;
+    let externalDone = 0;
+    let delivered = 0;
+
+    kpiScopeSites.forEach((site) => {
+      const ext = String(site.externalPath || site.rawRecord?.['المسار الخارجي'] || '').trim();
+      const intVal = String(site.internalPath || site.rawRecord?.['المسار الداخلى'] || site.rawRecord?.['موقف اللحامات'] || '').trim();
+      const del = String(site.deliveryStatus || site.deliveryArea || site.rawRecord?.['موقف التسليم'] || '').trim();
+      const cls = String(site.excelStatus || site.classification || site.rawRecord?.['التصنيف'] || '').trim();
+
+      if (ext === 'تم الانتهاء' || cls === 'تم الانتهاء والتسليم' || cls.includes('تم خارجي')) {
+        externalDone++;
+      }
+      if (intVal === 'تم الانتهاء' || intVal === 'تم الانتهاء بالكامل' || del === 'تم التسليم' || cls === 'تم الانتهاء والتسليم') {
+        internalDone++;
+      }
+      if (del === 'تم التسليم' || cls === 'تم الانتهاء والتسليم') {
+        delivered++;
+      }
+    });
+
+    return { totalSites, internalDone, externalDone, delivered };
   }, [kpiScopeSites]);
 
   // FTTS Operator cards stats scoped to user's authorized dataset
@@ -1029,11 +1158,23 @@ export const Dashboard: React.FC = () => {
           <>
             {/* 4. Summary KPI Cards ("Total Sites", "Completed", "In Progress", "Planned / Inspection") - Immediately below Mobile Operators */}
             <div className="mb-4">
-              <KpiCards
-                kpis={kpis}
-                activeStatusFilter={filters.status}
-                onSelectStatusFilter={handleStatusSelect}
-              />
+              {activeScope === 'ETAHA' || activeScope === 'AVAILABILITY' ? (
+                <EtahaKpiCards
+                  totalSites={etahaKpis.totalSites}
+                  internalDone={etahaKpis.internalDone}
+                  externalDone={etahaKpis.externalDone}
+                  delivered={etahaKpis.delivered}
+                  activeStatusFilter={filters.status}
+                  onSelectStatusFilter={handleStatusSelect}
+                  onClearStatusFilters={() => handleFilterChange('status', 'All')}
+                />
+              ) : (
+                <KpiCards
+                  kpis={kpis}
+                  activeStatusFilter={filters.status}
+                  onSelectStatusFilter={handleStatusSelect}
+                />
+              )}
             </div>
 
             {/* Quick Site Search Bar (شريط البحث السريع المباشر بكود أو اسم الموقع) */}
@@ -1066,11 +1207,10 @@ export const Dashboard: React.FC = () => {
                 <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
                   {filters.searchQuery ? (
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 ${
-                        filteredSites.length > 0 
-                          ? 'bg-sky-500/20 text-sky-200 border border-sky-400/30' 
+                      <span className={`text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 ${filteredSites.length > 0
+                          ? 'bg-sky-500/20 text-sky-200 border border-sky-400/30'
                           : 'bg-rose-500/20 text-rose-200 border border-rose-400/30'
-                      }`}>
+                        }`}>
                         <span>النتائج:</span>
                         <strong className="text-white font-mono text-sm">{filteredSites.length}</strong>
                         <span>موقع</span>
@@ -1132,6 +1272,7 @@ export const Dashboard: React.FC = () => {
                 onResetFilters={handleResetFilters}
                 sitesData={baseFilterSites}
                 selectedCompany={filters.company}
+                activeScope={activeScope}
               />
             </div>
 
@@ -1355,8 +1496,8 @@ export const Dashboard: React.FC = () => {
             )}
 
             {/* 7. Overall Sites Execution Status - with View Mode Toggle */}
-            <div className="mb-6 space-y-3">
-              {/* Section Header with View Mode Toggle */}
+            <div ref={executionSectionRef} className="mb-6 space-y-3">
+              {/* Section Header with View Mode Toggle & Export Image Button */}
               <div className="pbi-card p-3 bg-white/95 rounded-2xl border border-slate-200/90 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-200">
@@ -1375,33 +1516,57 @@ export const Dashboard: React.FC = () => {
                   </div>
                 </div>
 
-                {/* View Mode Toggle Controls */}
-                <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 shrink-0 self-stretch sm:self-auto">
-                  {/* Option 1: Graphical View */}
+                <div className="flex items-center gap-2 flex-wrap self-stretch sm:self-auto">
+                  {/* Export Chart as Image Button */}
                   <button
                     type="button"
-                    onClick={() => setExecutionViewMode('graphical')}
-                    className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${executionViewMode === 'graphical'
-                        ? 'bg-white text-blue-900 shadow-sm border border-slate-200'
-                        : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                    id="btn-export-chart-image"
+                    onClick={handleExportChartImage}
+                    disabled={isExportingImage}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-300 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
+                    title="تحميل وتصدير الموقف العام للتنفيذ كصورة عالية الدقة PNG"
                   >
-                    <span>📊</span>
-                    <span>العرض الرسومي</span>
+                    {isExportingImage ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-600" />
+                        <span>جارِ التصدير...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-3.5 h-3.5 text-sky-600" />
+                        <span>تصدير الرسم البياني كصورة</span>
+                      </>
+                    )}
                   </button>
 
-                  {/* Option 2: Executive Detailed Report View */}
-                  <button
-                    type="button"
-                    onClick={() => setExecutionViewMode('executive')}
-                    className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${executionViewMode === 'executive'
+                  {/* View Mode Toggle Controls */}
+                  <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 shrink-0">
+                    {/* Option 1: Graphical View */}
+                    <button
+                      type="button"
+                      onClick={() => setExecutionViewMode('graphical')}
+                      className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${executionViewMode === 'graphical'
+                        ? 'bg-white text-blue-900 shadow-sm border border-slate-200'
+                        : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                    >
+                      <span>📊</span>
+                      <span>العرض الرسومي</span>
+                    </button>
+
+                    {/* Option 2: Executive Detailed Report View */}
+                    <button
+                      type="button"
+                      onClick={() => setExecutionViewMode('executive')}
+                      className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${executionViewMode === 'executive'
                         ? 'bg-gradient-to-r from-slate-900 to-slate-800 text-white shadow-sm border border-slate-700'
                         : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                  >
-                    <span>📋</span>
-                    <span>العرض التنفيذي التفصيلي</span>
-                  </button>
+                        }`}
+                    >
+                      <span>📋</span>
+                      <span>العرض التنفيذي التفصيلي</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1437,8 +1602,8 @@ export const Dashboard: React.FC = () => {
                       onOpenDetailsModal={handleOpenDetails}
                       companyVariant={
                         filters.company === 'Orange' ? 'orange' :
-                        filters.company === 'Vodafone' ? 'vodafone' :
-                        activeScope === 'ETAHA' ? 'etaha' : 'we'
+                          filters.company === 'Vodafone' ? 'vodafone' :
+                            activeScope === 'ETAHA' ? 'etaha' : 'we'
                       }
                       onAddNewSite={() => {
                         if (filters.company === 'Orange') {
@@ -1583,6 +1748,29 @@ export const Dashboard: React.FC = () => {
             setToastMessage(`تم حذف وإلغاء موقع Orange (${code}) بنجاح ✅`);
           } else {
             handleDeleteSite(siteOrCode);
+          }
+        }}
+        onDeleteBulkSites={async (siteCodes) => {
+          if (!siteCodes || siteCodes.length === 0) return;
+          try {
+            if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+              await deleteEtahaRecordsBulk(siteCodes);
+              setToastMessage(`تم حذف ${siteCodes.length} مشروع بنجاح من قاعدة بيانات الإتاحة ✅`);
+            } else if (filters.company === 'Orange') {
+              await deleteOrangeRecordsBulk(siteCodes);
+              setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Orange ✅`);
+            } else {
+              await deleteRecordsBulk(siteCodes);
+              removeRecordsLocally(siteCodes);
+              setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من قاعدة بيانات Supabase ✅`);
+            }
+            setDeletedSiteCodes((prev) => {
+              const next = new Set(prev);
+              siteCodes.forEach((c) => next.add(c.toUpperCase()));
+              return next;
+            });
+          } catch (err: any) {
+            setToastMessage(`حدث خطأ أثناء حذف المواقع: ${err?.message || ''}`);
           }
         }}
       />
@@ -1758,163 +1946,41 @@ export const Dashboard: React.FC = () => {
         activeMetadata={uploadedMetadata}
       />
 
-      {/* Quick Site Deletion Modal from Control Panel */}
-      {isQuickDeleteModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-2xl border border-rose-200 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-150 text-right flex flex-col max-h-[90vh]">
-            <div className="p-4 sm:p-5 bg-gradient-to-r from-rose-700 to-red-800 text-white flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center ring-1 ring-white/20">
-                  <Trash2 className="w-5 h-5 text-rose-200" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold">
-                    إلغاء أو حذف موقع (Delete Site)
-                  </h3>
-                  <p className="text-xs text-rose-200 mt-0.5">
-                    اختر الموقع المطلوب إلغاؤه أو حذفه مع رسالة تأكيد الحذف
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setIsQuickDeleteModalOpen(false);
-                  setQuickDeleteSelectedCode('');
-                }}
-                className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors text-white cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-5 overflow-y-auto space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  البحث عن كود أو اسم الموقع المطلوب حذفه:
-                </label>
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute inset-y-0 right-3 my-auto text-slate-400" />
-                  <input
-                    type="text"
-                    value={quickDeleteSearch}
-                    onChange={(e) => setQuickDeleteSearch(e.target.value)}
-                    placeholder="ابحث بكود الموقع، السنترال، أو الاسم..."
-                    className="w-full pr-9 pl-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 text-slate-800"
-                  />
-                </div>
-              </div>
-
-              {/* List of matching sites */}
-              <div className="border border-slate-200 rounded-xl max-h-48 overflow-y-auto divide-y divide-slate-100 bg-white">
-                {matchingDeleteSites.slice(0, 30).map((site) => {
-                  const isSelected = quickDeleteSelectedCode === site.siteCode;
-                  return (
-                    <button
-                      key={site.id}
-                      type="button"
-                      onClick={() => setQuickDeleteSelectedCode(site.siteCode)}
-                      className={`w-full text-right p-2.5 transition flex items-center justify-between text-xs cursor-pointer ${isSelected
-                        ? 'bg-rose-50/90 text-rose-900 font-bold border-l-4 border-rose-600'
-                        : 'hover:bg-slate-50 text-slate-700'
-                        }`}
-                    >
-                      <div>
-                        <span className="font-mono font-bold text-indigo-700 ml-2">
-                          {site.siteCode}
-                        </span>
-                        <span className="text-slate-800 font-medium">{site.siteName}</span>
-                      </div>
-                      <span className="text-[11px] text-slate-500">
-                        {site.company} • {site.sector}
-                      </span>
-                    </button>
-                  );
-                })}
-                {matchingDeleteSites.length === 0 && (
-                  <p className="p-4 text-center text-xs text-slate-400">
-                    لا توجد مواقع مطابقة للبحث
-                  </p>
-                )}
-              </div>
-
-              {/* Selected Site Preview Card */}
-              {selectedDeleteSite && (
-                <div className="bg-rose-50/70 border border-rose-200 rounded-xl p-4 text-xs space-y-2">
-                  <div className="flex items-center gap-2 text-rose-700 font-bold mb-1">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    <span>تأكيد بيانات الموقع المراد حذفه:</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-slate-700">
-                    <div>
-                      <span className="text-slate-400 text-[11px] block">كود الموقع:</span>
-                      <strong className="font-mono text-indigo-800">{selectedDeleteSite.siteCode}</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 text-[11px] block">اسم الموقع:</span>
-                      <strong>{selectedDeleteSite.siteName}</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 text-[11px] block">المشغل:</span>
-                      <span>{selectedDeleteSite.company}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 text-[11px] block">القطاع والسنترال:</span>
-                      <span>{selectedDeleteSite.sector} - {selectedDeleteSite.central}</span>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-slate-400 text-[11px] block">الموقف التنفيذي:</span>
-                      <span className="font-semibold text-slate-800">{selectedDeleteSite.status}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Actions */}
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsQuickDeleteModalOpen(false);
-                  setQuickDeleteSelectedCode('');
-                }}
-                disabled={isDeletingQuick}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-300 hover:bg-slate-100 rounded-xl transition cursor-pointer"
-              >
-                إلغاء الأمر
-              </button>
-              <button
-                type="button"
-                disabled={!selectedDeleteSite || isDeletingQuick}
-                onClick={async () => {
-                  if (!selectedDeleteSite) return;
-                  setIsDeletingQuick(true);
-                  try {
-                    if (selectedDeleteSite.company === 'Orange') {
-                      await deleteOrangeRecord(selectedDeleteSite.siteCode);
-                      setToastMessage(`تم حذف وإلغاء موقع Orange (${selectedDeleteSite.siteCode}) بنجاح ✅`);
-                    } else if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
-                      await deleteEtahaRecord(selectedDeleteSite.siteCode);
-                      await handleDeleteSite(selectedDeleteSite);
-                      setToastMessage(`تم حذف وإلغاء مشروع الإتاحة (${selectedDeleteSite.siteCode}) بنجاح ✅`);
-                    } else {
-                      await handleDeleteSite(selectedDeleteSite);
-                    }
-                    setIsQuickDeleteModalOpen(false);
-                    setQuickDeleteSelectedCode('');
-                  } finally {
-                    setIsDeletingQuick(false);
-                  }
-                }}
-                className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-sm"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>{isDeletingQuick ? 'جارِ الحذف والتنفيذ...' : 'تأكيد الحذف النهائي للموقع'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Bulk Delete Modal (Multi-Select & Excel File Bulk Delete) */}
+      <BulkDeleteModal
+        isOpen={isQuickDeleteModalOpen}
+        onClose={() => {
+          setIsQuickDeleteModalOpen(false);
+          setQuickDeleteSelectedCode('');
+        }}
+        sites={authorizedScopeData}
+        initialSelectedCodes={quickDeleteSelectedCode ? [quickDeleteSelectedCode] : []}
+        activeScopeLabel={activeScope === 'ETAHA' ? 'مشروعات الإتاحة' : 'مواقع FTTS'}
+        onDeleteBulk={async (siteCodes) => {
+          if (!siteCodes || siteCodes.length === 0) return;
+          try {
+            if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+              await deleteEtahaRecordsBulk(siteCodes);
+              setToastMessage(`تم حذف ${siteCodes.length} مشروع بنجاح من قاعدة بيانات الإتاحة ✅`);
+            } else if (filters.company === 'Orange') {
+              await deleteOrangeRecordsBulk(siteCodes);
+              setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Orange ✅`);
+            } else {
+              await deleteRecordsBulk(siteCodes);
+              removeRecordsLocally(siteCodes);
+              setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من قاعدة بيانات Supabase ✅`);
+            }
+            setDeletedSiteCodes((prev) => {
+              const next = new Set(prev);
+              siteCodes.forEach((c) => next.add(c.toUpperCase()));
+              return next;
+            });
+            setIsQuickDeleteModalOpen(false);
+          } catch (err: any) {
+            setToastMessage(`حدث خطأ أثناء الحذف: ${err?.message || ''}`);
+          }
+        }}
+      />
 
       {/* Login & Sector Permissions Modal */}
       <LoginModal

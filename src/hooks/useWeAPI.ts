@@ -63,7 +63,7 @@ async function fetchAllRowsFromCandidateTables(): Promise<{ rows: any[]; tableNa
       if (!tableErr && allRows.length > 0) {
         return { rows: allRows, tableName: table };
       }
-    } catch {}
+    } catch { }
   }
   return { rows: [], tableName: 'we' };
 }
@@ -94,7 +94,7 @@ export function useWeRecords() {
           setRecords(localData.records);
           return;
         }
-      } catch {}
+      } catch { }
 
       // If both return 0 rows, initialize with empty (Dashboard handles preloaded fallback)
       setRecords([]);
@@ -138,6 +138,17 @@ export function useWeRecords() {
     );
   }, []);
 
+  const removeRecordsLocally = useCallback((idsOrCodes: string[]) => {
+    const set = new Set(idsOrCodes.map((s) => String(s || '').trim().toUpperCase()));
+    setRecords((prev) =>
+      prev.filter((r) => {
+        const id = String(r._id || (r as any).id || '').trim().toUpperCase();
+        const code = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
+        return !set.has(id) && !set.has(code);
+      })
+    );
+  }, []);
+
   useEffect(() => {
     fetchRecords();
   }, [fetchRecords]);
@@ -150,6 +161,7 @@ export function useWeRecords() {
     refetch: fetchRecords,
     updateOrAddRecordLocally,
     removeRecordLocally,
+    removeRecordsLocally,
   };
 }
 
@@ -206,7 +218,7 @@ export function useWeSiteCodes() {
           setCodes(localData.codes);
           return;
         }
-      } catch {}
+      } catch { }
 
       // Final fallback: use preloaded baseline site codes
       const fallback = [...new Set(WE_EXCEL_SITES.map((s) => s.siteCode))].sort();
@@ -250,7 +262,7 @@ export async function fetchSiteRecord(siteCode: string): Promise<WeRecord | null
         if (!error && data) {
           return normalizeRecord(data);
         }
-      } catch {}
+      } catch { }
     }
 
     // 2. Fallback to local server
@@ -258,7 +270,7 @@ export async function fetchSiteRecord(siteCode: string): Promise<WeRecord | null
       const res = await fetch(`${LOCAL_API_BASE}/records/${encodeURIComponent(cleanCode)}`);
       const localData = await res.json();
       if (localData.success && localData.record) return localData.record;
-    } catch {}
+    } catch { }
 
     // 3. Check preloaded sites as fallback
     const preloaded = WE_EXCEL_SITES.find(s => s.siteCode.toLowerCase() === cleanCode.toLowerCase());
@@ -502,7 +514,7 @@ export async function saveRecord(
       });
       const localRes = await res.json();
       if (localRes.success) return localRes;
-    } catch {}
+    } catch { }
 
     // 6. Resilient local optimistic success
     return {
@@ -620,13 +632,13 @@ export async function deleteRecord(idOrCode: string): Promise<{ success: boolean
           .or(`id.eq."${clean}",site_code.eq."${clean}",site code.eq."${clean}"`);
 
         await supabase.from(table).delete().eq('id', clean);
-      } catch {}
+      } catch { }
     }
 
     // 2. Also attempt cleanup on local server fallback
     try {
       await fetch(`${LOCAL_API_BASE}/records/${encodeURIComponent(clean)}`, { method: 'DELETE' });
-    } catch {}
+    } catch { }
 
     return { success: true };
   } catch (err: any) {
@@ -634,18 +646,41 @@ export async function deleteRecord(idOrCode: string): Promise<{ success: boolean
   }
 }
 
-// ── Bulk delete multiple records ──
-export async function deleteRecordsBulk(ids: string[]): Promise<{ success: boolean; count?: number; error?: string }> {
+// ── Bulk delete multiple records from Supabase (by ID or Site Code) ──
+export async function deleteRecordsBulk(idsOrCodes: string[]): Promise<{ success: boolean; count?: number; error?: string }> {
   try {
-    if (!ids || ids.length === 0) return { success: true, count: 0 };
-    for (const table of WE_TABLE_CANDIDATES) {
+    if (!idsOrCodes || idsOrCodes.length === 0) return { success: true, count: 0 };
+    const cleanList = idsOrCodes.map((s) => String(s || '').trim()).filter(Boolean);
+    if (cleanList.length === 0) return { success: true, count: 0 };
+
+    const batchSize = 60;
+    for (let i = 0; i < cleanList.length; i += batchSize) {
+      const batch = cleanList.slice(i, i + batchSize);
+
+      for (const table of WE_TABLE_CANDIDATES) {
+        try {
+          // Delete matching by id
+          await supabase.from(table).delete().in('id', batch);
+          // Delete matching by site_code
+          await supabase.from(table).delete().in('site_code', batch);
+          // Delete matching by "site code"
+          await supabase.from(table).delete().in('site code', batch);
+        } catch { }
+      }
+
+      // Also call local server if running
       try {
-        await supabase.from(table).delete().in('id', ids);
-      } catch {}
+        await fetch(`${LOCAL_API_BASE}/records/bulk-delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: batch }),
+        });
+      } catch { }
     }
-    return { success: true, count: ids.length };
+
+    return { success: true, count: cleanList.length };
   } catch (err: any) {
-    return { success: false, error: err?.message || 'فشل في حذف السجلات' };
+    return { success: false, error: err?.message || 'فشل في حذف السجلات من قاعدة بيانات Supabase' };
   }
 }
 

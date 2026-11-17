@@ -14,10 +14,15 @@ import {
   Trash2,
   PlusCircle,
   AlertTriangle,
-  Info
+  Info,
+  CheckSquare,
+  Square,
+  FileSpreadsheet,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { useAuth } from '../context/AuthContext';
 import { isRecordInSector } from '../utils/sectorPermissions';
+import { BulkDeleteModal } from './BulkDeleteModal';
 
 import type { SiteRecord } from '../types/dashboard';
 import { STATUS_CONFIG } from '../data/dashboardData';
@@ -31,6 +36,7 @@ interface SiteDetailsModalProps {
   onEditSite?: (siteCode: string) => void;
   onAddNewSite?: () => void;
   onDeleteSite?: (site: SiteRecord) => Promise<boolean | void> | void;
+  onDeleteBulkSites?: (siteCodes: string[]) => Promise<{ success: boolean; count?: number; error?: string } | void>;
 }
 
 export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
@@ -41,6 +47,7 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
   onEditSite,
   onAddNewSite,
   onDeleteSite,
+  onDeleteBulkSites,
 }) => {
   const { user, canEditRecord } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
@@ -48,6 +55,8 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
   const [siteToDelete, setSiteToDelete] = useState<SiteRecord | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [expandedOrangeCode, setExpandedOrangeCode] = useState<string | null>(null);
+  const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
   const pageSize = 8;
 
   // Quick lookup map for Orange raw Excel records
@@ -147,6 +156,62 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
     document.body.removeChild(link);
   };
 
+  // Checkbox selection logic
+  const handleToggleSiteSelect = (code: string) => {
+    const norm = code.trim().toUpperCase();
+    setSelectedCodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(norm)) {
+        next.delete(norm);
+      } else {
+        next.add(norm);
+      }
+      return next;
+    });
+  };
+
+  const isAllCurrentPageSelected = useMemo(() => {
+    if (pagedSites.length === 0) return false;
+    return pagedSites.every((s) => selectedCodes.has(s.siteCode.trim().toUpperCase()));
+  }, [pagedSites, selectedCodes]);
+
+  const handleToggleSelectAllPage = () => {
+    if (isAllCurrentPageSelected) {
+      setSelectedCodes((prev) => {
+        const next = new Set(prev);
+        pagedSites.forEach((s) => next.delete(s.siteCode.trim().toUpperCase()));
+        return next;
+      });
+    } else {
+      setSelectedCodes((prev) => {
+        const next = new Set(prev);
+        pagedSites.forEach((s) => next.add(s.siteCode.trim().toUpperCase()));
+        return next;
+      });
+    }
+  };
+
+  const handleDownloadDeleteTemplate = () => {
+    try {
+      const sample = sites.slice(0, 3);
+      const data = [
+        ['كود الموقع (Site Code) - إجباري', 'اسم الموقع (Site Name) - اختياري', 'ملاحظات أو سبب الحذف - اختياري'],
+        ...sample.map((s, idx) => [
+          s.siteCode,
+          s.siteName,
+          idx === 0 ? 'موقع مكرر أو ملغي' : 'تم استبداله بموقع بديل',
+        ]),
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      ws['!cols'] = [{ wch: 30 }, { wch: 35 }, { wch: 35 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Delete_Codes');
+      XLSX.writeFile(wb, `Delete_Sites_Template_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (err) {
+      console.error('Failed to generate template:', err);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
@@ -197,7 +262,29 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
             />
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+            {/* Download Delete Template */}
+            <button
+              type="button"
+              onClick={handleDownloadDeleteTemplate}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg transition-colors shadow-2xs cursor-pointer"
+              title="تحميل شيت إكسيل فارغ مخصص لتسجيل الأكواد المراد حذفها"
+            >
+              <Download className="w-3.5 h-3.5 text-sky-600" />
+              <span>نموذج حذف إكسيل</span>
+            </button>
+
+            {/* Excel Bulk Delete Button */}
+            <button
+              type="button"
+              onClick={() => setIsBulkDeleteModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors shadow-2xs cursor-pointer"
+              title="حذف جماعي للأكواد برفع ملف إكسيل أو التحديد المتعدد"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>حذف جماعي (إكسيل / يدوي)</span>
+            </button>
+
             <button
               onClick={() => {
                 onClose();
@@ -221,12 +308,55 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
           </div>
         </div>
 
+        {/* Multi-Select Floating Notification Bar */}
+        {selectedCodes.size > 0 && (
+          <div className="bg-rose-50 border-b border-rose-200 px-4 py-2.5 flex items-center justify-between text-xs animate-in fade-in duration-150">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-pulse" />
+              <span className="font-bold text-rose-900">
+                تم تحديد <strong className="font-mono text-sm">{selectedCodes.size}</strong> موقع للحذف
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedCodes(new Set())}
+                className="px-2.5 py-1 text-xs font-semibold text-slate-600 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+              >
+                إلغاء التحديد
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsBulkDeleteModalOpen(true)}
+                className="px-3.5 py-1 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>حذف المواقع المحددة ({selectedCodes.size})</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Modal Table Content */}
         <div className="flex-1 overflow-y-auto p-4">
           <div className="overflow-x-auto rounded-lg border border-slate-200">
             <table className="w-full text-right text-xs">
               <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
                 <tr>
+                  <th className="py-2.5 px-3 text-center w-10">
+                    <button
+                      type="button"
+                      onClick={handleToggleSelectAllPage}
+                      className="text-slate-600 hover:text-slate-900 cursor-pointer flex items-center justify-center mx-auto"
+                      title={isAllCurrentPageSelected ? 'إلغاء تحديد كافة مواقع الصفحة' : 'تحديد كافة مواقع الصفحة الحالية'}
+                    >
+                      {isAllCurrentPageSelected ? (
+                        <CheckSquare className="w-4 h-4 text-rose-600" />
+                      ) : (
+                        <Square className="w-4 h-4 text-slate-400" />
+                      )}
+                    </button>
+                  </th>
                   <th className="py-2.5 px-3">كود الموقع</th>
                   <th className="py-2.5 px-3">اسم الموقع / السنترال</th>
                   <th className="py-2.5 px-3">الشركة</th>
@@ -251,6 +381,20 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                   return (
                     <React.Fragment key={site.id}>
                       <tr className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-2.5 px-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleSiteSelect(site.siteCode)}
+                            className="cursor-pointer flex items-center justify-center mx-auto text-rose-600"
+                            title={selectedCodes.has(site.siteCode.trim().toUpperCase()) ? 'إلغاء التحديد' : 'تحديد للحذف'}
+                          >
+                            {selectedCodes.has(site.siteCode.trim().toUpperCase()) ? (
+                              <CheckSquare className="w-4 h-4 text-rose-600" />
+                            ) : (
+                              <Square className="w-4 h-4 text-slate-300 hover:text-slate-500" />
+                            )}
+                          </button>
+                        </td>
                         <td className="py-2.5 px-3 font-mono font-bold text-sky-800">
                           <div>{site.siteCode}</div>
                           {site.company === 'Orange' && (
@@ -415,7 +559,7 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                         const raw = site.rawRecord || orangeRawMap.get(site.siteCode) || {};
                         return (
                           <tr className="bg-orange-50/50 border-b-2 border-orange-200">
-                            <td colSpan={10} className="p-4 text-xs">
+                            <td colSpan={11} className="p-4 text-xs">
                               <div className="bg-white rounded-xl p-4 border border-orange-200 shadow-sm space-y-3">
                                 <div className="flex items-center justify-between pb-2 border-b border-orange-100">
                                   <div className="flex items-center gap-2">
@@ -479,7 +623,7 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
 
                 {pagedSites.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="text-center py-8 text-slate-400">
+                    <td colSpan={11} className="text-center py-8 text-slate-400">
                       لا توجد مواقع مطابقة للبحث أو التصفية الحالية
                     </td>
                   </tr>

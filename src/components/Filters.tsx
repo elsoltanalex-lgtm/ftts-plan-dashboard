@@ -15,6 +15,8 @@ import {
   Tag,
   AlertCircle,
   Lock,
+  Award,
+  Zap,
 } from 'lucide-react';
 import type { FilterState, SiteRecord } from '../types/dashboard';
 import { useAuth } from '../context/AuthContext';
@@ -32,6 +34,7 @@ interface FiltersProps {
   onResetFilters: () => void;
   sitesData: SiteRecord[];
   selectedCompany?: string;
+  activeScope?: string;
 }
 
 interface MultiFilterDropdownProps {
@@ -93,6 +96,18 @@ const MultiFilterDropdown: React.FC<MultiFilterDropdownProps> = ({
     if (filterKey === 'classification') {
       const targetTrimmed = String(optVal).trim();
       return sitesData.filter((s) => getSiteClassification(s) === targetTrimmed || String(s.classification || '').trim() === targetTrimmed).length;
+    }
+    if (filterKey === 'externalPath') {
+      const targetTrimmed = String(optVal).trim();
+      return sitesData.filter((s) => String(s.externalPath || s.rawRecord?.['المسار الخارجي'] || '').trim() === targetTrimmed).length;
+    }
+    if (filterKey === 'excelStatus') {
+      const targetTrimmed = String(optVal).trim();
+      return sitesData.filter((s) => String(s.excelStatus || s.classification || s.rawRecord?.['التصنيف'] || '').trim() === targetTrimmed).length;
+    }
+    if (filterKey === 'deliveryStatus') {
+      const targetTrimmed = String(optVal).trim();
+      return sitesData.filter((s) => String(s.deliveryStatus || s.deliveryArea || s.rawRecord?.['موقف التسليم'] || '').trim() === targetTrimmed).length;
     }
     const targetTrimmed = String(optVal).trim();
     return sitesData.filter((s) => String(s[filterKey] || '').trim() === targetTrimmed).length;
@@ -167,10 +182,10 @@ const MultiFilterDropdown: React.FC<MultiFilterDropdownProps> = ({
         onClick={() => !disabled && setIsOpen(!isOpen)}
         title={disabled ? (lockedNote || 'نطاق مقيد بحسب صلاحيات حسابك') : selectedList.join(' • ')}
         className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xl border transition-all text-right shadow-2xs ${disabled
-            ? 'bg-slate-100/90 border-slate-300 text-slate-600 font-semibold cursor-not-allowed opacity-90'
-            : isSelected
-              ? 'bg-sky-50 border-sky-400 text-sky-950 font-bold ring-1 ring-sky-300 cursor-pointer shadow-xs'
-              : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50/50 cursor-pointer'
+          ? 'bg-slate-100/90 border-slate-300 text-slate-600 font-semibold cursor-not-allowed opacity-90'
+          : isSelected
+            ? 'bg-sky-50 border-sky-400 text-sky-950 font-bold ring-1 ring-sky-300 cursor-pointer shadow-xs'
+            : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50/50 cursor-pointer'
           }`}
       >
         <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
@@ -241,16 +256,16 @@ const MultiFilterDropdown: React.FC<MultiFilterDropdownProps> = ({
                   key={clean}
                   onClick={() => toggleOption(clean)}
                   className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${isOptionActive
-                      ? 'bg-sky-50 text-sky-950 font-bold border border-sky-200/80'
-                      : 'hover:bg-slate-100 text-slate-700 border border-transparent'
+                    ? 'bg-sky-50 text-sky-950 font-bold border border-sky-200/80'
+                    : 'hover:bg-slate-100 text-slate-700 border border-transparent'
                     }`}
                 >
                   <div className="flex items-center gap-2 truncate">
                     {/* Checkbox Box */}
                     <div
                       className={`w-4 h-4 rounded flex items-center justify-center transition-colors flex-shrink-0 border ${isOptionActive
-                          ? 'bg-sky-600 border-sky-600 text-white shadow-2xs'
-                          : 'border-slate-300 bg-white'
+                        ? 'bg-sky-600 border-sky-600 text-white shadow-2xs'
+                        : 'border-slate-300 bg-white'
                         }`}
                     >
                       {isOptionActive && <Check className="w-3 h-3 stroke-[3]" />}
@@ -259,8 +274,8 @@ const MultiFilterDropdown: React.FC<MultiFilterDropdownProps> = ({
                   </div>
                   <span
                     className={`text-[10px] font-mono px-1.5 py-0.5 rounded flex-shrink-0 ${isOptionActive
-                        ? 'bg-sky-200/70 text-sky-900 font-black'
-                        : 'bg-slate-100 text-slate-500'
+                      ? 'bg-sky-200/70 text-sky-900 font-black'
+                      : 'bg-slate-100 text-slate-500'
                       }`}
                   >
                     {count}
@@ -301,24 +316,37 @@ export const Filters: React.FC<FiltersProps> = ({
   onResetFilters,
   sitesData,
   selectedCompany,
+  activeScope,
 }) => {
   const { user } = useAuth();
   const isSectorLocked = Boolean(user && user.role !== 'admin' && user.sector !== 'ALL');
-  const isOrange = (selectedCompany || filters.company) === 'Orange';
+  const isEtaha = activeScope === 'ETAHA' || activeScope === 'AVAILABILITY';
+  const isOrange = !isEtaha && (selectedCompany || filters.company) === 'Orange';
 
   // Base dataset: when specific operator is selected, strictly scope to those sites
   const baseSites = useMemo(() => {
+    if (isEtaha) return sitesData;
     const comp = selectedCompany || filters.company;
     if (comp && comp !== 'All') {
       const filtered = sitesData.filter((s) => s.company === comp);
       return filtered.length > 0 ? filtered : sitesData;
     }
     return sitesData;
-  }, [sitesData, selectedCompany, filters.company]);
+  }, [sitesData, selectedCompany, filters.company, isEtaha]);
 
   // Active filters count
   const activeCount = useMemo(() => {
     let count = 0;
+    if (isEtaha) {
+      if (!isSectorLocked && toFilterArray(filters.sector).length > 0) count += toFilterArray(filters.sector).length;
+      if (toFilterArray(filters.generalAdmin).length > 0) count += toFilterArray(filters.generalAdmin).length;
+      if (toFilterArray(filters.competentAdmin).length > 0) count += toFilterArray(filters.competentAdmin).length;
+      if (toFilterArray(filters.externalPath).length > 0) count += toFilterArray(filters.externalPath).length;
+      if (toFilterArray(filters.excelStatus).length > 0) count += toFilterArray(filters.excelStatus).length;
+      if (toFilterArray(filters.deliveryStatus).length > 0) count += toFilterArray(filters.deliveryStatus).length;
+      if (filters.searchQuery) count += 1;
+      return count;
+    }
     if (!isSectorLocked && toFilterArray(filters.sector).length > 0) count += toFilterArray(filters.sector).length;
     if (toFilterArray(filters.generalAdmin).length > 0) count += toFilterArray(filters.generalAdmin).length;
     if (isOrange && toFilterArray(filters.subSector).length > 0) count += toFilterArray(filters.subSector).length;
@@ -328,12 +356,18 @@ export const Filters: React.FC<FiltersProps> = ({
     if (toFilterArray(filters.status).length > 0) count += toFilterArray(filters.status).length;
     if (filters.searchQuery) count += 1;
     return count;
-  }, [filters, isSectorLocked, isOrange]);
+  }, [filters, isSectorLocked, isOrange, isEtaha]);
 
   // Level 1: Sector / Presidency Filter
   const dynamicSectors = useMemo(() => {
     if (isSectorLocked && user?.sector) {
       return [toCanonicalSector(user.sector)];
+    }
+    if (isEtaha) {
+      const etahaSecs = Array.from(
+        new Set(baseSites.map((s) => (s.sector || '').trim()).filter(Boolean))
+      );
+      return etahaSecs.sort((a, b) => a.localeCompare(b, 'ar'));
     }
     if (isOrange) {
       const orangeSecs = Array.from(
@@ -570,6 +604,103 @@ export const Filters: React.FC<FiltersProps> = ({
     }
   }, [isOrange, dynamicObstacleReasons, filters.obstacleReason, onChangeFilter]);
 
+  // ── Etaha Specific: Dynamic Options for 3 Axes ──
+  const dynamicExternalPaths = useMemo(() => {
+    if (!isEtaha) return [];
+    const list = Array.from(
+      new Set(
+        baseSites
+          .map((s) => String(s.externalPath || s.rawRecord?.['المسار الخارجي'] || '').trim())
+          .filter(Boolean)
+      )
+    );
+    const order = ['تم الانتهاء', 'جاري العمل', 'جاري استخراج تصاريح', 'متعذرات', 'معوقات'];
+    return list.sort((a, b) => {
+      const idxA = order.indexOf(a);
+      const idxB = order.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b, 'ar');
+    });
+  }, [baseSites, isEtaha]);
+
+  const dynamicExcelStatuses = useMemo(() => {
+    if (!isEtaha) return [];
+    const list = Array.from(
+      new Set(
+        baseSites
+          .map((s) => String(s.excelStatus || s.classification || s.rawRecord?.['التصنيف'] || '').trim())
+          .filter(Boolean)
+      )
+    );
+    const order = ['تم الانتهاء والتسليم', 'تم خارجي -متوقف علي العميل', 'جاري خارجي', 'تصاريح', 'تعذر', 'معوقات', 'منتظر التسليم'];
+    return list.sort((a, b) => {
+      const idxA = order.indexOf(a);
+      const idxB = order.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b, 'ar');
+    });
+  }, [baseSites, isEtaha]);
+
+  const dynamicDeliveryStatuses = useMemo(() => {
+    if (!isEtaha) return [];
+    const list = Array.from(
+      new Set(
+        baseSites
+          .map((s) => String(s.deliveryStatus || s.deliveryArea || s.rawRecord?.['موقف التسليم'] || '').trim())
+          .filter(Boolean)
+      )
+    );
+    const order = ['تم التسليم', 'لم يتم'];
+    return list.sort((a, b) => {
+      const idxA = order.indexOf(a);
+      const idxB = order.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b, 'ar');
+    });
+  }, [baseSites, isEtaha]);
+
+  useEffect(() => {
+    if (isEtaha) {
+      const current = toFilterArray(filters.externalPath);
+      if (current.length > 0 && dynamicExternalPaths.length > 0) {
+        const valid = current.filter((x) => dynamicExternalPaths.includes(x));
+        if (valid.length !== current.length) {
+          onChangeFilter('externalPath', valid.length === 1 ? valid[0] : valid);
+        }
+      }
+    }
+  }, [isEtaha, dynamicExternalPaths, filters.externalPath, onChangeFilter]);
+
+  useEffect(() => {
+    if (isEtaha) {
+      const current = toFilterArray(filters.excelStatus);
+      if (current.length > 0 && dynamicExcelStatuses.length > 0) {
+        const valid = current.filter((x) => dynamicExcelStatuses.includes(x));
+        if (valid.length !== current.length) {
+          onChangeFilter('excelStatus', valid.length === 1 ? valid[0] : valid);
+        }
+      }
+    }
+  }, [isEtaha, dynamicExcelStatuses, filters.excelStatus, onChangeFilter]);
+
+  useEffect(() => {
+    if (isEtaha) {
+      const current = toFilterArray(filters.deliveryStatus);
+      if (current.length > 0 && dynamicDeliveryStatuses.length > 0) {
+        const valid = current.filter((x) => dynamicDeliveryStatuses.includes(x));
+        if (valid.length !== current.length) {
+          onChangeFilter('deliveryStatus', valid.length === 1 ? valid[0] : valid);
+        }
+      }
+    }
+  }, [isEtaha, dynamicDeliveryStatuses, filters.deliveryStatus, onChangeFilter]);
+
   return (
     <div className="pbi-card p-5 mt-2">
       {/* Filters Header */}
@@ -581,9 +712,11 @@ export const Filters: React.FC<FiltersProps> = ({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-base font-bold text-slate-800 leading-tight">
-                {isOrange
-                  ? 'فلاتر التصفية الهرمية لـ Orange (متعددة الاختيار Multi-Select)'
-                  : 'فلاتر التصفية التفاعلية الهرمية (متعددة الاختيار Multi-Select)'}
+                {isEtaha
+                  ? 'فلاتر تصفية مشروعات الإتاحة (متعددة الاختيار Multi-Select)'
+                  : isOrange
+                    ? 'فلاتر التصفية الهرمية لـ Orange (متعددة الاختيار Multi-Select)'
+                    : 'فلاتر التصفية التفاعلية الهرمية (متعددة الاختيار Multi-Select)'}
               </h3>
               {activeCount > 0 && (
                 <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-300 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 shadow-2xs">
@@ -593,9 +726,11 @@ export const Filters: React.FC<FiltersProps> = ({
               )}
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              {isOrange
-                ? 'تصفية المواقع طبقاً للهيكل الإداري لـ Orange: رئاسة القطاعات ← الإدارة العامة للتنفيذ ← الإدارة المختصة ← إدارة المنطقة'
-                : 'تصفية المؤشرات طبقاً للهيكل الإداري المتسلسل: القطاع ← الإدارة العامة ← إدارة التنفيذ المختصة ← التصنيف (يدعم تحديد أكثر من خيار)'}
+              {isEtaha
+                ? 'تصفية مشروعات الإتاحة: القطاع ← الإدارة العامة ← إدارة التنفيذ المختصة ← المحاور الثلاثة (المسار الخارجي، موقف الإكسيل، وموقف التسليم)'
+                : isOrange
+                  ? 'تصفية المواقع طبقاً للهيكل الإداري لـ Orange: رئاسة القطاعات ← الإدارة العامة للتنفيذ ← الإدارة المختصة ← إدارة المنطقة'
+                  : 'تصفية المؤشرات طبقاً للهيكل الإداري المتسلسل: القطاع ← الإدارة العامة ← إدارة التنفيذ المختصة ← التصنيف (يدعم تحديد أكثر من خيار)'}
             </p>
           </div>
         </div>
@@ -627,7 +762,90 @@ export const Filters: React.FC<FiltersProps> = ({
       </div>
 
       {/* Grid of Multi-Select Slicers */}
-      {isOrange ? (
+      {isEtaha ? (
+        /* Etaha Specific: 6 Multi-Select Slicers (القطاع، الإدارة العامة، إدارة التنفيذ، ومحاور التصنيف الثلاثة) */
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+          {/* 1. القطاع */}
+          <MultiFilterDropdown
+            id="filter-etaha-sector"
+            label={isSectorLocked ? `القطاع (${user?.sector})` : 'القطاع'}
+            labelEn="Sector"
+            icon={MapPin}
+            value={isSectorLocked ? [user?.sector || ''] : filters.sector}
+            options={dynamicSectors}
+            onChange={(val) => !isSectorLocked && onChangeFilter('sector', val)}
+            sitesData={baseSites}
+            filterKey="sector"
+            disabled={isSectorLocked}
+            lockedNote={`تم حجب باقي القطاعات - مقيد بقطاع ${user?.sector}`}
+          />
+
+          {/* 2. الإدارة العامة */}
+          <MultiFilterDropdown
+            id="filter-etaha-general-admin"
+            label="الإدارة العامة"
+            labelEn="General Admin"
+            icon={Building}
+            value={filters.generalAdmin}
+            options={dynamicGeneralAdmins}
+            onChange={(val) => onChangeFilter('generalAdmin', val)}
+            sitesData={sectorScopedSites}
+            filterKey="generalAdmin"
+          />
+
+          {/* 3. إدارة التنفيذ المختصة */}
+          <MultiFilterDropdown
+            id="filter-etaha-competent-admin"
+            label="إدارة التنفيذ المختصة"
+            labelEn="Execution Admin"
+            icon={Briefcase}
+            value={filters.competentAdmin}
+            options={dynamicCompetentAdmins}
+            onChange={(val) => onChangeFilter('competentAdmin', val)}
+            sitesData={deptScopedSites}
+            filterKey="competentAdmin"
+          />
+
+          {/* 4. محور 1: المسار الخارجي */}
+          <MultiFilterDropdown
+            id="filter-etaha-external-path"
+            label="المسار الخارجي"
+            labelEn="External Path"
+            icon={Zap}
+            value={filters.externalPath || []}
+            options={dynamicExternalPaths}
+            onChange={(val) => onChangeFilter('externalPath', val)}
+            sitesData={baseSites}
+            filterKey="externalPath"
+          />
+
+          {/* 5. محور 2: موقف الإكسيل */}
+          <MultiFilterDropdown
+            id="filter-etaha-excel-status"
+            label="موقف الإكسيل"
+            labelEn="Excel Status"
+            icon={Tag}
+            value={filters.excelStatus || []}
+            options={dynamicExcelStatuses}
+            onChange={(val) => onChangeFilter('excelStatus', val)}
+            sitesData={baseSites}
+            filterKey="excelStatus"
+          />
+
+          {/* 6. محور 3: موقف التسليم */}
+          <MultiFilterDropdown
+            id="filter-etaha-delivery-status"
+            label="موقف التسليم"
+            labelEn="Delivery Status"
+            icon={Award}
+            value={filters.deliveryStatus || []}
+            options={dynamicDeliveryStatuses}
+            onChange={(val) => onChangeFilter('deliveryStatus', val)}
+            sitesData={baseSites}
+            filterKey="deliveryStatus"
+          />
+        </div>
+      ) : isOrange ? (
         /* Orange Slicers: 4 Hierarchical Multi-Select Filters */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {/* 1. رئاسة القطاعات */}
