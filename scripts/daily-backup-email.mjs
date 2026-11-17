@@ -5,9 +5,11 @@
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import os from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -34,7 +36,7 @@ async function fetchTable(tableName) {
     if (error || !data || data.length === 0) {
       return null;
     }
-    console.log(`[Daily Backup] Supabase table [${tableName}]: successfully fetched ${data.length} live rows.`);
+    console.log(`[Backup] Supabase table [${tableName}]: fetched ${data.length} live rows.`);
     return data;
   } catch {
     return null;
@@ -45,19 +47,19 @@ async function fetchTable(tableName) {
  * Safely load JSON from server/data
  */
 function loadJsonFallback(filename) {
-  const p = join(ROOT_DIR, 'server', 'data', filename);
-  if (existsSync(p)) {
-    try {
+  try {
+    const p = join(ROOT_DIR, 'server', 'data', filename);
+    if (existsSync(p)) {
       const parsed = JSON.parse(readFileSync(p, 'utf-8'));
       if (Array.isArray(parsed)) return parsed;
       if (parsed && Array.isArray(parsed.records)) return parsed.records;
-    } catch {}
-  }
+    }
+  } catch {}
   return [];
 }
 
 /**
- * Main routine: Supports invocation with string (recipient email) or options object
+ * Main routine: Supports invocation with options object
  */
 export async function runDailyBackup(optionsOrRecipient = null) {
   const options = (typeof optionsOrRecipient === 'string')
@@ -68,54 +70,34 @@ export async function runDailyBackup(optionsOrRecipient = null) {
   const now = new Date();
   const dateStr = now.toISOString().slice(0, 10);
   const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
-  const fileName = `FTTS_Daily_Backup_${dateStr}_${timeStr}.xlsx`;
+  const fileName = `FTTS_Backup_${dateStr}_${timeStr}.xlsx`;
 
-  console.log(`[Daily Backup] Starting backup routine for ${recipient}...`);
-  console.log(`[Daily Backup] Time: ${now.toLocaleString('ar-EG', { timeZone: 'Africa/Cairo' })} (Cairo Time)`);
+  console.log(`[Backup] Starting routine for ${recipient}...`);
+  console.log(`[Backup] Time: ${now.toLocaleString('ar-EG', { timeZone: 'Africa/Cairo' })} (Cairo Time)`);
 
   let weRows = [];
   let vodafoneRows = [];
   let orangeRows = [];
   let etahaRows = [];
 
-  // Prioritize live client data passed from UI (most up-to-date in-memory state)
-  if (options.clientData) {
-    console.log('[Daily Backup] Using client-provided live active dataset from browser state.');
-    if (Array.isArray(options.clientData.we)) weRows = options.clientData.we;
-    if (Array.isArray(options.clientData.vodafone)) vodafoneRows = options.clientData.vodafone;
-    if (Array.isArray(options.clientData.orange)) orangeRows = options.clientData.orange;
-    if (Array.isArray(options.clientData.etaha)) etahaRows = options.clientData.etaha;
-  }
+  // Query Supabase tables with local JSON fallbacks
+  const [liveWe, liveVodafone, liveOrange, liveEtaha] = await Promise.all([
+    fetchTable('we_records').then(res => res || fetchTable('we')),
+    fetchTable('vodafone_records'),
+    fetchTable('orange_records'),
+    fetchTable('etaha_records').then(res => res || fetchTable('etaha')),
+  ]);
 
-  // If any dataset is still empty, query Supabase and fallbacks
-  if (weRows.length === 0 || vodafoneRows.length === 0 || orangeRows.length === 0 || etahaRows.length === 0) {
-    const [liveWe, liveVodafone, liveOrange, liveEtaha] = await Promise.all([
-      weRows.length > 0 ? null : fetchTable('we_records').then(res => res || fetchTable('we')),
-      vodafoneRows.length > 0 ? null : fetchTable('vodafone_records'),
-      orangeRows.length > 0 ? null : fetchTable('orange_records'),
-      etahaRows.length > 0 ? null : fetchTable('etaha_records').then(res => res || fetchTable('etaha')),
-    ]);
+  weRows = (liveWe && liveWe.length > 0) ? liveWe : loadJsonFallback('We.json');
+  vodafoneRows = (liveVodafone && liveVodafone.length > 0) ? liveVodafone : loadJsonFallback('Vodafone.json');
+  orangeRows = (liveOrange && liveOrange.length > 0) ? liveOrange : loadJsonFallback('Orange_480.json');
+  etahaRows = (liveEtaha && liveEtaha.length > 0) ? liveEtaha : loadJsonFallback('Etaha_360.json');
 
-    if (weRows.length === 0) {
-      weRows = (liveWe && liveWe.length > 0) ? liveWe : loadJsonFallback('We.json');
-    }
-    if (vodafoneRows.length === 0) {
-      vodafoneRows = (liveVodafone && liveVodafone.length > 0) ? liveVodafone : loadJsonFallback('Vodafone.json');
-    }
-    if (orangeRows.length === 0) {
-      orangeRows = (liveOrange && liveOrange.length > 0) ? liveOrange : loadJsonFallback('Orange_480.json');
-    }
-    if (etahaRows.length === 0) {
-      etahaRows = (liveEtaha && liveEtaha.length > 0) ? liveEtaha : loadJsonFallback('Etaha_360.json');
-    }
-  }
+  console.log(`[Backup] Counts: WE=${weRows.length}, Vodafone=${vodafoneRows.length}, Orange=${orangeRows.length}, Availability=${etahaRows.length}`);
 
-  console.log(`[Daily Backup] Data counts: WE=${weRows.length}, Vodafone=${vodafoneRows.length}, Orange=${orangeRows.length}, Availability=${etahaRows.length}`);
-
-  // Format sheets
+  // Format Excel sheets
   const wb = XLSX.utils.book_new();
 
-  // Helper to format table rows cleanly
   const sanitizeRows = (list, defaultCompany) => {
     return list.map((item, idx) => {
       const raw = item.rawRecord || item.data || item;
@@ -141,7 +123,6 @@ export async function runDailyBackup(optionsOrRecipient = null) {
   const formattedVodafone = sanitizeRows(vodafoneRows, 'Vodafone');
   const formattedOrange = sanitizeRows(orangeRows, 'Orange');
 
-  // Format Availability (Etaha 360 sites)
   const formattedEtaha = etahaRows.map((item, idx) => {
     const raw = item.rawRecord || item;
     return {
@@ -160,10 +141,8 @@ export async function runDailyBackup(optionsOrRecipient = null) {
     };
   });
 
-  // Consolidated Master FTTS Plan
   const masterFtts = [...formattedWe, ...formattedVodafone, ...formattedOrange];
 
-  // Helper to add sheet with RTL and auto column width
   const addStyledSheet = (sheetData, sheetName) => {
     if (!sheetData || sheetData.length === 0) {
       sheetData = [{ 'تنبيه': 'لا توجد بيانات مسجلة حالياً في هذا الجدول' }];
@@ -175,77 +154,44 @@ export async function runDailyBackup(optionsOrRecipient = null) {
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
   };
 
-  // Add sheets
   addStyledSheet(masterFtts, 'Master_FTTS_Plan');
   addStyledSheet(formattedWe, 'WE_Rollout');
   addStyledSheet(formattedVodafone, 'Vodafone_Plan');
   addStyledSheet(formattedOrange, 'Orange_Plan');
   addStyledSheet(formattedEtaha, 'Availability_الإتاحة');
 
-  // Summary metadata sheet
   const summary = [
     { 'البيان': 'منظومة المتابعة', 'القيمة': 'Fiber Tracking Board (FTTS & Availability)' },
     { 'البيان': 'تاريخ وتوقيت التصدير', 'القيمة': now.toLocaleString('ar-EG', { timeZone: 'Africa/Cairo' }) },
     { 'البيان': 'البريد المرسل إليه', 'القيمة': recipient },
+    { 'البيان': 'نمط التوليد', 'القيمة': options.triggerType === 'MANUAL_ON_DEMAND' ? 'طلب فوري مباشر (Send Backup Now)' : 'جدولة يومية أوتوماتيكية (12:00 AM)' },
     { 'البيان': 'إجمالي مواقع FTTS المجمعة', 'القيمة': masterFtts.length },
     { 'البيان': 'عدد مواقع WE', 'القيمة': formattedWe.length },
     { 'البيان': 'عدد مواقع Vodafone', 'القيمة': formattedVodafone.length },
     { 'البيان': 'عدد مواقع Orange', 'القيمة': formattedOrange.length },
     { 'البيان': 'عدد مشروعات Availability (الإتاحة)', 'القيمة': formattedEtaha.length },
     { 'البيان': 'إجمالي السجلات المؤمّنة', 'القيمة': masterFtts.length + formattedEtaha.length },
-    { 'البيان': 'حالة الحفظ السحابي', 'القيمة': 'نسخة احتياطية آلية ومحدثة من قاعدة البيانات' },
   ];
   addStyledSheet(summary, 'تقرير_النسخة_الاحتياطية');
 
   // Generate buffer
   const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-  // Save local copy to backups for archive (if filesystem writable)
+  // Safe file write (works on both local dev and serverless /tmp)
   try {
-    const backupDir = join(ROOT_DIR, 'backups');
-    if (!existsSync(backupDir)) {
-      mkdirSync(backupDir, { recursive: true });
-    }
-    const localFilePath = join(backupDir, fileName);
-    writeFileSync(localFilePath, excelBuffer);
-    console.log(`[Daily Backup] Local backup copy saved: ${localFilePath}`);
+    const tmpDir = os.tmpdir();
+    const tmpPath = join(tmpDir, fileName);
+    writeFileSync(tmpPath, excelBuffer);
+    console.log(`[Backup] Copy written to temporary storage: ${tmpPath}`);
   } catch {}
 
   const grandTotal = masterFtts.length + formattedEtaha.length;
-  console.log(`[Daily Backup] Excel file generated successfully (${grandTotal} records, ${excelBuffer.length} bytes).`);
+  console.log(`[Backup] Excel generated: ${grandTotal} records, ${excelBuffer.length} bytes.`);
 
-  // Email sending configuration
-  const smtpUser = options.smtpUser || process.env.SMTP_USER || process.env.GMAIL_USER || 'Elsoltanalex@gmail.com';
-  const smtpPass = options.smtpPass || process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
-  const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const smtpPort = parseInt(process.env.SMTP_PORT || '465', 10);
-
-  if (!smtpPass) {
-    console.log(`\n======================================================`);
-    console.log(`⚠️  [Daily Backup Notice] SMTP Credentials / Gmail App Password not yet configured!`);
-    console.log(`   Target Email: ${recipient}`);
-    console.log(`   File ready: ${fileName} (${excelBuffer.length} bytes, ${grandTotal} records)`);
-    console.log(`======================================================\n`);
-    return {
-      success: true,
-      emailSent: false,
-      requiresPassword: true,
-      message: 'تم تجهيز ملف النسخة الاحتياطية بنجاح (' + grandTotal + ' موقعاً). يرجى إدخال كلمة مرور تطبيقات Gmail لإتمام الإرسال الفوري للبريد.',
-      fileName,
-      totalRecords: grandTotal,
-    };
-  }
-
-  console.log(`[Daily Backup] Connecting to SMTP server (${smtpHost}:${smtpPort}) as ${smtpUser} to deliver email to ${recipient}...`);
-  const transporter = nodemailer.createTransport({
-    host: smtpHost,
-    port: smtpPort,
-    secure: smtpPort === 465,
-    auth: {
-      user: smtpUser,
-      pass: smtpPass,
-    },
-  });
+  // ── Determine Email Service Credentials ──
+  const resendApiKey = options.resendApiKey || process.env.RESEND_API_KEY;
+  const gmailUser = options.gmailUser || options.smtpUser || process.env.GMAIL_USER || process.env.SMTP_USER || 'Elsoltanalex@gmail.com';
+  const gmailPass = options.gmailAppPassword || options.smtpPass || process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS;
 
   const isManual = options.triggerType === 'MANUAL_ON_DEMAND';
   const mailSubject = isManual
@@ -258,80 +204,151 @@ export async function runDailyBackup(optionsOrRecipient = null) {
     ? `تم التوليد والإرسال فورياً بناءً على طلبك من لوحة التحكم (Send Backup Now)`
     : `تم التوليد والإرسال أوتوماتيكياً عبر الجدولة اليومية (الساعة 12:00 منتصف الليل)`;
 
-  const mailOptions = {
-    from: `"FTTS Backup System" <${smtpUser}>`,
-    to: recipient,
-    subject: mailSubject,
-    html: `
-      <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px; background-color: #f8fafc; color: #1e293b;">
-        <div style="max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-          <div style="background: linear-gradient(135deg, ${isManual ? '#0d9488, #2563eb' : '#0284c7, #4f46e5'}); color: #ffffff; padding: 25px; text-align: center;">
-            <h1 style="margin: 0; font-size: 22px; font-weight: bold;">${bannerTitle}</h1>
-            <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 13px;">${bannerSubtitle}</p>
-          </div>
-          
-          <div style="padding: 25px;">
-            <p style="font-size: 15px; line-height: 1.6; margin-top: 0;">
-              تحية طيبة،<br/>
-              ${isManual ? 'بناءً على طلبك الفوري عبر زر <strong>"نسخة احتياطية الآن"</strong>، مرفق طيه أحدث نسخة احتياطية شاملة ومحدثة من قاعدة البيانات السحابية Supabase:' : 'مرفق طيه النسخة الاحتياطية اليومية التلقائية المجدولة والشاملة لكافة مشروعات FTTS ومشروعات Availability (الإتاحة) والعمليات الجديدة:'}
-            </p>
+  const htmlContent = `
+    <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px; background-color: #f8fafc; color: #1e293b;">
+      <div style="max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div style="background: linear-gradient(135deg, ${isManual ? '#0d9488, #2563eb' : '#0284c7, #4f46e5'}); color: #ffffff; padding: 25px; text-align: center;">
+          <h1 style="margin: 0; font-size: 22px; font-weight: bold;">${bannerTitle}</h1>
+          <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 13px;">${bannerSubtitle}</p>
+        </div>
+        
+        <div style="padding: 25px;">
+          <p style="font-size: 15px; line-height: 1.6; margin-top: 0;">
+            تحية طيبة،<br/>
+            ${isManual ? 'بناءً على طلبك الفوري عبر زر <strong>"نسخة احتياطية الآن"</strong>، مرفق طيه أحدث نسخة احتياطية شاملة ومحدثة من قاعدة البيانات السحابية Supabase:' : 'مرفق طيه النسخة الاحتياطية اليومية التلقائية المجدولة والشاملة لكافة مشروعات FTTS ومشروعات Availability (الإتاحة) والعمليات الجديدة:'}
+          </p>
 
-            <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
-              <tr style="background-color: #f1f5f9;">
-                <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">⚙️ نمط التشغيل:</td>
-                <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; color: ${isManual ? '#0d9488' : '#2563eb'};">
-                  ${isManual ? 'طلب يدوي فوري (Send Backup Now)' : 'جدولة أوتوماتيكية يومية (12:00 منتصف الليل)'}
-                </td>
-              </tr>
-              <tr>
-                <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">📅 تاريخ التصدير:</td>
-                <td style="padding: 10px; border: 1px solid #e2e8f0;">${now.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td>
-              </tr>
-              <tr style="background-color: #f1f5f9;">
-                <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">⏰ التوقيت:</td>
-                <td style="padding: 10px; border: 1px solid #e2e8f0;">${now.toLocaleTimeString('ar-EG', { timeZone: 'Africa/Cairo' })} (توقيت القاهرة)</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">🌐 إجمالي مواقع FTTS:</td>
-                <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; color: #0284c7;">${masterFtts.length} موقعاً (WE: ${formattedWe.length} • Vodafone: ${formattedVodafone.length} • Orange: ${formattedOrange.length})</td>
-              </tr>
-              <tr style="background-color: #f1f5f9;">
-                <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">📋 مشروعات Availability:</td>
-                <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; color: #0d9488;">${formattedEtaha.length} مشروعاً معتمداً</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">📁 اسم الملف المرفق:</td>
-                <td style="padding: 10px; border: 1px solid #e2e8f0; font-family: monospace;">${fileName}</td>
-              </tr>
-            </table>
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
+            <tr style="background-color: #f1f5f9;">
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">⚙️ نمط التشغيل:</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; color: ${isManual ? '#0d9488' : '#2563eb'};">
+                ${isManual ? 'طلب يدوي فوري (Send Backup Now)' : 'جدولة أوتوماتيكية يومية (12:00 منتصف الليل)'}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">📅 تاريخ التصدير:</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${now.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td>
+            </tr>
+            <tr style="background-color: #f1f5f9;">
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">⏰ التوقيت:</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${now.toLocaleTimeString('ar-EG', { timeZone: 'Africa/Cairo' })} (توقيت القاهرة)</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">🌐 إجمالي مواقع FTTS:</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; color: #0284c7;">${masterFtts.length} موقعاً (WE: ${formattedWe.length} • Vodafone: ${formattedVodafone.length} • Orange: ${formattedOrange.length})</td>
+            </tr>
+            <tr style="background-color: #f1f5f9;">
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">📋 مشروعات Availability:</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; color: #0d9488;">${formattedEtaha.length} مشروعاً معتمداً</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">📁 اسم الملف المرفق:</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-family: monospace;">${fileName}</td>
+            </tr>
+          </table>
 
-            <div style="background-color: #ecfdf5; border-right: 4px solid #10b981; padding: 12px; border-radius: 4px; font-size: 13px; color: #065f46;">
-              ✅ تم تأمين واستخراج هذه النسخة بنجاح لحفظ وتأمين كافة بيانات المشروعات وسلامة العمليات والرجوع إليها في أي وقت.
-            </div>
-          </div>
-
-          <div style="background-color: #f8fafc; padding: 15px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b;">
-            منظومة المتابعة الرقمية للمشروعات القومية للفايبر والاتصالات • نظام النسخ الاحتياطي الهجين (أوتوماتيكي + فوري)
+          <div style="background-color: #ecfdf5; border-right: 4px solid #10b981; padding: 12px; border-radius: 4px; font-size: 13px; color: #065f46;">
+            ✅ تم تأمين واستخراج هذه النسخة بنجاح لحفظ وتأمين كافة بيانات المشروعات وسلامة العمليات والرجوع إليها في أي وقت.
           </div>
         </div>
+
+        <div style="background-color: #f8fafc; padding: 15px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b;">
+          منظومة المتابعة الرقمية للمشروعات القومية للفايبر والاتصالات • إرسال معتمد
+        </div>
       </div>
-    `,
-    attachments: [
-      {
-        filename: fileName,
-        content: excelBuffer,
-        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      },
-    ],
-  };
+    </div>
+  `;
 
-  const info = await transporter.sendMail(mailOptions);
-  console.log(`[Daily Backup] ✅ Email successfully sent to ${recipient}! MessageId: ${info.messageId}`);
+  // ── 1. Try Resend if configured (Most reliable on Vercel) ──
+  if (resendApiKey) {
+    try {
+      console.log(`[Backup] Sending email via Resend API to ${recipient}...`);
+      const resend = new Resend(resendApiKey);
+      const resendResult = await resend.emails.send({
+        from: 'FTTS System <onboarding@resend.dev>',
+        to: recipient,
+        subject: mailSubject,
+        html: htmlContent,
+        attachments: [
+          {
+            filename: fileName,
+            content: excelBuffer.toString('base64'),
+          },
+        ],
+      });
 
+      console.log('[Backup] ✅ Successfully sent via Resend API!', resendResult);
+      return {
+        success: true,
+        emailSent: true,
+        provider: 'Resend',
+        messageId: resendResult?.data?.id || 'resend-ok',
+        fileName,
+        totalRecords: grandTotal,
+        message: `تم إرسال النسخة الاحتياطية بنجاح عبر Resend إلى ${recipient}`,
+      };
+    } catch (resendErr) {
+      console.error('[Backup] Resend error:', resendErr);
+      // Fall through to Nodemailer
+    }
+  }
+
+  // ── 2. Try Nodemailer / Gmail SMTP ──
+  if (gmailPass) {
+    try {
+      console.log(`[Backup] Sending email via Gmail SMTP as ${gmailUser} to ${recipient}...`);
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: gmailUser,
+          pass: gmailPass.replace(/\s+/g, ''), // clean any spaces in Google 16-char app password
+        },
+      });
+
+      const info = await transporter.sendMail({
+        from: `"FTTS Backup System" <${gmailUser}>`,
+        to: recipient,
+        subject: mailSubject,
+        html: htmlContent,
+        attachments: [
+          {
+            filename: fileName,
+            content: excelBuffer,
+            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          },
+        ],
+      });
+
+      console.log(`[Backup] ✅ Successfully sent via Gmail SMTP! MessageId: ${info.messageId}`);
+      return {
+        success: true,
+        emailSent: true,
+        provider: 'Gmail SMTP',
+        messageId: info.messageId,
+        fileName,
+        totalRecords: grandTotal,
+        message: `تم إرسال النسخة الاحتياطية بنجاح عبر Gmail إلى ${recipient}`,
+      };
+    } catch (smtpErr) {
+      console.error('[Backup] Gmail SMTP error:', smtpErr);
+      return {
+        success: false,
+        emailSent: false,
+        error: `خطأ في اتصال خادم البريد (Gmail SMTP): ${smtpErr.message}`,
+        fileName,
+        totalRecords: grandTotal,
+      };
+    }
+  }
+
+  // ── 3. Neither Resend nor Gmail password is set ──
+  console.log(`[Backup Notice] No email provider configured yet!`);
   return {
-    success: true,
-    emailSent: true,
-    messageId: info.messageId,
+    success: false,
+    emailSent: false,
+    requiresConfig: true,
+    error: 'MISSING_EMAIL_CREDENTIALS',
+    message: 'يتطلب إرسال الإيميل تزويد مفتاح Resend API أو كلمة مرور تطبيقات Gmail (App Password). يمكنك إدخالها مباشرة في النافذة التالية أو إضافتها في إعدادات Vercel.',
     fileName,
     totalRecords: grandTotal,
   };

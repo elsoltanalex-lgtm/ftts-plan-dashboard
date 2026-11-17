@@ -1,6 +1,5 @@
 // api/backup/send-now.js
 // Dedicated On-Demand Endpoint for "نسخة احتياطية الآن" (Send Backup Now)
-// Triggered on-demand when the user clicks the manual backup button in Admin Dashboard
 
 import { runDailyBackup, TARGET_EMAIL } from '../../scripts/daily-backup-email.mjs';
 
@@ -17,36 +16,47 @@ export default async function handler(req, res) {
   try {
     const body = req.body || {};
     const recipient = req.query.email || body.email || TARGET_EMAIL;
-    const clientData = body.clientData || null;
-    const smtpUser = body.smtpUser || null;
-    const smtpPass = body.smtpPass || null;
+    const gmailAppPassword = body.gmailAppPassword || body.smtpPass || process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS;
+    const gmailUser = body.gmailUser || body.smtpUser || process.env.GMAIL_USER || process.env.SMTP_USER;
+    const resendApiKey = body.resendApiKey || process.env.RESEND_API_KEY;
 
-    console.log(`[Manual Send Backup Now] Triggered on-demand for recipient: ${recipient}...`);
+    console.log(`[Send Backup Now API] Running on-demand backup for: ${recipient}...`);
 
     const result = await runDailyBackup({
       recipient,
-      clientData,
-      smtpUser,
-      smtpPass,
+      gmailUser,
+      gmailAppPassword,
+      resendApiKey,
       triggerType: 'MANUAL_ON_DEMAND',
     });
+
+    if (!result.emailSent) {
+      return res.status(result.requiresConfig ? 400 : 500).json({
+        success: false,
+        requiresConfig: !!result.requiresConfig,
+        error: result.error || 'لم يتم إرسال الإيميل',
+        message: result.message || 'فشل إرسال الإيميل، يرجى التحقق من إعدادات البريد.',
+        fileName: result.fileName,
+        totalRecords: result.totalRecords,
+      });
+    }
 
     return res.status(200).json({
       success: true,
       timestamp: new Date().toISOString(),
       recipient,
       triggerType: 'MANUAL_ON_DEMAND',
+      provider: result.provider,
+      messageId: result.messageId,
       fileName: result.fileName,
       totalRecords: result.totalRecords,
-      emailSent: result.emailSent,
-      requiresPassword: !!result.requiresPassword,
-      message: result.message || (result.emailSent ? `تم إرسال النسخة الاحتياطية بنجاح إلى ${recipient}` : 'تم تجهيز ملف النسخة الاحتياطية بنجاح'),
+      message: result.message || `تم إرسال النسخة الاحتياطية بنجاح إلى ${recipient}`,
     });
   } catch (error) {
-    console.error('[Manual Send Backup Now] Error:', error);
+    console.error('[Send Backup Now API] Fatal error:', error);
     return res.status(500).json({
       success: false,
-      error: error.message || 'حدث خطأ أثناء إرسال النسخة الاحتياطية',
+      error: error.message || 'حدث خطأ تقني في معالجة النسخة الاحتياطية',
     });
   }
 }

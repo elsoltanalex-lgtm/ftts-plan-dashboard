@@ -38,6 +38,7 @@ import { useEtahaAPI } from '../hooks/useEtahaAPI';
 import { EtahaBulkImportModal } from '../components/EtahaBulkImportModal';
 import { WeExecutiveReportView } from '../components/WeExecutiveReportView';
 import { SiteActionDropdown } from '../components/SiteActionDropdown';
+import { BackupEmailConfigModal } from '../components/BackupEmailConfigModal';
 
 
 import {
@@ -1016,6 +1017,7 @@ export const Dashboard: React.FC = () => {
   // State & Handler for Full Database / Supabase Backup Export to Excel (.xlsx)
   const [isExportingBackup, setIsExportingBackup] = useState(false);
   const [isEmailingBackup, setIsEmailingBackup] = useState(false);
+  const [isBackupSettingsOpen, setIsBackupSettingsOpen] = useState(false);
 
   const handleExportBackup = useCallback(async () => {
     setIsExportingBackup(true);
@@ -1040,52 +1042,40 @@ export const Dashboard: React.FC = () => {
   }, [liveWeSites, vodafoneSites, orangeSites, etahaSites, deletedSiteCodes, user]);
 
   // Handler to trigger the on-demand email backup to Elsoltanalex@gmail.com
-  const handleEmailBackup = useCallback(async (overridePass?: string) => {
+  const handleEmailBackup = useCallback(async (customCreds?: { gmailAppPassword?: string; resendApiKey?: string }) => {
     setIsEmailingBackup(true);
-    setToastMessage('جارِ استخراج كافة البيانات وإرسال النسخة الاحتياطية إلى Elsoltanalex@gmail.com...');
+    setToastMessage('جارِ تجميع البيانات من Supabase وتوليد ملف الإكسيل للإرسال إلى Elsoltanalex@gmail.com...');
     try {
-      const storedPass = overridePass || localStorage.getItem('ftts_backup_smtp_pass') || undefined;
+      const storedGmailPass = customCreds?.gmailAppPassword || localStorage.getItem('ftts_backup_gmail_pass') || undefined;
+      const storedResendKey = customCreds?.resendApiKey || localStorage.getItem('ftts_backup_resend_key') || undefined;
+
       const res = await fetch('/api/backup/send-now', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: 'Elsoltanalex@gmail.com',
-          smtpPass: storedPass,
-          clientData: {
-            we: liveWeSites,
-            vodafone: vodafoneSites,
-            orange: orangeSites,
-            etaha: etahaSites,
-          },
+          gmailAppPassword: storedGmailPass,
+          resendApiKey: storedResendKey,
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.emailSent) {
-          setToastMessage(`✅ تم إرسال النسخة الاحتياطية بنجاح إلى البريد الإلكتروني Elsoltanalex@gmail.com (${data.totalRecords} موقعاً)`);
-        } else if (data.requiresPassword) {
-          const pass = window.prompt(
-            'تم تجهيز ملف النسخة الاحتياطية بنجاح (' + (data.totalRecords || '') + ' موقعاً).\n\nلتأكيد إرسال الإيميل فوراً عبر Gmail، أدخل كلمة مرور التطبيقات (App Password) الخاصة بحسابك:\n(أو اضغط إلغاء للاكتفاء بحفظ الملف محلياً)',
-            ''
-          );
-          if (pass && pass.trim()) {
-            localStorage.setItem('ftts_backup_smtp_pass', pass.trim());
-            return handleEmailBackup(pass.trim());
-          } else {
-            setToastMessage(`📦 ${data.message || 'تم تجهيز وتأمين النسخة الاحتياطية بنجاح'}`);
-          }
-        } else {
-          setToastMessage(`📦 ${data.message || 'تم تجهيز النسخة الاحتياطية بنجاح'} (${data.totalRecords} موقعاً)`);
-        }
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIsBackupSettingsOpen(false);
+        setToastMessage(`✅ تم إرسال النسخة الاحتياطية بنجاح إلى Elsoltanalex@gmail.com عبر ${data.provider || 'البريد'} (${data.totalRecords} موقعاً) 📦`);
+      } else if (data.requiresConfig) {
+        setIsBackupSettingsOpen(true);
+        setToastMessage('⚙️ يرجى إدخال كلمة مرور تطبيقات Gmail أو مفتاح Resend لإتمام الإرسال الفوري');
       } else {
-        setToastMessage('✅ تم تسجيل وتأكيد إرسال النسخة الاحتياطية الآلية إلى Elsoltanalex@gmail.com');
+        setToastMessage(`❌ ${data.error || data.message || 'فشل إرسال الإيميل'}`);
       }
-    } catch {
-      setToastMessage('✅ تم تأكيد جدولة خدمة النسخ الاحتياطي التلقائي وإرسالها إلى Elsoltanalex@gmail.com');
+    } catch (err: any) {
+      console.error('Email backup error:', err);
+      setToastMessage('❌ حدث خطأ في الاتصال بالخادم، يرجى المحاولة مرة أخرى');
     } finally {
       setIsEmailingBackup(false);
     }
-  }, [liveWeSites, vodafoneSites, orangeSites, etahaSites]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-100/70 p-3 sm:p-5 lg:p-7 text-slate-800 font-sans">
@@ -2203,6 +2193,15 @@ export const Dashboard: React.FC = () => {
       <LoginModal
         isOpen={isLoginModalOpen}
         onClose={closeLoginModal}
+      />
+
+      {/* Backup Email Configuration & Sending Modal */}
+      <BackupEmailConfigModal
+        isOpen={isBackupSettingsOpen}
+        onClose={() => setIsBackupSettingsOpen(false)}
+        onSendWithCredentials={handleEmailBackup}
+        isSending={isEmailingBackup}
+        targetEmail="Elsoltanalex@gmail.com"
       />
     </div>
   );
