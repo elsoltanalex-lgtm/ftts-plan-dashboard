@@ -1125,7 +1125,7 @@ export const Dashboard: React.FC = () => {
                 onClick={() => handleScopeChange('ETAHA')}
                 className="px-5 py-2.5 bg-gradient-to-r from-teal-700 to-emerald-800 hover:from-teal-800 hover:to-emerald-900 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
               >
-                الانتقال إلى تبويب الإتاحة المعتمد (840 موقعاً)
+                الانتقال إلى تبويب الإتاحة المعتمد (360 موقعاً)
               </button>
             </div>
           </div>
@@ -1150,7 +1150,7 @@ export const Dashboard: React.FC = () => {
                 onClick={() => handleScopeChange('ETAHA')}
                 className="px-5 py-2.5 bg-gradient-to-r from-teal-700 to-emerald-800 hover:from-teal-800 hover:to-emerald-900 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
               >
-                الانتقال إلى تبويب الإتاحة المعتمد (840 موقعاً)
+                الانتقال إلى تبويب الإتاحة المعتمد (360 موقعاً)
               </button>
             </div>
           </div>

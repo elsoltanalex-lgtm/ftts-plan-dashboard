@@ -3,10 +3,10 @@
 
 import { useState, useCallback } from 'react';
 import type { SiteRecord } from '../types/dashboard';
-import { ETAHA_RAW_RECORDS, ETAHA_MASTER_SITES, type EtahaRecord } from '../data/etahaSites';
+import { ETAHA_RAW_RECORDS, type EtahaRecord } from '../data/etahaSites';
 import { supabase } from '../lib/supabase';
 
-const STORAGE_KEY = 'availability_etaha_records_v2';
+const STORAGE_KEY = 'availability_etaha_records_v4_360';
 
 let inMemoryEtahaRecords: EtahaRecord[] = [];
 

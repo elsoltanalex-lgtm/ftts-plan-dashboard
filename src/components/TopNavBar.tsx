@@ -171,7 +171,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
   ];
 
   // The 3 Sub-navigation Tabs under "الإتاحة":
-  // 1. الإتاحة (Availability) - Linked exclusively to the 840 sites Excel sheet
+  // 1. الإتاحة (Availability) - Linked exclusively to the 360 sites Excel sheet
   // 2. Digital Transformation
   // 3. Egypt Post
   const availabilitySubTabs = [
@@ -181,7 +181,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
       nameEn: 'Availability',
       arSubtitle: 'مشروعات الإتاحة المعتمدة (الشيت المرفوع)',
       icon: Globe,
-      count: stats.etahaCount || 840,
+      count: stats.etahaCount || 360,
       countLabel: 'مشروع معتمد',
       badge: 'شيت الإتاحة المرفوع ✅',
       activeGradient:
@@ -255,8 +255,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
           <div ref={fttsRef} className="relative">
             <div
               className={`flex items-center justify-between p-3 rounded-xl border transition-all duration-200 cursor-pointer ${isFttsActive
-                  ? 'bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 text-white shadow-md ring-2 ring-blue-500/30 border-blue-600'
-                  : 'bg-slate-50/90 hover:bg-slate-100 border-slate-200 text-slate-700'
+                ? 'bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 text-white shadow-md ring-2 ring-blue-500/30 border-blue-600'
+                : 'bg-slate-50/90 hover:bg-slate-100 border-slate-200 text-slate-700'
                 }`}
               onClick={handleSelectFtts}
             >
@@ -264,8 +264,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
               <div className="flex items-center gap-3 text-left flex-1 min-w-0">
                 <div
                   className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isFttsActive
-                      ? 'bg-white/15 text-white'
-                      : 'bg-white text-blue-600 shadow-2xs border border-slate-200'
+                    ? 'bg-white/15 text-white'
+                    : 'bg-white text-blue-600 shadow-2xs border border-slate-200'
                     }`}
                 >
                   <Radio className="w-5 h-5" />
@@ -300,8 +300,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                   setIsAvailabilityDropdownOpen(false);
                 }}
                 className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ml-2 ${isFttsActive
-                    ? 'bg-white/15 hover:bg-white/25 text-white border border-white/20'
-                    : 'bg-white hover:bg-slate-200/80 text-slate-600 border border-slate-200 shadow-2xs'
+                  ? 'bg-white/15 hover:bg-white/25 text-white border border-white/20'
+                  : 'bg-white hover:bg-slate-200/80 text-slate-600 border border-slate-200 shadow-2xs'
                   }`}
                 title="Open FTTS Operators Dropdown"
               >
@@ -332,8 +332,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                         type="button"
                         onClick={() => handleSelectOperator(op.id)}
                         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all duration-150 cursor-pointer ${isSelected
-                            ? 'bg-blue-50/90 text-blue-900 border border-blue-200 font-bold'
-                            : 'hover:bg-slate-50 text-slate-700 font-medium'
+                          ? 'bg-blue-50/90 text-blue-900 border border-blue-200 font-bold'
+                          : 'hover:bg-slate-50 text-slate-700 font-medium'
                           }`}
                       >
                         <div className="flex items-center gap-2.5">
@@ -361,8 +361,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
           <div ref={availabilityRef} className="relative">
             <div
               className={`flex items-center justify-between p-3 rounded-xl border transition-all duration-200 cursor-pointer ${isAvailabilityActive
-                  ? 'bg-gradient-to-r from-teal-700 via-emerald-700 to-teal-800 text-white shadow-md ring-2 ring-emerald-500/30 border-teal-600'
-                  : 'bg-slate-50/90 hover:bg-slate-100 border-slate-200 text-slate-700'
+                ? 'bg-gradient-to-r from-teal-700 via-emerald-700 to-teal-800 text-white shadow-md ring-2 ring-emerald-500/30 border-teal-600'
+                : 'bg-slate-50/90 hover:bg-slate-100 border-slate-200 text-slate-700'
                 }`}
               onClick={handleSelectAvailability}
             >
@@ -370,8 +370,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
               <div className="flex items-center gap-3 text-left flex-1 min-w-0">
                 <div
                   className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isAvailabilityActive
-                      ? 'bg-white/15 text-white'
-                      : 'bg-white text-emerald-600 shadow-2xs border border-slate-200'
+                    ? 'bg-white/15 text-white'
+                    : 'bg-white text-emerald-600 shadow-2xs border border-slate-200'
                     }`}
                 >
                   <Globe className="w-5 h-5" />
@@ -383,11 +383,11 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                     </span>
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${isAvailabilityActive
-                          ? 'bg-white/20 text-white'
-                          : 'bg-emerald-100 text-emerald-800'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-emerald-100 text-emerald-800'
                         }`}
                     >
-                      {(stats.etahaCount || 840).toLocaleString()} Projects
+                      {(stats.etahaCount || 360).toLocaleString()} Projects
                     </span>
                   </div>
                   <span
@@ -408,8 +408,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                   setIsFttsDropdownOpen(false);
                 }}
                 className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ml-2 ${isAvailabilityActive
-                    ? 'bg-white/15 hover:bg-white/25 text-white border border-white/20'
-                    : 'bg-white hover:bg-slate-200/80 text-slate-600 border border-slate-200 shadow-2xs'
+                  ? 'bg-white/15 hover:bg-white/25 text-white border border-white/20'
+                  : 'bg-white hover:bg-slate-200/80 text-slate-600 border border-slate-200 shadow-2xs'
                   }`}
                 title="فتح قائمة الأقسام الفرعية للإتاحة"
               >
@@ -445,8 +445,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                         type="button"
                         onClick={() => handleSelectAvailabilitySubTab(subTab.id)}
                         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all duration-150 cursor-pointer ${isSelected
-                            ? 'bg-teal-50/90 text-teal-900 border border-teal-200 font-bold'
-                            : 'hover:bg-slate-50 text-slate-700 font-medium'
+                          ? 'bg-teal-50/90 text-teal-900 border border-teal-200 font-bold'
+                          : 'hover:bg-slate-50 text-slate-700 font-medium'
                           }`}
                       >
                         <div className="flex items-center gap-2.5">
@@ -480,8 +480,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
               type="button"
               onClick={onSelectUploaded}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeScope === 'UPLOADED'
-                  ? 'bg-purple-700 text-white shadow-sm'
-                  : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200'
+                ? 'bg-purple-700 text-white shadow-sm'
+                : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200'
                 }`}
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -521,8 +521,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                     id={`btn-operator-${op.id.toLowerCase()}`}
                     onClick={() => handleSelectOperator(op.id)}
                     className={`relative p-3.5 rounded-xl border text-left transition-all duration-200 cursor-pointer group flex flex-col justify-between ${isSelected
-                        ? op.activeGradient
-                        : 'bg-white hover:bg-slate-50/90 border-slate-200/90 text-slate-700 shadow-xs hover:shadow-sm'
+                      ? op.activeGradient
+                      : 'bg-white hover:bg-slate-50/90 border-slate-200/90 text-slate-700 shadow-xs hover:shadow-sm'
                       }`}
                   >
                     {/* Top Row: Icon, Title, and Brand dot */}
@@ -577,8 +577,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                         </span>
                         <span
                           className={`font-mono text-xs font-bold px-2 py-0.5 rounded-md inline-block ${isSelected
-                              ? 'bg-white/20 text-white'
-                              : 'bg-slate-100 text-slate-700'
+                            ? 'bg-white/20 text-white'
+                            : 'bg-slate-100 text-slate-700'
                             }`}
                         >
                           {op.links.toLocaleString()}
@@ -620,8 +620,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                       setIsAvailabilityDropdownOpen(false);
                     }}
                     className={`relative p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer group flex flex-col justify-between ${isSelected
-                        ? subTab.activeGradient
-                        : 'bg-white hover:bg-slate-50/90 border-slate-200/90 text-slate-700 shadow-xs hover:shadow-sm'
+                      ? subTab.activeGradient
+                      : 'bg-white hover:bg-slate-50/90 border-slate-200/90 text-slate-700 shadow-xs hover:shadow-sm'
                       }`}
                   >
                     {/* Top Row: Icon, Title, and Brand dot */}
@@ -629,8 +629,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div
                           className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${isSelected
-                              ? 'bg-white/20 text-white'
-                              : 'bg-slate-100 text-slate-700 group-hover:bg-teal-50 group-hover:text-teal-700'
+                            ? 'bg-white/20 text-white'
+                            : 'bg-slate-100 text-slate-700 group-hover:bg-teal-50 group-hover:text-teal-700'
                             }`}
                         >
                           <Icon className="w-5 h-5" />
@@ -681,7 +681,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                               إجمالي مشروعات الإكسيل
                             </span>
                             <span className="font-mono text-base sm:text-lg font-black tracking-tight leading-none">
-                              {(stats.etahaCount || 840).toLocaleString()} موقع
+                              {(stats.etahaCount || 360).toLocaleString()} موقع
                             </span>
                           </>
                         ) : (
@@ -696,8 +696,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
 
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isSelected
-                            ? 'bg-white/20 text-white border border-white/30'
-                            : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                          ? 'bg-white/20 text-white border border-white/30'
+                          : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                           }`}
                       >
                         {subTab.badge}
