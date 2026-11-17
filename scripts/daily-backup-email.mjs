@@ -247,54 +247,71 @@ export async function runDailyBackup(optionsOrRecipient = null) {
     },
   });
 
+  const isManual = options.triggerType === 'MANUAL_ON_DEMAND';
+  const mailSubject = isManual
+    ? `⚡ نسخة احتياطية فورية (طلب يدوي) - FTTS & Availability - ${dateStr}`
+    : `📦 النسخة الاحتياطية اليومية التلقائية (12:00 AM) - FTTS & Availability - ${dateStr}`;
+  const bannerTitle = isManual
+    ? `⚡ نسخة احتياطية فورية (طلب يدوي)`
+    : `📦 النسخة الاحتياطية اليومية التلقائية`;
+  const bannerSubtitle = isManual
+    ? `تم التوليد والإرسال فورياً بناءً على طلبك من لوحة التحكم (Send Backup Now)`
+    : `تم التوليد والإرسال أوتوماتيكياً عبر الجدولة اليومية (الساعة 12:00 منتصف الليل)`;
+
   const mailOptions = {
     from: `"FTTS Backup System" <${smtpUser}>`,
     to: recipient,
-    subject: `📦 النسخة الاحتياطية لنظام FTTS & Availability - ${dateStr}`,
+    subject: mailSubject,
     html: `
       <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px; background-color: #f8fafc; color: #1e293b;">
         <div style="max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-          <div style="background: linear-gradient(135deg, #0284c7, #4f46e5); color: #ffffff; padding: 25px; text-align: center;">
-            <h1 style="margin: 0; font-size: 22px; font-weight: bold;">📦 النسخة الاحتياطية الفورية المحدثة</h1>
-            <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">Fiber Tracking Board (FTTS & Availability)</p>
+          <div style="background: linear-gradient(135deg, ${isManual ? '#0d9488, #2563eb' : '#0284c7, #4f46e5'}); color: #ffffff; padding: 25px; text-align: center;">
+            <h1 style="margin: 0; font-size: 22px; font-weight: bold;">${bannerTitle}</h1>
+            <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 13px;">${bannerSubtitle}</p>
           </div>
           
           <div style="padding: 25px;">
             <p style="font-size: 15px; line-height: 1.6; margin-top: 0;">
               تحية طيبة،<br/>
-              مرفق طيه النسخة الاحتياطية الشاملة والمحدثة بالكامل من قاعدة البيانات السحابية Supabase، والمتضمنة كافة مشروعات FTTS ومشروعات Availability (الإتاحة الـ 360 مشروعاً المعتمدة) والعمليات الجديدة.
+              ${isManual ? 'بناءً على طلبك الفوري عبر زر <strong>"نسخة احتياطية الآن"</strong>، مرفق طيه أحدث نسخة احتياطية شاملة ومحدثة من قاعدة البيانات السحابية Supabase:' : 'مرفق طيه النسخة الاحتياطية اليومية التلقائية المجدولة والشاملة لكافة مشروعات FTTS ومشروعات Availability (الإتاحة) والعمليات الجديدة:'}
             </p>
 
             <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
               <tr style="background-color: #f1f5f9;">
+                <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">⚙️ نمط التشغيل:</td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; color: ${isManual ? '#0d9488' : '#2563eb'};">
+                  ${isManual ? 'طلب يدوي فوري (Send Backup Now)' : 'جدولة أوتوماتيكية يومية (12:00 منتصف الليل)'}
+                </td>
+              </tr>
+              <tr>
                 <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">📅 تاريخ التصدير:</td>
                 <td style="padding: 10px; border: 1px solid #e2e8f0;">${now.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td>
               </tr>
-              <tr>
+              <tr style="background-color: #f1f5f9;">
                 <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">⏰ التوقيت:</td>
                 <td style="padding: 10px; border: 1px solid #e2e8f0;">${now.toLocaleTimeString('ar-EG', { timeZone: 'Africa/Cairo' })} (توقيت القاهرة)</td>
               </tr>
-              <tr style="background-color: #f1f5f9;">
+              <tr>
                 <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">🌐 إجمالي مواقع FTTS:</td>
                 <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; color: #0284c7;">${masterFtts.length} موقعاً (WE: ${formattedWe.length} • Vodafone: ${formattedVodafone.length} • Orange: ${formattedOrange.length})</td>
               </tr>
-              <tr>
+              <tr style="background-color: #f1f5f9;">
                 <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">📋 مشروعات Availability:</td>
                 <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; color: #0d9488;">${formattedEtaha.length} مشروعاً معتمداً</td>
               </tr>
-              <tr style="background-color: #f1f5f9;">
+              <tr>
                 <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">📁 اسم الملف المرفق:</td>
                 <td style="padding: 10px; border: 1px solid #e2e8f0; font-family: monospace;">${fileName}</td>
               </tr>
             </table>
 
             <div style="background-color: #ecfdf5; border-right: 4px solid #10b981; padding: 12px; border-radius: 4px; font-size: 13px; color: #065f46;">
-              ✅ تم تأمين واستخراج هذه النسخة تلقائياً لحفظ وتأمين كافة بيانات المشروعات وسلامة العمليات والرجوع إليها في أي وقت.
+              ✅ تم تأمين واستخراج هذه النسخة بنجاح لحفظ وتأمين كافة بيانات المشروعات وسلامة العمليات والرجوع إليها في أي وقت.
             </div>
           </div>
 
           <div style="background-color: #f8fafc; padding: 15px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b;">
-            منظومة المتابعة الرقمية للمشروعات القومية للفايبر والاتصالات • إرسال آلي معتمد
+            منظومة المتابعة الرقمية للمشروعات القومية للفايبر والاتصالات • نظام النسخ الاحتياطي الهجين (أوتوماتيكي + فوري)
           </div>
         </div>
       </div>

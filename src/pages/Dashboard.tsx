@@ -1045,7 +1045,7 @@ export const Dashboard: React.FC = () => {
     setToastMessage('جارِ استخراج كافة البيانات وإرسال النسخة الاحتياطية إلى Elsoltanalex@gmail.com...');
     try {
       const storedPass = overridePass || localStorage.getItem('ftts_backup_smtp_pass') || undefined;
-      const res = await fetch('/api/cron/daily-backup', {
+      const res = await fetch('/api/backup/send-now', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1161,13 +1161,13 @@ export const Dashboard: React.FC = () => {
               </div>
             )}
 
-            {/* زر إرسال نسخة احتياطية الآن (Send Backup Now) */}
+            {/* زر منفصل ومستقل للطلب الفوري: نسخة احتياطية الآن (Send Backup Now) */}
             <button
               onClick={() => handleEmailBackup()}
               disabled={isEmailingBackup}
               id="btn-admin-send-backup-now"
               className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold border border-emerald-400/50 transition-all shadow-md hover:shadow-emerald-500/25 cursor-pointer flex items-center gap-1.5 disabled:opacity-60"
-              title="تجميع أحدث بيانات Supabase وإرسالها فوراً إلى Elsoltanalex@gmail.com"
+              title="توليد وإرسال نسخة احتياطية فورية من بيانات Supabase كطلب يدوي إلى Elsoltanalex@gmail.com"
             >
               {isEmailingBackup ? (
                 <>
@@ -1177,10 +1177,19 @@ export const Dashboard: React.FC = () => {
               ) : (
                 <>
                   <Mail className="w-3.5 h-3.5 text-emerald-200" />
-                  <span>إرسال نسخة احتياطية الآن (Send Backup Now)</span>
+                  <span>نسخة احتياطية الآن (Send Backup Now)</span>
                 </>
               )}
             </button>
+
+            {/* شارة توضيحية لجدولة النسخ الأوتوماتيكية اليومية المستقلة */}
+            <div
+              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-950/60 text-emerald-300 border border-emerald-500/40 shadow-sm"
+              title="الجدولة الأوتوماتيكية اليومية تعمل تلقائياً كل ليلة في تمام الساعة 12:00 منتصف الليل دون أي تدخل يدوي"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>الجدولة الآلية: 12:00 منتصف الليل يومياً</span>
+            </div>
 
             <button
               onClick={openLoginModal}

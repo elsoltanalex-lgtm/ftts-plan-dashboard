@@ -212,27 +212,38 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Send Backup Now (Instant Email Delivery Test) */}
+          {/* Send Backup Now (Instant On-Demand Request) */}
           {onEmailBackup && (
-            <button
-              onClick={onEmailBackup}
-              id="btn-send-backup-now"
-              disabled={isEmailingBackup}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 rounded-lg border border-emerald-400/50 transition-all shadow-md hover:shadow-emerald-500/25 cursor-pointer disabled:opacity-60"
-              title="تجميع أحدث بيانات Supabase وإرسالها فوراً إلى Elsoltanalex@gmail.com (Send Backup Now)"
-            >
-              {isEmailingBackup ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-200" />
-                  <span>جارِ الإرسال للإيميل...</span>
-                </>
-              ) : (
-                <>
-                  <Mail className="w-3.5 h-3.5 text-emerald-200" />
-                  <span>إرسال نسخة احتياطية الآن (Send Backup Now)</span>
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onEmailBackup}
+                id="btn-send-backup-now"
+                disabled={isEmailingBackup}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 rounded-lg border border-emerald-400/50 transition-all shadow-md hover:shadow-emerald-500/25 cursor-pointer disabled:opacity-60"
+                title="توليد وإرسال نسخة احتياطية فورية من بيانات Supabase كطلب يدوي إلى Elsoltanalex@gmail.com"
+              >
+                {isEmailingBackup ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-200" />
+                    <span>جارِ الإرسال للإيميل...</span>
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-3.5 h-3.5 text-emerald-200" />
+                    <span>نسخة احتياطية الآن (Send Backup Now)</span>
+                  </>
+                )}
+              </button>
+
+              {/* Automated Schedule Status Badge */}
+              <div 
+                className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 bg-emerald-950/70 rounded-lg border border-emerald-500/30"
+                title="جدولة أوتوماتيكية يومية مفعلة تعمل كل ليلة الساعة 12:00 منتصف الليل وترسل لـ Elsoltanalex@gmail.com"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                <span>جدولة يومية: 12:00 AM تلقائياً</span>
+              </div>
+            </div>
           )}
 
           {/* Export CSV Button */}
