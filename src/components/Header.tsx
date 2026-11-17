@@ -212,14 +212,14 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Daily Automated Email Backup Button & Status */}
+          {/* Send Backup Now (Instant Email Delivery Test) */}
           {onEmailBackup && (
             <button
               onClick={onEmailBackup}
-              id="btn-email-backup"
+              id="btn-send-backup-now"
               disabled={isEmailingBackup}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 rounded-lg border border-emerald-400/50 transition-all shadow-md hover:shadow-emerald-500/20 cursor-pointer disabled:opacity-60"
-              title="إرسال نسخة احتياطية مجدولة وفورية لكافة الجداول إلى Elsoltanalex@gmail.com (مجدولة آلياً كل ليلة الساعة 12:00 منتصف الليل)"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 rounded-lg border border-emerald-400/50 transition-all shadow-md hover:shadow-emerald-500/25 cursor-pointer disabled:opacity-60"
+              title="تجميع أحدث بيانات Supabase وإرسالها فوراً إلى Elsoltanalex@gmail.com (Send Backup Now)"
             >
               {isEmailingBackup ? (
                 <>
@@ -229,7 +229,7 @@ export const Header: React.FC<HeaderProps> = ({
               ) : (
                 <>
                   <Mail className="w-3.5 h-3.5 text-emerald-200" />
-                  <span>نسخة الإيميل اليومية (12:00 AM)</span>
+                  <span>إرسال نسخة احتياطية الآن (Send Backup Now)</span>
                 </>
               )}
             </button>

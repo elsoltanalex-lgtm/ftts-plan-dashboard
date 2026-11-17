@@ -1,6 +1,6 @@
 // scripts/daily-backup-email.mjs
 // Automated Daily Backup & Email Script for FTTS & Availability Dashboard
-// Scheduled to run daily at midnight (12:00 AM Cairo Time)
+// Scheduled to run daily at midnight (12:00 AM Cairo Time) and on-demand via UI
 
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
@@ -21,9 +21,6 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // 2. Email destination
 export const TARGET_EMAIL = process.env.BACKUP_TARGET_EMAIL || 'Elsoltanalex@gmail.com';
 
-console.log(`[Daily Backup] Starting backup routine for ${TARGET_EMAIL}...`);
-console.log(`[Daily Backup] Time: ${new Date().toLocaleString('ar-EG', { timeZone: 'Africa/Cairo' })} (Cairo Time)`);
-
 /**
  * Fetch table safely from Supabase
  */
@@ -39,7 +36,7 @@ async function fetchTable(tableName) {
     }
     console.log(`[Daily Backup] Supabase table [${tableName}]: successfully fetched ${data.length} live rows.`);
     return data;
-  } catch (err) {
+  } catch {
     return null;
   }
 }
@@ -60,28 +57,58 @@ function loadJsonFallback(filename) {
 }
 
 /**
- * Main routine
+ * Main routine: Supports invocation with string (recipient email) or options object
  */
-export async function runDailyBackup(customRecipient = null) {
-  const recipient = customRecipient || TARGET_EMAIL;
+export async function runDailyBackup(optionsOrRecipient = null) {
+  const options = (typeof optionsOrRecipient === 'string')
+    ? { recipient: optionsOrRecipient }
+    : (optionsOrRecipient || {});
+
+  const recipient = options.recipient || TARGET_EMAIL;
   const now = new Date();
   const dateStr = now.toISOString().slice(0, 10);
   const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
   const fileName = `FTTS_Daily_Backup_${dateStr}_${timeStr}.xlsx`;
 
-  // Fetch Supabase live data with fallbacks
-  const [liveWe, liveVodafone, liveOrange, liveEtaha] = await Promise.all([
-    fetchTable('we_records').then(res => res || fetchTable('we')),
-    fetchTable('vodafone_records'),
-    fetchTable('orange_records'),
-    fetchTable('etaha_records').then(res => res || fetchTable('etaha')),
-  ]);
+  console.log(`[Daily Backup] Starting backup routine for ${recipient}...`);
+  console.log(`[Daily Backup] Time: ${now.toLocaleString('ar-EG', { timeZone: 'Africa/Cairo' })} (Cairo Time)`);
 
-  // Load verified local datasets if table is not active in Supabase yet
-  const weRows = (liveWe && liveWe.length > 0) ? liveWe : loadJsonFallback('We.json');
-  const vodafoneRows = (liveVodafone && liveVodafone.length > 0) ? liveVodafone : loadJsonFallback('Vodafone.json');
-  const orangeRows = (liveOrange && liveOrange.length > 0) ? liveOrange : loadJsonFallback('Orange_480.json');
-  const etahaRows = (liveEtaha && liveEtaha.length > 0) ? liveEtaha : loadJsonFallback('Etaha_360.json');
+  let weRows = [];
+  let vodafoneRows = [];
+  let orangeRows = [];
+  let etahaRows = [];
+
+  // Prioritize live client data passed from UI (most up-to-date in-memory state)
+  if (options.clientData) {
+    console.log('[Daily Backup] Using client-provided live active dataset from browser state.');
+    if (Array.isArray(options.clientData.we)) weRows = options.clientData.we;
+    if (Array.isArray(options.clientData.vodafone)) vodafoneRows = options.clientData.vodafone;
+    if (Array.isArray(options.clientData.orange)) orangeRows = options.clientData.orange;
+    if (Array.isArray(options.clientData.etaha)) etahaRows = options.clientData.etaha;
+  }
+
+  // If any dataset is still empty, query Supabase and fallbacks
+  if (weRows.length === 0 || vodafoneRows.length === 0 || orangeRows.length === 0 || etahaRows.length === 0) {
+    const [liveWe, liveVodafone, liveOrange, liveEtaha] = await Promise.all([
+      weRows.length > 0 ? null : fetchTable('we_records').then(res => res || fetchTable('we')),
+      vodafoneRows.length > 0 ? null : fetchTable('vodafone_records'),
+      orangeRows.length > 0 ? null : fetchTable('orange_records'),
+      etahaRows.length > 0 ? null : fetchTable('etaha_records').then(res => res || fetchTable('etaha')),
+    ]);
+
+    if (weRows.length === 0) {
+      weRows = (liveWe && liveWe.length > 0) ? liveWe : loadJsonFallback('We.json');
+    }
+    if (vodafoneRows.length === 0) {
+      vodafoneRows = (liveVodafone && liveVodafone.length > 0) ? liveVodafone : loadJsonFallback('Vodafone.json');
+    }
+    if (orangeRows.length === 0) {
+      orangeRows = (liveOrange && liveOrange.length > 0) ? liveOrange : loadJsonFallback('Orange_480.json');
+    }
+    if (etahaRows.length === 0) {
+      etahaRows = (liveEtaha && liveEtaha.length > 0) ? liveEtaha : loadJsonFallback('Etaha_360.json');
+    }
+  }
 
   console.log(`[Daily Backup] Data counts: WE=${weRows.length}, Vodafone=${vodafoneRows.length}, Orange=${orangeRows.length}, Availability=${etahaRows.length}`);
 
@@ -92,20 +119,20 @@ export async function runDailyBackup(customRecipient = null) {
   const sanitizeRows = (list, defaultCompany) => {
     return list.map((item, idx) => {
       const raw = item.rawRecord || item.data || item;
-      const code = item['site code'] || item[' Site code'] || item.site_code || item.Code || raw[' Site code'] || raw['site code'] || `SITE-${idx + 1}`;
+      const code = item.siteCode || item['site code'] || item[' Site code'] || item.site_code || item.Code || raw[' Site code'] || raw['site code'] || `SITE-${idx + 1}`;
       return {
         'مسلسل': idx + 1,
         'Site Code': code,
         'المشغل': item.company || defaultCompany || 'WE',
-        'سنترال الربط': item['سنترال الربط'] || item.central || raw['سنترال الربط'] || '',
-        'التصنيف': item['التصنيف'] || item.classification || raw['التصنيف'] || '',
+        'سنترال الربط': item.central || item['سنترال الربط'] || raw['سنترال الربط'] || '',
+        'التصنيف': item.classification || item['التصنيف'] || raw['التصنيف'] || '',
         'الحالة التنفيذية': item.status || item['التصنيف'] || '',
-        'رئاسة قطاعات التنفيذ': item['رئاسة قطاعات التنفيذ'] || item.sector || raw['رئاسة قطاعات التنفيذ'] || '',
-        'الادارة العامة لتنفيذ الشبكات': item['الادارة العامة لتنفيذ الشبكات'] || item.generalAdmin || raw['الادارة العامة لتنفيذ الشبكات'] || '',
-        'إدارة التنفيذ المختصة': item['ادارة التنفيذ الفرعية'] || item['إدارة التنفيذ المختصة'] || item.competentAdmin || '',
-        'تاريخ الانتهاء المتوقع': item['التاريخ المتوقع للانتهاء'] || item.expectedDate || '',
-        'اسباب التعذر': item['اسباب التعّذر'] || item['اسباب التعذر'] || item.obstacleReason || '',
-        'الملاحظات': item['الملاحظات'] || item.notes || '',
+        'رئاسة قطاعات التنفيذ': item.sector || item['رئاسة قطاعات التنفيذ'] || raw['رئاسة قطاعات التنفيذ'] || '',
+        'الادارة العامة لتنفيذ الشبكات': item.generalAdmin || item['الادارة العامة لتنفيذ الشبكات'] || raw['الادارة العامة لتنفيذ الشبكات'] || '',
+        'إدارة التنفيذ المختصة': item.competentAdmin || item['ادارة التنفيذ الفرعية'] || item['إدارة التنفيذ المختصة'] || '',
+        'تاريخ الانتهاء المتوقع': item.expectedDate || item['التاريخ المتوقع للانتهاء'] || '',
+        'اسباب التعذر': item.obstacleReason || item['اسباب التعّذر'] || item['اسباب التعذر'] || '',
+        'الملاحظات': item.notes || item['الملاحظات'] || '',
       };
     });
   };
@@ -120,16 +147,16 @@ export async function runDailyBackup(customRecipient = null) {
     return {
       'مسلسل': idx + 1,
       'كود الموقع (Code)': item.Code || item.code || item.siteCode || `ETAH-${idx + 1}`,
-      'اسم العميل': raw['اسم العميل'] || item.clientName || 'العميل المعتمد',
-      'اسم الفرع': raw['اسم الفرع'] || item.branchName || '',
-      'العنوان': raw['العنوان'] || item.address || '',
-      'القطاع': raw['القطاعات'] || raw['القطاع'] || item.sector || '',
-      'الإدارة العامة': raw['الادارة العامة المنفذة'] || raw['الإدارة العامة'] || raw['الادارة العامة'] || item.generalAdmin || '',
-      'إدارة التنفيذ المختصة': raw['ادارة التنفيذ'] || raw['إدارة التنفيذ المختصة'] || item.competentAdmin || '',
+      'اسم العميل': item.clientName || raw['اسم العميل'] || 'العميل المعتمد',
+      'اسم الفرع': item.branchName || raw['اسم الفرع'] || '',
+      'العنوان': item.address || raw['العنوان'] || '',
+      'القطاع': item.sector || raw['القطاعات'] || raw['القطاع'] || '',
+      'الإدارة العامة': item.generalAdmin || raw['الادارة العامة المنفذة'] || raw['الإدارة العامة'] || raw['الادارة العامة'] || '',
+      'إدارة التنفيذ المختصة': item.competentAdmin || raw['ادارة التنفيذ'] || raw['إدارة التنفيذ المختصة'] || '',
       'المسار الداخلي': raw['المسار الداخلى'] || raw['المسار الداخلي'] || 'غير محدد',
       'المسار الخارجي': raw['المسار الخارجي'] || 'غير محدد',
-      'موقف التسليم': raw['موقف التسليم'] || raw['موقف_التسليم'] || raw['التصنيف'] || item.status || '',
-      'الملاحظات': raw['ملحوظه في حاله عدم الانتهاء'] || raw['الملاحظات'] || item.notes || '',
+      'موقف التسليم': item.status || raw['موقف التسليم'] || raw['موقف_التسليم'] || raw['التصنيف'] || '',
+      'الملاحظات': item.notes || raw['ملحوظه في حاله عدم الانتهاء'] || raw['الملاحظات'] || '',
     };
   });
 
@@ -166,20 +193,20 @@ export async function runDailyBackup(customRecipient = null) {
     { 'البيان': 'عدد مواقع Orange', 'القيمة': formattedOrange.length },
     { 'البيان': 'عدد مشروعات Availability (الإتاحة)', 'القيمة': formattedEtaha.length },
     { 'البيان': 'إجمالي السجلات المؤمّنة', 'القيمة': masterFtts.length + formattedEtaha.length },
-    { 'البيان': 'حالة الحفظ السحابي', 'القيمة': 'نسخة احتياطية آلية مجدولة يومياً' },
+    { 'البيان': 'حالة الحفظ السحابي', 'القيمة': 'نسخة احتياطية آلية ومحدثة من قاعدة البيانات' },
   ];
   addStyledSheet(summary, 'تقرير_النسخة_الاحتياطية');
 
   // Generate buffer
   const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-  // Save local copy to backups for archive
-  const backupDir = join(ROOT_DIR, 'backups');
-  if (!existsSync(backupDir)) {
-    try { mkdirSync(backupDir, { recursive: true }); } catch {}
-  }
-  const localFilePath = join(backupDir, fileName);
+  // Save local copy to backups for archive (if filesystem writable)
   try {
+    const backupDir = join(ROOT_DIR, 'backups');
+    if (!existsSync(backupDir)) {
+      mkdirSync(backupDir, { recursive: true });
+    }
+    const localFilePath = join(backupDir, fileName);
     writeFileSync(localFilePath, excelBuffer);
     console.log(`[Daily Backup] Local backup copy saved: ${localFilePath}`);
   } catch {}
@@ -188,30 +215,28 @@ export async function runDailyBackup(customRecipient = null) {
   console.log(`[Daily Backup] Excel file generated successfully (${grandTotal} records, ${excelBuffer.length} bytes).`);
 
   // Email sending configuration
-  const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER;
-  const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
+  const smtpUser = options.smtpUser || process.env.SMTP_USER || process.env.GMAIL_USER || 'Elsoltanalex@gmail.com';
+  const smtpPass = options.smtpPass || process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
   const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
   const smtpPort = parseInt(process.env.SMTP_PORT || '465', 10);
 
-  if (!smtpUser || !smtpPass) {
+  if (!smtpPass) {
     console.log(`\n======================================================`);
-    console.log(`⚠️  [Daily Backup Notice] SMTP Credentials not yet set in environment variables!`);
+    console.log(`⚠️  [Daily Backup Notice] SMTP Credentials / Gmail App Password not yet configured!`);
     console.log(`   Target Email: ${recipient}`);
-    console.log(`   File ready: ${fileName} (${excelBuffer.length} bytes)`);
-    console.log(`   To send emails automatically via Gmail:`);
-    console.log(`   Set GMAIL_USER and GMAIL_APP_PASSWORD in your Vercel / GitHub Secrets.`);
+    console.log(`   File ready: ${fileName} (${excelBuffer.length} bytes, ${grandTotal} records)`);
     console.log(`======================================================\n`);
     return {
       success: true,
       emailSent: false,
-      message: 'تم إنشاء وتجهيز النسخة الاحتياطية بنجاح. يرجى تزويد بيانات SMTP / Gmail لإتمام الإرسال الفعلي.',
+      requiresPassword: true,
+      message: 'تم تجهيز ملف النسخة الاحتياطية بنجاح (' + grandTotal + ' موقعاً). يرجى إدخال كلمة مرور تطبيقات Gmail لإتمام الإرسال الفوري للبريد.',
       fileName,
       totalRecords: grandTotal,
-      buffer: excelBuffer,
     };
   }
 
-  console.log(`[Daily Backup] Connecting to SMTP server (${smtpHost}:${smtpPort}) to deliver email to ${recipient}...`);
+  console.log(`[Daily Backup] Connecting to SMTP server (${smtpHost}:${smtpPort}) as ${smtpUser} to deliver email to ${recipient}...`);
   const transporter = nodemailer.createTransport({
     host: smtpHost,
     port: smtpPort,
@@ -225,19 +250,19 @@ export async function runDailyBackup(customRecipient = null) {
   const mailOptions = {
     from: `"FTTS Backup System" <${smtpUser}>`,
     to: recipient,
-    subject: `📦 النسخة الاحتياطية اليومية لنظام FTTS & Availability - ${dateStr}`,
+    subject: `📦 النسخة الاحتياطية لنظام FTTS & Availability - ${dateStr}`,
     html: `
       <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px; background-color: #f8fafc; color: #1e293b;">
         <div style="max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
           <div style="background: linear-gradient(135deg, #0284c7, #4f46e5); color: #ffffff; padding: 25px; text-align: center;">
-            <h1 style="margin: 0; font-size: 22px; font-weight: bold;">📦 النسخة الاحتياطية اليومية التلقائية</h1>
+            <h1 style="margin: 0; font-size: 22px; font-weight: bold;">📦 النسخة الاحتياطية الفورية المحدثة</h1>
             <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">Fiber Tracking Board (FTTS & Availability)</p>
           </div>
           
           <div style="padding: 25px;">
             <p style="font-size: 15px; line-height: 1.6; margin-top: 0;">
               تحية طيبة،<br/>
-              مرفق طيه النسخة الاحتياطية اليومية الشاملة والمحدثة بالكامل من قاعدة البيانات السحابية Supabase، والمتضمنة كافة مشروعات FTTS ومشروعات Availability (الإتاحة الـ 360 مشروعاً) والعمليات الجديدة.
+              مرفق طيه النسخة الاحتياطية الشاملة والمحدثة بالكامل من قاعدة البيانات السحابية Supabase، والمتضمنة كافة مشروعات FTTS ومشروعات Availability (الإتاحة الـ 360 مشروعاً المعتمدة) والعمليات الجديدة.
             </p>
 
             <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
@@ -247,7 +272,7 @@ export async function runDailyBackup(customRecipient = null) {
               </tr>
               <tr>
                 <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">⏰ التوقيت:</td>
-                <td style="padding: 10px; border: 1px solid #e2e8f0;">12:00 منتصف الليل (توقيت القاهرة)</td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;">${now.toLocaleTimeString('ar-EG', { timeZone: 'Africa/Cairo' })} (توقيت القاهرة)</td>
               </tr>
               <tr style="background-color: #f1f5f9;">
                 <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">🌐 إجمالي مواقع FTTS:</td>
@@ -269,7 +294,7 @@ export async function runDailyBackup(customRecipient = null) {
           </div>
 
           <div style="background-color: #f8fafc; padding: 15px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b;">
-            منظومة المتابعة الرقمية للمشروعات القومية للفايبر والاتصالات • إرسال آلي مجدول
+            منظومة المتابعة الرقمية للمشروعات القومية للفايبر والاتصالات • إرسال آلي معتمد
           </div>
         </div>
       </div>

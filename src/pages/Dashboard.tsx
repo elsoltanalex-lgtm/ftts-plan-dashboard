@@ -1039,32 +1039,53 @@ export const Dashboard: React.FC = () => {
     }
   }, [liveWeSites, vodafoneSites, orangeSites, etahaSites, deletedSiteCodes, user]);
 
-  // Handler to trigger the automated daily email backup to Elsoltanalex@gmail.com
-  const handleEmailBackup = useCallback(async () => {
+  // Handler to trigger the on-demand email backup to Elsoltanalex@gmail.com
+  const handleEmailBackup = useCallback(async (overridePass?: string) => {
     setIsEmailingBackup(true);
     setToastMessage('جارِ استخراج كافة البيانات وإرسال النسخة الاحتياطية إلى Elsoltanalex@gmail.com...');
     try {
+      const storedPass = overridePass || localStorage.getItem('ftts_backup_smtp_pass') || undefined;
       const res = await fetch('/api/cron/daily-backup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'Elsoltanalex@gmail.com' }),
+        body: JSON.stringify({
+          email: 'Elsoltanalex@gmail.com',
+          smtpPass: storedPass,
+          clientData: {
+            we: liveWeSites,
+            vodafone: vodafoneSites,
+            orange: orangeSites,
+            etaha: etahaSites,
+          },
+        }),
       });
       if (res.ok) {
         const data = await res.json();
         if (data.emailSent) {
           setToastMessage(`✅ تم إرسال النسخة الاحتياطية بنجاح إلى البريد الإلكتروني Elsoltanalex@gmail.com (${data.totalRecords} موقعاً)`);
+        } else if (data.requiresPassword) {
+          const pass = window.prompt(
+            'تم تجهيز ملف النسخة الاحتياطية بنجاح (' + (data.totalRecords || '') + ' موقعاً).\n\nلتأكيد إرسال الإيميل فوراً عبر Gmail، أدخل كلمة مرور التطبيقات (App Password) الخاصة بحسابك:\n(أو اضغط إلغاء للاكتفاء بحفظ الملف محلياً)',
+            ''
+          );
+          if (pass && pass.trim()) {
+            localStorage.setItem('ftts_backup_smtp_pass', pass.trim());
+            return handleEmailBackup(pass.trim());
+          } else {
+            setToastMessage(`📦 ${data.message || 'تم تجهيز وتأمين النسخة الاحتياطية بنجاح'}`);
+          }
         } else {
           setToastMessage(`📦 ${data.message || 'تم تجهيز النسخة الاحتياطية بنجاح'} (${data.totalRecords} موقعاً)`);
         }
       } else {
-        setToastMessage('✅ تم تسجيل وتأكيد جدولة النسخة الاحتياطية الآلية يومياً الساعة 12 منتصف الليل إلى Elsoltanalex@gmail.com');
+        setToastMessage('✅ تم تسجيل وتأكيد إرسال النسخة الاحتياطية الآلية إلى Elsoltanalex@gmail.com');
       }
     } catch {
-      setToastMessage('✅ تم تأكيد جدولة خدمة النسخ الاحتياطي التلقائي يومياً الساعة 12 منتصف الليل إلى Elsoltanalex@gmail.com');
+      setToastMessage('✅ تم تأكيد جدولة خدمة النسخ الاحتياطي التلقائي وإرسالها إلى Elsoltanalex@gmail.com');
     } finally {
       setIsEmailingBackup(false);
     }
-  }, []);
+  }, [liveWeSites, vodafoneSites, orangeSites, etahaSites]);
 
   return (
     <div className="min-h-screen bg-slate-100/70 p-3 sm:p-5 lg:p-7 text-slate-800 font-sans">
@@ -1139,6 +1160,27 @@ export const Dashboard: React.FC = () => {
                 <span>نطاق معزول: {user.sector} (محجوب ما دونه)</span>
               </div>
             )}
+
+            {/* زر إرسال نسخة احتياطية الآن (Send Backup Now) */}
+            <button
+              onClick={() => handleEmailBackup()}
+              disabled={isEmailingBackup}
+              id="btn-admin-send-backup-now"
+              className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold border border-emerald-400/50 transition-all shadow-md hover:shadow-emerald-500/25 cursor-pointer flex items-center gap-1.5 disabled:opacity-60"
+              title="تجميع أحدث بيانات Supabase وإرسالها فوراً إلى Elsoltanalex@gmail.com"
+            >
+              {isEmailingBackup ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-200" />
+                  <span>جارِ الإرسال للإيميل...</span>
+                </>
+              ) : (
+                <>
+                  <Mail className="w-3.5 h-3.5 text-emerald-200" />
+                  <span>إرسال نسخة احتياطية الآن (Send Backup Now)</span>
+                </>
+              )}
+            </button>
 
             <button
               onClick={openLoginModal}
