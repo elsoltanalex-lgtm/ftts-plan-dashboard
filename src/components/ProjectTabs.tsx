@@ -47,7 +47,7 @@ export const ProjectTabs: React.FC<ProjectTabsProps> = ({
     },
     {
       id: 'AVAILABILITY' as ActiveProjectScope,
-      title: 'الإتاحة',
+      title: 'Availability',
       titleEn: 'Availability Portal',
       count: counts.etaha,
       icon: Globe,
@@ -56,7 +56,7 @@ export const ProjectTabs: React.FC<ProjectTabsProps> = ({
       tagColor: 'bg-emerald-500/20 text-emerald-200 border-emerald-400/30',
       countColor: 'bg-white/20 text-white',
       isComingSoon: false,
-      subText: 'الإتاحة • Digital Transformation • Egypt Post',
+      subText: 'Availability • Digital Transformation • Egypt Post',
     },
     {
       id: 'TAHAWOL' as ActiveProjectScope,

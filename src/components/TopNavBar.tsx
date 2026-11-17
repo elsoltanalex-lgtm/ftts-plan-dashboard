@@ -170,15 +170,15 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
     },
   ];
 
-  // The 3 Sub-navigation Tabs under "الإتاحة":
-  // 1. الإتاحة (Availability) - Linked exclusively to the 360 sites Excel sheet
+  // The 3 Sub-navigation Tabs under "Availability":
+  // 1. Availability (Linked exclusively to the 360 sites Excel sheet)
   // 2. Digital Transformation
   // 3. Egypt Post
   const availabilitySubTabs = [
     {
       id: 'ETAHA' as ActiveProjectScope,
-      name: 'الإتاحة',
-      nameEn: 'Availability',
+      name: 'Availability',
+      nameEn: 'مشروعات الإتاحة',
       arSubtitle: 'مشروعات الإتاحة المعتمدة (الشيت المرفوع)',
       icon: Globe,
       count: stats.etahaCount || 360,
@@ -191,7 +191,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
     {
       id: 'TAHAWOL' as ActiveProjectScope,
       name: 'Digital Transformation',
-      nameEn: '',
+      nameEn: 'التحول الرقمي',
       arSubtitle: 'مشروعات الوزارات والهيئات الحكومية',
       icon: Landmark,
       count: 0,
@@ -204,7 +204,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
     {
       id: 'POST' as ActiveProjectScope,
       name: 'Egypt Post',
-      nameEn: '',
+      nameEn: 'البريد المصري',
       arSubtitle: 'فروع ومكاتب البريد',
       icon: Mail,
       count: 0,
@@ -379,7 +379,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                 <div className="truncate">
                   <div className="flex items-center gap-2">
                     <span className="font-extrabold text-sm sm:text-base leading-tight tracking-tight">
-                      الإتاحة
+                      Availability
                     </span>
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${isAvailabilityActive
@@ -394,7 +394,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                     className={`text-[11px] block mt-0.5 truncate ${isAvailabilityActive ? 'text-teal-100' : 'text-slate-400'
                       }`}
                   >
-                    الإتاحة • Digital Transformation • Egypt Post
+                    Availability • Digital Transformation • Egypt Post
                   </span>
                 </div>
               </div>
@@ -427,7 +427,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                 <div className="px-3 py-1.5 border-b border-slate-100 mb-1.5 flex items-center justify-between">
                   <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                     <Globe className="w-3 h-3 text-emerald-600" />
-                    أقسام منظومة الإتاحة
+                    أقسام منظومة Availability
                   </span>
                   <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                     3 خيارات فرعية
@@ -591,12 +591,12 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
             </div>
           </div>
         ) : (
-          /* Availability Sub-Navigation: 3 Sub-Tabs in exact order: 1. الإتاحة, 2. التحول الرقمي, 3. البريد */
+          /* Availability Sub-Navigation: 3 Sub-Tabs in exact order: 1. Availability, 2. Digital Transformation, 3. Egypt Post */
           <div>
             <div className="flex items-center justify-between px-1 mb-2">
               <span className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-600" />
-                القائمة الفرعية لمنظومة الإتاحة (انقر للتبديل بين الأقسام):
+                القائمة الفرعية لمنظومة Availability (انقر للتبديل بين الأقسام):
               </span>
               <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
                 3 خيارات فرعية

@@ -38,7 +38,7 @@ export const EtahaKpiCards: React.FC<EtahaKpiCardsProps> = ({
       title: 'إجمالي المواقع',
       titleEn: 'Total Sites',
       value: totalSites,
-      subValue: `${totalSites} مشروعاً معتمداً بالإتاحة`,
+      subValue: `${totalSites} مشروعاً معتمداً بـ Availability`,
       icon: Layers,
       color: 'from-blue-600 via-indigo-600 to-indigo-800',
       textColor: 'text-blue-700',
@@ -102,7 +102,7 @@ export const EtahaKpiCards: React.FC<EtahaKpiCardsProps> = ({
         <div className="mb-2.5 px-3 py-1.5 bg-gradient-to-r from-teal-50 via-sky-50 to-indigo-50 border border-teal-200/90 rounded-xl flex items-center justify-between text-xs text-teal-950 font-bold shadow-2xs flex-wrap gap-2 animate-in fade-in duration-150">
           <div className="flex items-center gap-1.5 flex-wrap">
             <CheckSquare className="w-4 h-4 text-teal-600 flex-shrink-0" />
-            <span>تصفية الإتاحة النشطة:</span>
+            <span>تصفية Availability النشطة:</span>
             <div className="flex items-center gap-1 flex-wrap">
               {activeList.map((st) => (
                 <span
@@ -119,7 +119,7 @@ export const EtahaKpiCards: React.FC<EtahaKpiCardsProps> = ({
             className="text-[11px] text-rose-700 hover:text-rose-900 bg-white hover:bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200 flex items-center gap-1 font-bold cursor-pointer transition"
           >
             <RotateCcw className="w-3 h-3 text-rose-600" />
-            <span>إلغاء التحديد وعرض كافة مشاريع الإتاحة</span>
+            <span>إلغاء التحديد وعرض كافة مشاريع Availability</span>
           </button>
         </div>
       )}
@@ -136,7 +136,7 @@ export const EtahaKpiCards: React.FC<EtahaKpiCardsProps> = ({
               onClick={() => onSelectStatusFilter(card.filterTarget)}
               title={
                 card.filterTarget === 'All'
-                  ? 'عرض إجمالي كافة مشاريع الإتاحة'
+                  ? 'عرض إجمالي كافة مشاريع Availability'
                   : `تصفية حسب: ${card.title}`
               }
               className={`pbi-card p-4 sm:p-5 flex flex-col justify-between relative overflow-hidden transition-all duration-200 select-none cursor-pointer ${

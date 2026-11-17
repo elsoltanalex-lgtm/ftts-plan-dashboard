@@ -1175,7 +1175,7 @@ export const Dashboard: React.FC = () => {
                 onClick={() => handleScopeChange('ETAHA')}
                 className="px-5 py-2.5 bg-gradient-to-r from-teal-700 to-emerald-800 hover:from-teal-800 hover:to-emerald-900 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
               >
-                الانتقال إلى تبويب الإتاحة المعتمد (360 موقعاً)
+                الانتقال إلى تبويب Availability المعتمد (360 موقعاً)
               </button>
             </div>
           </div>
@@ -1200,7 +1200,7 @@ export const Dashboard: React.FC = () => {
                 onClick={() => handleScopeChange('ETAHA')}
                 className="px-5 py-2.5 bg-gradient-to-r from-teal-700 to-emerald-800 hover:from-teal-800 hover:to-emerald-900 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
               >
-                الانتقال إلى تبويب الإتاحة المعتمد (360 موقعاً)
+                الانتقال إلى تبويب Availability المعتمد (360 موقعاً)
               </button>
             </div>
           </div>
@@ -1538,7 +1538,7 @@ export const Dashboard: React.FC = () => {
                       🔄 تحديث مباشر
                     </button>
                     <span className="px-3 py-1.5 bg-teal-50 text-teal-800 border border-teal-200 rounded-xl text-xs font-bold font-mono">
-                      🌐 قاعدة بيانات الإتاحة: {etahaSites.length} مشروع معتمد
+                      🌐 قاعدة بيانات Availability: {etahaSites.length} مشروع معتمد
                     </span>
                   </div>
                 </div>
@@ -1712,7 +1712,7 @@ export const Dashboard: React.FC = () => {
         {/* Footer info bar */}
         <footer className="mt-8 pt-4 border-t border-slate-200 text-center text-xs text-slate-400 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>
-            منظومة متابعة المشروعات القومية للاتصالات والفايبر • FTTS • الإتاحة • التحول الرقمي
+            منظومة متابعة المشروعات القومية للاتصالات والفايبر • FTTS • Availability • Digital Transformation
           </span>
           <span className="font-mono text-[11px]">
             {activeScope === 'FTTS'
