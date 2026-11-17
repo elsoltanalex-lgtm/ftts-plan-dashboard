@@ -302,7 +302,28 @@ export const Dashboard: React.FC = () => {
   const liveWeSites = useMemo<SiteRecord[]>(() => {
     let baseSites: SiteRecord[] = [];
     if (weCentralRecords && weCentralRecords.length > 0) {
-      baseSites = weCentralRecords.map((r, i) => mapWeRecordToSiteRecord(r, i));
+      if (weCentralRecords.length >= WE_EXCEL_SITES.length) {
+        baseSites = weCentralRecords.map((r, i) => mapWeRecordToSiteRecord(r, i));
+      } else {
+        // Merge Supabase records with baseline so partial edits/additions don't hide remaining sites
+        const liveMap = new Map<string, SiteRecord>();
+        weCentralRecords.forEach((r, i) => {
+          const s = mapWeRecordToSiteRecord(r, i);
+          liveMap.set(s.siteCode.toUpperCase(), s);
+        });
+        const merged: SiteRecord[] = [];
+        const seen = new Set<string>();
+        for (const [code, site] of liveMap.entries()) {
+          merged.push(site);
+          seen.add(code);
+        }
+        for (const site of WE_EXCEL_SITES) {
+          if (!seen.has(site.siteCode.toUpperCase())) {
+            merged.push(site);
+          }
+        }
+        baseSites = merged;
+      }
     } else {
       baseSites = WE_EXCEL_SITES;
     }

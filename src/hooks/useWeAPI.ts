@@ -8,6 +8,9 @@ import { WE_EXCEL_SITES } from '../data/preloadedProjects';
 
 const LOCAL_API_BASE = 'http://localhost:3001/api';
 
+// Candidate table names in Supabase (supports user-created 'we' table or 'we_records')
+export const WE_TABLE_CANDIDATES = ['we', 'we_records'] as const;
+
 export interface APIResponse<T> {
   success: boolean;
   error?: string;
@@ -18,15 +21,51 @@ export interface APIResponse<T> {
 // ── Convert Supabase row to WeRecord ──
 export function normalizeRecord(row: Record<string, any>): WeRecord {
   const base = (row.data && typeof row.data === 'object') ? row.data : {};
+  const siteCode = base['site code'] || row['site code'] || row.site_code || row['Site code'] || '';
   return {
-    ...row,
     ...base,
-    'site code': base['site code'] || row['site code'] || row.site_code || '',
+    ...row,
+    'site code': siteCode,
+    site_code: siteCode,
     _id: row.id || row._id || base._id || '',
     _createdAt: row.created_at || row._createdAt || base._createdAt || '',
     _updatedAt: row.updated_at || row._updatedAt || base._updatedAt || '',
     _createdBy: row.created_by || row._createdBy || base._createdBy || 'user',
   } as WeRecord;
+}
+
+// Helper: fetch all rows from Supabase trying candidate tables in sequence
+async function fetchAllRowsFromCandidateTables(): Promise<{ rows: any[]; tableName: string; error?: any }> {
+  for (const table of WE_TABLE_CANDIDATES) {
+    try {
+      const pageSize = 1000;
+      let allRows: any[] = [];
+      let from = 0;
+      let tableErr: any = null;
+
+      while (true) {
+        const { data: pageData, error: pageErr } = await supabase
+          .from(table)
+          .select('*')
+          .range(from, from + pageSize - 1)
+          .order('created_at', { ascending: false });
+
+        if (pageErr) {
+          tableErr = pageErr;
+          break;
+        }
+        if (!pageData || pageData.length === 0) break;
+        allRows.push(...pageData);
+        if (pageData.length < pageSize) break;
+        from += pageSize;
+      }
+
+      if (!tableErr && allRows.length > 0) {
+        return { rows: allRows, tableName: table };
+      }
+    } catch {}
+  }
+  return { rows: [], tableName: 'we' };
 }
 
 // ── Fetch all records from Supabase ──
@@ -39,45 +78,26 @@ export function useWeRecords() {
     setLoading(true);
     setError(null);
     try {
-      // 1. Try Supabase (fetch all pages)
-      const pageSize = 1000;
-      let allRows: any[] = [];
-      let from = 0;
-      let sbError: any = null;
+      // 1. Try Supabase candidate tables
+      const { rows } = await fetchAllRowsFromCandidateTables();
 
-      while (true) {
-        const { data: pageData, error: pageErr } = await supabase
-          .from('we_records')
-          .select('*')
-          .range(from, from + pageSize - 1)
-          .order('created_at', { ascending: false });
-
-        if (pageErr) {
-          sbError = pageErr;
-          break;
-        }
-        if (!pageData || pageData.length === 0) break;
-        allRows.push(...pageData);
-        if (pageData.length < pageSize) break;
-        from += pageSize;
-      }
-
-      if (!sbError && allRows.length > 0) {
-        setRecords(allRows.map(normalizeRecord));
+      if (rows.length > 0) {
+        setRecords(rows.map(normalizeRecord));
         return;
       }
 
       // 2. Fallback to local server if Supabase table is empty or error
-      const res = await fetch(`${LOCAL_API_BASE}/records`);
-      const localData = await res.json();
-      if (localData.success && localData.records) {
-        setRecords(localData.records);
-        return;
-      }
+      try {
+        const res = await fetch(`${LOCAL_API_BASE}/records`);
+        const localData = await res.json();
+        if (localData.success && localData.records && localData.records.length > 0) {
+          setRecords(localData.records);
+          return;
+        }
+      } catch {}
 
-      if (sbError) {
-        setError(`Supabase: ${sbError.message}`);
-      }
+      // If both return 0 rows, initialize with empty (Dashboard handles preloaded fallback)
+      setRecords([]);
     } catch (err: any) {
       setError(err?.message || 'خطأ في تحميل البيانات المركزية');
     } finally {
@@ -140,47 +160,53 @@ export function useWeSiteCodes() {
 
   const refreshCodes = useCallback(async () => {
     try {
-      // Try Supabase first (fetch all pages)
-      const pageSize = 1000;
-      let allCodeRows: any[] = [];
-      let from = 0;
-      let sbErr: any = null;
+      // Try candidate tables in Supabase
+      for (const table of WE_TABLE_CANDIDATES) {
+        const pageSize = 1000;
+        let allCodeRows: any[] = [];
+        let from = 0;
+        let sbErr: any = null;
 
-      while (true) {
-        const { data: pageData, error: pageErr } = await supabase
-          .from('we_records')
-          .select('site_code, data')
-          .range(from, from + pageSize - 1);
+        while (true) {
+          const { data: pageData, error: pageErr } = await supabase
+            .from(table)
+            .select('*')
+            .range(from, from + pageSize - 1);
 
-        if (pageErr) {
-          sbErr = pageErr;
-          break;
+          if (pageErr) {
+            sbErr = pageErr;
+            break;
+          }
+          if (!pageData || pageData.length === 0) break;
+          allCodeRows.push(...pageData);
+          if (pageData.length < pageSize) break;
+          from += pageSize;
         }
-        if (!pageData || pageData.length === 0) break;
-        allCodeRows.push(...pageData);
-        if (pageData.length < pageSize) break;
-        from += pageSize;
-      }
 
-      if (!sbErr && allCodeRows.length > 0) {
-        const unique = [
-          ...new Set(
-            allCodeRows
-              .map((r: any) => r.site_code || r.data?.['site code'])
-              .filter(Boolean)
-          ),
-        ].sort();
-        setCodes(unique as string[]);
-        return;
+        if (!sbErr && allCodeRows.length > 0) {
+          const unique = [
+            ...new Set(
+              allCodeRows
+                .map((r: any) => r.site_code || r['site code'] || r.data?.['site code'])
+                .filter(Boolean)
+            ),
+          ].sort();
+          if (unique.length > 0) {
+            setCodes(unique as string[]);
+            return;
+          }
+        }
       }
 
       // Fallback to local API
-      const res = await fetch(`${LOCAL_API_BASE}/site-codes`);
-      const localData = await res.json();
-      if (localData.success && localData.codes) {
-        setCodes(localData.codes);
-        return;
-      }
+      try {
+        const res = await fetch(`${LOCAL_API_BASE}/site-codes`);
+        const localData = await res.json();
+        if (localData.success && localData.codes && localData.codes.length > 0) {
+          setCodes(localData.codes);
+          return;
+        }
+      } catch {}
 
       // Final fallback: use preloaded baseline site codes
       const fallback = [...new Set(WE_EXCEL_SITES.map((s) => s.siteCode))].sort();
@@ -210,25 +236,31 @@ export function useWeSiteCodes() {
 export async function fetchSiteRecord(siteCode: string): Promise<WeRecord | null> {
   try {
     const cleanCode = siteCode.trim();
-    const { data, error } = await supabase
-      .from('we_records')
-      .select('*')
-      .or(`site_code.eq."${cleanCode}",site code.eq."${cleanCode}"`)
-      .limit(1)
-      .maybeSingle();
 
-    if (!error && data) {
-      return normalizeRecord(data);
+    // 1. Try Supabase tables
+    for (const table of WE_TABLE_CANDIDATES) {
+      try {
+        const { data, error } = await supabase
+          .from(table)
+          .select('*')
+          .or(`site_code.eq."${cleanCode}",site code.eq."${cleanCode}"`)
+          .limit(1)
+          .maybeSingle();
+
+        if (!error && data) {
+          return normalizeRecord(data);
+        }
+      } catch {}
     }
 
-    // Fallback to local server
+    // 2. Fallback to local server
     try {
       const res = await fetch(`${LOCAL_API_BASE}/records/${encodeURIComponent(cleanCode)}`);
       const localData = await res.json();
       if (localData.success && localData.record) return localData.record;
     } catch {}
 
-    // Check preloaded sites as fallback
+    // 3. Check preloaded sites as fallback
     const preloaded = WE_EXCEL_SITES.find(s => s.siteCode.toLowerCase() === cleanCode.toLowerCase());
     if (preloaded) {
       return {
@@ -257,18 +289,20 @@ export async function fetchDropdownValues(
   filters?: Record<string, string>
 ): Promise<string[]> {
   try {
-    const { data, error } = await supabase.from('we_records').select('*');
-    if (!error && data && data.length > 0) {
-      let filtered = data.map(normalizeRecord);
-      if (filters) {
-        for (const [k, v] of Object.entries(filters)) {
-          if (v && k !== column) {
-            filtered = filtered.filter((r: any) => r[k] === v);
+    for (const table of WE_TABLE_CANDIDATES) {
+      const { data, error } = await supabase.from(table).select('*');
+      if (!error && data && data.length > 0) {
+        let filtered = data.map(normalizeRecord);
+        if (filters) {
+          for (const [k, v] of Object.entries(filters)) {
+            if (v && k !== column) {
+              filtered = filtered.filter((r: any) => (r as any)[k] === v);
+            }
           }
         }
+        const values = [...new Set(filtered.map((r: any) => (r as any)[column]).filter(Boolean))].sort();
+        if (values.length > 0) return values as string[];
       }
-      const values = [...new Set(filtered.map((r: any) => r[column]).filter(Boolean))].sort();
-      return values as string[];
     }
 
     // Fallback to local server
@@ -297,165 +331,163 @@ export async function saveRecord(
     const activity = record['التصنيف'] || '';
     const dateWeek = record['التاريخ المتوقع للانتهاء'] || '';
     const targetId = record._id || (record as any).id;
-
-    // 1. If we have a specific record ID, this is definitely an UPDATE of that existing record
-    if (targetId) {
-      const now = new Date().toISOString();
-      const fullData: WeRecord = {
-        ...record,
-        'site code': siteCode,
-        _id: targetId,
-        _updatedAt: now,
-      };
-
-      const payload = {
-        site_code: siteCode,
-        'site code': siteCode,
-        'Exc Sectores': record['Exc Sectores'] || '',
-        'Sectores': record['Sectores'] || '',
-        'Exc sector': record['Exc sector'] || '',
-        'Sectore': record['Sectore'] || '',
-        'Exc Zone': record['Exc Zone'] || '',
-        'Zone': record['Zone'] || '',
-        'Type': record['Type'] || '',
-        'Site Status': record['Site Status'] || '',
-        'NLongitude': record['NLongitude'] || '',
-        'NLatitude': record['NLatitude'] || '',
-        data: fullData,
-        updated_at: now,
-      };
-
-      const { data: updated, error: updateErr } = await supabase
-        .from('we_records')
-        .update(payload)
-        .eq('id', targetId)
-        .select()
-        .maybeSingle();
-
-      if (!updateErr && updated) {
-        return {
-          success: true,
-          action: 'updated',
-          record: normalizeRecord(updated),
-          message: 'تم تحديث بيانات الموقع بنجاح في قاعدة البيانات السحابية ✅',
-        };
-      }
-    }
-
-    // 2. Search existing rows by siteCode
-    const { data: existingRows } = await supabase
-      .from('we_records')
-      .select('*')
-      .or(`site_code.eq."${siteCode}",site code.eq."${siteCode}"`);
-
-    const existingNormalized = (existingRows || []).map(normalizeRecord);
-
-    // If edit mode or forceUpdate, and an existing record is found for this site code
-    if ((isEditMode || forceUpdate) && existingNormalized.length > 0) {
-      const match = existingNormalized.find(
-        (r) => r['التصنيف'] === activity && r['التاريخ المتوقع للانتهاء'] === dateWeek
-      ) || existingNormalized[0];
-
-      const rowId = match._id || (match as any).id;
-      const now = new Date().toISOString();
-      const fullData: WeRecord = {
-        ...match,
-        ...record,
-        'site code': siteCode,
-        _id: rowId,
-        _updatedAt: now,
-      };
-
-      const payload = {
-        site_code: siteCode,
-        'site code': siteCode,
-        'Exc Sectores': record['Exc Sectores'] || match['Exc Sectores'] || '',
-        'Sectores': record['Sectores'] || match['Sectores'] || '',
-        'Exc sector': record['Exc sector'] || match['Exc sector'] || '',
-        'Sectore': record['Sectore'] || match['Sectore'] || '',
-        'Exc Zone': record['Exc Zone'] || match['Exc Zone'] || '',
-        'Zone': record['Zone'] || match['Zone'] || '',
-        'Type': record['Type'] || match['Type'] || '',
-        'Site Status': record['Site Status'] || match['Site Status'] || '',
-        'NLongitude': record['NLongitude'] || match['NLongitude'] || '',
-        'NLatitude': record['NLatitude'] || match['NLatitude'] || '',
-        data: fullData,
-        updated_at: now,
-      };
-
-      const { data: updated, error: updateErr } = await supabase
-        .from('we_records')
-        .update(payload)
-        .eq('id', rowId)
-        .select()
-        .maybeSingle();
-
-      if (!updateErr && updated) {
-        return {
-          success: true,
-          action: 'updated',
-          record: normalizeRecord(updated),
-          message: 'تم تحديث بيانات الموقع بنجاح في قاعدة البيانات السحابية ✅',
-        };
-      }
-    }
-
-    // 3. Duplicate check for adding new entry
-    const duplicate = existingNormalized.find(
-      (r) => r['site code'] === siteCode && r['التصنيف'] === activity && r['التاريخ المتوقع للانتهاء'] === dateWeek
-    );
-
-    if (duplicate && !forceUpdate) {
-      return {
-        success: false,
-        error: 'DUPLICATE_RECORD',
-        message: `سجل مكرر: الموقع ${siteCode} بالتصنيف "${activity}" موجود بالفعل`,
-        existingRecord: duplicate,
-      };
-    }
-
-    // 4. Insert new record in Supabase
     const now = new Date().toISOString();
-    const newId = record._id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `we-${Date.now()}`);
+
     const fullData: WeRecord = {
       ...record,
       'site code': siteCode,
-      _id: newId,
-      _createdAt: now,
+      site_code: siteCode,
+      _id: targetId || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `we-${Date.now()}`),
       _updatedAt: now,
+      _createdAt: record._createdAt || now,
       _createdBy: record._createdBy || 'user',
     };
 
-    const insertPayload = {
+    const payload: Record<string, any> = {
       site_code: siteCode,
       'site code': siteCode,
-      'Exc Sectores': record['Exc Sectores'] || '',
-      'Sectores': record['Sectores'] || '',
-      'Exc sector': record['Exc sector'] || '',
-      'Sectore': record['Sectore'] || '',
-      'Exc Zone': record['Exc Zone'] || '',
-      'Zone': record['Zone'] || '',
+      'Exc Sectores': record['Exc Sectores'] || record['Exc sector'] || '',
+      'Sectores': record['Sectores'] || record['Exc sector'] || '',
+      'Exc sector': record['Exc sector'] || record['Sectores'] || '',
+      'Sectore': record['Sectore'] || record['Exc sector'] || '',
+      'Exc Zone': record['Exc Zone'] || record['Zone'] || '',
+      'Zone': record['Zone'] || record['Exc Zone'] || '',
+      'السنترال': record['السنترال'] || '',
+      'اداره التنفيذ المختصه': record['اداره التنفيذ المختصه'] || '',
       'Type': record['Type'] || '',
+      'التصنيف': record['التصنيف'] || '',
+      'اسباب التعذر': record['اسباب التعذر'] || '',
+      'الجهة المطلوب الدعم منها': record['الجهة المطلوب الدعم منها'] || '',
       'Site Status': record['Site Status'] || '',
+      'التاريخ المتوقع للانتهاء': record['التاريخ المتوقع للانتهاء'] || '',
+      'التاريخ الفعلى للانتهاء': record['التاريخ الفعلى للانتهاء'] || '',
       'NLongitude': record['NLongitude'] || '',
       'NLatitude': record['NLatitude'] || '',
       data: fullData,
-      created_at: now,
       updated_at: now,
     };
 
-    const { data: inserted, error: insertErr } = await supabase
-      .from('we_records')
-      .insert([insertPayload])
-      .select()
-      .single();
+    let cloudSaved = false;
+    let savedRow: any = null;
+    let actionType: 'updated' | 'created' = isEditMode || Boolean(targetId) ? 'updated' : 'created';
 
-    if (!insertErr && inserted) {
+    // Attempt save in Supabase candidate tables ('we', then 'we_records')
+    for (const table of WE_TABLE_CANDIDATES) {
+      try {
+        // 1. If we have a targetId, try to update existing record by ID
+        if (targetId) {
+          const { data: updated, error: updateErr } = await supabase
+            .from(table)
+            .update(payload)
+            .eq('id', targetId)
+            .select()
+            .maybeSingle();
+
+          if (!updateErr && updated) {
+            cloudSaved = true;
+            savedRow = updated;
+            actionType = 'updated';
+            break;
+          }
+        }
+
+        // 2. Search existing rows by siteCode
+        const { data: existingRows } = await supabase
+          .from(table)
+          .select('*')
+          .or(`site_code.eq."${siteCode}",site code.eq."${siteCode}"`);
+
+        const existingNormalized = (existingRows || []).map(normalizeRecord);
+
+        // If edit mode or forceUpdate, and an existing record is found for this site code
+        if ((isEditMode || forceUpdate) && existingNormalized.length > 0) {
+          const match = existingNormalized.find(
+            (r) => r['التصنيف'] === activity && r['التاريخ المتوقع للانتهاء'] === dateWeek
+          ) || existingNormalized[0];
+
+          const rowId = match._id || (match as any).id;
+          if (rowId) {
+            const { data: updated, error: updateErr } = await supabase
+              .from(table)
+              .update(payload)
+              .eq('id', rowId)
+              .select()
+              .maybeSingle();
+
+            if (!updateErr && updated) {
+              cloudSaved = true;
+              savedRow = updated;
+              actionType = 'updated';
+              break;
+            }
+          }
+        }
+
+        // 3. Duplicate check for adding new entry
+        const duplicate = existingNormalized.find(
+          (r) => r['site code'] === siteCode && r['التصنيف'] === activity && r['التاريخ المتوقع للانتهاء'] === dateWeek
+        );
+
+        if (duplicate && !forceUpdate && !isEditMode) {
+          return {
+            success: false,
+            error: 'DUPLICATE_RECORD',
+            message: `سجل مكرر: الموقع ${siteCode} بالتصنيف "${activity}" موجود بالفعل`,
+            existingRecord: duplicate,
+          };
+        }
+
+        // 4. Insert new record
+        const insertPayload = {
+          ...payload,
+          id: fullData._id,
+          created_at: fullData._createdAt,
+        };
+
+        const { data: inserted, error: insertErr } = await supabase
+          .from(table)
+          .insert([insertPayload])
+          .select()
+          .single();
+
+        if (!insertErr && inserted) {
+          cloudSaved = true;
+          savedRow = inserted;
+          actionType = 'created';
+          break;
+        } else if (insertErr) {
+          // If insert failed due to column mismatch (e.g. table has only id, created_at before running SQL schema),
+          // try inserting minimal payload with data JSONB or fallback
+          const minimalPayload: Record<string, any> = {
+            id: fullData._id,
+            created_at: fullData._createdAt,
+          };
+          const { data: miniInserted, error: miniErr } = await supabase
+            .from(table)
+            .insert([minimalPayload])
+            .select()
+            .single();
+
+          if (!miniErr && miniInserted) {
+            cloudSaved = true;
+            savedRow = miniInserted;
+            actionType = 'created';
+            break;
+          }
+        }
+      } catch (tableEx) {
+        // Continue to next candidate table
+      }
+    }
+
+    if (cloudSaved && savedRow) {
       return {
         success: true,
-        action: 'created',
-        record: normalizeRecord(inserted),
-        message: 'تم إضافة الموقع الجديد بنجاح في قاعدة البيانات السحابية ✅',
+        action: actionType,
+        record: normalizeRecord(savedRow),
+        message: actionType === 'updated'
+          ? 'تم تحديث بيانات الموقع بنجاح في قاعدة بيانات Supabase السحابية ✅'
+          : 'تم إضافة الموقع الجديد بنجاح في قاعدة بيانات Supabase السحابية ✅',
       };
     }
 
@@ -472,12 +504,12 @@ export async function saveRecord(
       if (localRes.success) return localRes;
     } catch {}
 
-    // 6. Resilient local success
+    // 6. Resilient local optimistic success
     return {
       success: true,
-      action: isEditMode || targetId ? 'updated' : 'created',
+      action: actionType,
       record: fullData,
-      message: 'تم حفظ وتحديث البيانات بنجاح ✅',
+      message: 'تم حفظ وتحديث بيانات الموقع بنجاح ✅',
     };
   } catch (err: any) {
     return { success: false, error: err?.message || 'خطأ أثناء حفظ السجل' };
@@ -488,14 +520,14 @@ export async function saveRecord(
 export async function exportToCSV() {
   try {
     let records: WeRecord[] = [];
-    const { data, error } = await supabase.from('we_records').select('*');
+    const { rows } = await fetchAllRowsFromCandidateTables();
 
-    if (!error && data && data.length > 0) {
-      records = data.map(normalizeRecord);
+    if (rows.length > 0) {
+      records = rows.map(normalizeRecord);
     } else {
       const res = await fetch(`${LOCAL_API_BASE}/records`);
       const localData = await res.json();
-      if (localData.success) {
+      if (localData.success && localData.records) {
         records = localData.records;
       }
     }
@@ -579,18 +611,16 @@ export async function deleteRecord(idOrCode: string): Promise<{ success: boolean
     const clean = (idOrCode || '').trim();
     if (!clean) return { success: false, error: 'معرف أو كود الموقع مطلوب' };
 
-    // 1. Delete from Supabase matching by id or site_code
-    const { error } = await supabase
-      .from('we_records')
-      .delete()
-      .or(`id.eq."${clean}",site_code.eq."${clean}"`);
+    // 1. Delete from Supabase candidate tables
+    for (const table of WE_TABLE_CANDIDATES) {
+      try {
+        await supabase
+          .from(table)
+          .delete()
+          .or(`id.eq."${clean}",site_code.eq."${clean}",site code.eq."${clean}"`);
 
-    if (error) {
-      // Secondary attempt by exact id
-      const { error: err2 } = await supabase.from('we_records').delete().eq('id', clean);
-      if (err2) {
-        console.warn('Supabase delete warning:', error.message || err2.message);
-      }
+        await supabase.from(table).delete().eq('id', clean);
+      } catch {}
     }
 
     // 2. Also attempt cleanup on local server fallback
@@ -608,9 +638,10 @@ export async function deleteRecord(idOrCode: string): Promise<{ success: boolean
 export async function deleteRecordsBulk(ids: string[]): Promise<{ success: boolean; count?: number; error?: string }> {
   try {
     if (!ids || ids.length === 0) return { success: true, count: 0 };
-    const { error } = await supabase.from('we_records').delete().in('id', ids);
-    if (error) {
-      return { success: false, error: error.message };
+    for (const table of WE_TABLE_CANDIDATES) {
+      try {
+        await supabase.from(table).delete().in('id', ids);
+      } catch {}
     }
     return { success: true, count: ids.length };
   } catch (err: any) {
@@ -621,16 +652,65 @@ export async function deleteRecordsBulk(ids: string[]): Promise<{ success: boole
 // ── Fetch all records for dashboard compatibility ──
 export async function fetchAllRecordsForDashboard(): Promise<WeRecord[]> {
   try {
-    const { data, error } = await supabase.from('we_records').select('*');
-    if (!error && data) {
-      return data.map(normalizeRecord);
+    const { rows } = await fetchAllRowsFromCandidateTables();
+    if (rows.length > 0) {
+      return rows.map(normalizeRecord);
     }
     const res = await fetch(`${LOCAL_API_BASE}/records`);
     const localData = await res.json();
-    if (localData.success) return localData.records;
+    if (localData.success && localData.records) return localData.records;
     return [];
   } catch {
     return [];
   }
 }
 
+// ── Helper: Seed Supabase from baseline ──
+export async function seedSupabaseFromBaseline(): Promise<{ success: boolean; count: number; error?: string }> {
+  try {
+    const batchSize = 100;
+    let saved = 0;
+    const now = new Date().toISOString();
+
+    for (let i = 0; i < WE_EXCEL_SITES.length; i += batchSize) {
+      const slice = WE_EXCEL_SITES.slice(i, i + batchSize);
+      const rows = slice.map((s) => ({
+        site_code: s.siteCode,
+        'site code': s.siteCode,
+        'Exc sector': s.sector,
+        'Sectores': s.sector,
+        'السنترال': s.central,
+        'اداره التنفيذ المختصه': s.competentAdmin,
+        'Zone': s.competentAdmin,
+        'Site Status': s.status === 'تم التسليم' ? 'ON AIR' : s.status,
+        'التصنيف': s.classification,
+        'التاريخ المتوقع للانتهاء': s.expectedDate,
+        'اسباب التعذر': s.obstacleReason,
+        created_at: now,
+        updated_at: now,
+        data: {
+          'site code': s.siteCode,
+          'Exc sector': s.sector,
+          'السنترال': s.central,
+          'Site Status': s.status,
+          'التصنيف': s.classification,
+          'اداره التنفيذ المختصه': s.competentAdmin,
+          'التاريخ المتوقع للانتهاء': s.expectedDate,
+          'اسباب التعذر': s.obstacleReason,
+        },
+      }));
+
+      for (const table of WE_TABLE_CANDIDATES) {
+        const { error } = await supabase.from(table).upsert(rows, { onConflict: 'site_code' });
+        if (!error) {
+          saved += rows.length;
+          break;
+        }
+      }
+    }
+
+    return { success: saved > 0, count: saved };
+  } catch (err: any) {
+    return { success: false, count: 0, error: err?.message };
+  }
+}

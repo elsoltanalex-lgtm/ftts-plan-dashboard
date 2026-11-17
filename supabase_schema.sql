@@ -10,8 +10,66 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ==============================================================================
--- 1. WE CENTRAL RECORDS TABLE (public.we_records)
+-- 1. WE CENTRAL RECORDS TABLES (public.we and public.we_records)
 -- ==============================================================================
+
+-- 1A. TABLE: public.we (matches the table created in Supabase Dashboard)
+CREATE TABLE IF NOT EXISTS public.we (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS site_code TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "site code" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "Exc Sectores" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "Sectores" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "Exc sector" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "Sectore" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "Exc Zone" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "Zone" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "السنترال" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "اداره التنفيذ المختصه" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "Type" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "التصنيف" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "اسباب التعذر" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "الجهة المطلوب الدعم منها" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "خطة" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "مواقع تم اضافتها بتاريخ2" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "Site Status" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "التاريخ المتوقع للانتهاء" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "التاريخ الفعلى للانتهاء" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "NLongitude" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "NLatitude" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "المسافة كم" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "تكلفة التوصيل بدون مسار تراسلى بالجنيه" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "تكلفة التوصيل على المسار التراسلى بالجنيه" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "المستند" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS "المسئولية" TEXT DEFAULT '';
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS data JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS created_by TEXT DEFAULT 'user';
+
+CREATE INDEX IF NOT EXISTS idx_we_site_code ON public.we(site_code);
+CREATE INDEX IF NOT EXISTS idx_we_site_code_quoted ON public.we("site code");
+CREATE INDEX IF NOT EXISTS idx_we_status ON public.we("Site Status");
+CREATE INDEX IF NOT EXISTS idx_we_tasneef ON public.we("التصنيف");
+
+-- Open full permissions for anonymous / public access on table public.we
+ALTER TABLE public.we ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read we" ON public.we;
+CREATE POLICY "Allow public read we" ON public.we FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow public insert we" ON public.we;
+CREATE POLICY "Allow public insert we" ON public.we FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public update we" ON public.we;
+CREATE POLICY "Allow public update we" ON public.we FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "Allow public delete we" ON public.we;
+CREATE POLICY "Allow public delete we" ON public.we FOR DELETE USING (true);
+
+-- 1B. TABLE: public.we_records (alias / legacy compatibility)
 CREATE TABLE IF NOT EXISTS public.we_records (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     site_code TEXT NOT NULL DEFAULT '',
