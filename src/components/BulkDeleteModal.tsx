@@ -64,8 +64,6 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({
     }
   }, [isOpen, initialSelectedCodes]);
 
-  if (!isOpen) return null;
-
   // Lookup map of all existing sites in this dataset
   const sitesMap = useMemo(() => {
     const map = new Map<string, SiteRecord>();
@@ -269,6 +267,8 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({
       setIsConfirming(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">

@@ -382,15 +382,17 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
   // Filtered site codes for search
   const filteredCodes = useMemo(() => {
-    if (!siteCodeSearch.trim()) return allSiteCodes.slice(0, 50);
+    const codes = allSiteCodes || [];
+    if (!siteCodeSearch.trim()) return codes.slice(0, 50);
     const q = siteCodeSearch.trim().toLowerCase();
-    return allSiteCodes.filter((c) => c.toLowerCase().includes(q)).slice(0, 50);
+    return codes.filter((c) => String(c || '').toLowerCase().includes(q)).slice(0, 50);
   }, [allSiteCodes, siteCodeSearch]);
 
   const hasExactMatch = useMemo(() => {
+    const codes = allSiteCodes || [];
     if (!siteCodeSearch.trim()) return true;
     const q = siteCodeSearch.trim().toLowerCase();
-    return allSiteCodes.some((c) => c.toLowerCase() === q);
+    return codes.some((c) => String(c || '').toLowerCase() === q);
   }, [allSiteCodes, siteCodeSearch]);
 
   // Load dropdown values

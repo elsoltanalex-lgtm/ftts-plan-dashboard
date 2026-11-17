@@ -472,9 +472,12 @@ export const Dashboard: React.FC = () => {
   // WE Site Codes scoped to user's sector
   const authorizedWeCodes = useMemo(() => {
     if (!user) return [];
-    if (user.role === 'admin' || user.sector === 'ALL') return weCentralCodes;
+    if (user.role === 'admin' || user.sector === 'ALL') {
+      if (weCentralCodes && weCentralCodes.length > 0) return weCentralCodes;
+      return [...new Set(liveWeSites.map((s) => s.siteCode).filter(Boolean))].sort();
+    }
     const sectorSites = liveWeSites.filter((s) => isRecordInSector(user.sector, s));
-    return [...new Set(sectorSites.map((s) => s.siteCode))].sort();
+    return [...new Set(sectorSites.map((s) => s.siteCode).filter(Boolean))].sort();
   }, [weCentralCodes, liveWeSites, user]);
 
   // Dynamic filter application across authorized scope (Supports Multi-Select & Search)
@@ -1832,7 +1835,7 @@ export const Dashboard: React.FC = () => {
           setEditingSiteCode(undefined);
           setEditingRecord(null);
         }}
-        allSiteCodes={authorizedWeCodes.length > 0 ? authorizedWeCodes : liveWeSites.filter(s => isRecordInSector(user?.sector, s)).map(s => s.siteCode)}
+        allSiteCodes={authorizedWeCodes}
         initialSiteCode={editingSiteCode}
         initialRecord={editingRecord}
         mode={weModalMode}

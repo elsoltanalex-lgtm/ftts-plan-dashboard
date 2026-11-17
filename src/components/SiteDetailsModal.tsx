@@ -77,8 +77,6 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
     return sites.filter((site) => isRecordInSector(user.sector, site));
   }, [sites, user]);
 
-  if (!isOpen) return null;
-
   const filteredSites = authorizedSites.filter((site) => {
     const q = (searchTerm || '').toLowerCase();
     const code = String(site?.siteCode || '').toLowerCase();
@@ -227,6 +225,8 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
       console.error('Failed to generate template:', err);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
