@@ -12,7 +12,8 @@ import {
   ShieldCheck,
   Eye,
   Database,
-  Loader2
+  Loader2,
+  Mail
 } from 'lucide-react';
 import type { UploadedFileMetadata } from '../types/dashboard';
 import { useAuth } from '../context/AuthContext';
@@ -25,6 +26,8 @@ interface HeaderProps {
   onExportCsv: () => void;
   onExportBackup?: () => void;
   isExportingBackup?: boolean;
+  onEmailBackup?: () => void;
+  isEmailingBackup?: boolean;
   onPrint: () => void;
   onOpenUploadModal: () => void;
   activeUploadedMetadata?: UploadedFileMetadata | null;
@@ -39,6 +42,8 @@ export const Header: React.FC<HeaderProps> = ({
   onExportCsv,
   onExportBackup,
   isExportingBackup = false,
+  onEmailBackup,
+  isEmailingBackup = false,
   onPrint,
   onOpenUploadModal,
   activeUploadedMetadata,
@@ -202,6 +207,29 @@ export const Header: React.FC<HeaderProps> = ({
                 <>
                   <Database className="w-3.5 h-3.5 text-sky-200" />
                   <span>تحميل النسخة الاحتياطية (Export Backup)</span>
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Daily Automated Email Backup Button & Status */}
+          {onEmailBackup && (
+            <button
+              onClick={onEmailBackup}
+              id="btn-email-backup"
+              disabled={isEmailingBackup}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 rounded-lg border border-emerald-400/50 transition-all shadow-md hover:shadow-emerald-500/20 cursor-pointer disabled:opacity-60"
+              title="إرسال نسخة احتياطية مجدولة وفورية لكافة الجداول إلى Elsoltanalex@gmail.com (مجدولة آلياً كل ليلة الساعة 12:00 منتصف الليل)"
+            >
+              {isEmailingBackup ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-200" />
+                  <span>جارِ الإرسال للإيميل...</span>
+                </>
+              ) : (
+                <>
+                  <Mail className="w-3.5 h-3.5 text-emerald-200" />
+                  <span>نسخة الإيميل اليومية (12:00 AM)</span>
                 </>
               )}
             </button>

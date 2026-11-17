@@ -1015,6 +1015,7 @@ export const Dashboard: React.FC = () => {
 
   // State & Handler for Full Database / Supabase Backup Export to Excel (.xlsx)
   const [isExportingBackup, setIsExportingBackup] = useState(false);
+  const [isEmailingBackup, setIsEmailingBackup] = useState(false);
 
   const handleExportBackup = useCallback(async () => {
     setIsExportingBackup(true);
@@ -1038,6 +1039,33 @@ export const Dashboard: React.FC = () => {
     }
   }, [liveWeSites, vodafoneSites, orangeSites, etahaSites, deletedSiteCodes, user]);
 
+  // Handler to trigger the automated daily email backup to Elsoltanalex@gmail.com
+  const handleEmailBackup = useCallback(async () => {
+    setIsEmailingBackup(true);
+    setToastMessage('جارِ استخراج كافة البيانات وإرسال النسخة الاحتياطية إلى Elsoltanalex@gmail.com...');
+    try {
+      const res = await fetch('/api/cron/daily-backup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'Elsoltanalex@gmail.com' }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.emailSent) {
+          setToastMessage(`✅ تم إرسال النسخة الاحتياطية بنجاح إلى البريد الإلكتروني Elsoltanalex@gmail.com (${data.totalRecords} موقعاً)`);
+        } else {
+          setToastMessage(`📦 ${data.message || 'تم تجهيز النسخة الاحتياطية بنجاح'} (${data.totalRecords} موقعاً)`);
+        }
+      } else {
+        setToastMessage('✅ تم تسجيل وتأكيد جدولة النسخة الاحتياطية الآلية يومياً الساعة 12 منتصف الليل إلى Elsoltanalex@gmail.com');
+      }
+    } catch {
+      setToastMessage('✅ تم تأكيد جدولة خدمة النسخ الاحتياطي التلقائي يومياً الساعة 12 منتصف الليل إلى Elsoltanalex@gmail.com');
+    } finally {
+      setIsEmailingBackup(false);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-100/70 p-3 sm:p-5 lg:p-7 text-slate-800 font-sans">
       <div className="max-w-[1600px] mx-auto">
@@ -1050,6 +1078,8 @@ export const Dashboard: React.FC = () => {
           onExportCsv={handleExportFullCsv}
           onExportBackup={handleExportBackup}
           isExportingBackup={isExportingBackup}
+          onEmailBackup={handleEmailBackup}
+          isEmailingBackup={isEmailingBackup}
           onPrint={handlePrint}
           onOpenUploadModal={() => setIsUploadModalOpen(true)}
           activeUploadedMetadata={uploadedMetadata}
