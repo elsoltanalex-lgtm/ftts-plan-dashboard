@@ -33,6 +33,8 @@ import { OrangeBulkImportModal } from '../components/OrangeBulkImportModal';
 import { OrangeDataAnalysisModal } from '../components/OrangeDataAnalysisModal';
 
 import { useVodafoneAPI } from '../hooks/useVodafoneAPI';
+import type { VodafoneRecord } from '../types/vodafone';
+import { VodafoneAddDataModal } from '../components/VodafoneAddDataModal';
 import { VodafoneBulkImportModal } from '../components/VodafoneBulkImportModal';
 import { useEtahaAPI } from '../hooks/useEtahaAPI';
 import type { EtahaRecord } from '../data/etahaSites';
@@ -218,12 +220,17 @@ export const Dashboard: React.FC = () => {
   const {
     vodafoneRecords,
     vodafoneSites,
+    saveVodafoneRecord,
     deleteVodafoneRecord,
     deleteVodafoneRecordsBulk,
     bulkImportVodafoneRecords,
     refetchVodafoneRecords,
   } = useVodafoneAPI();
   const [isVodafoneBulkImportOpen, setIsVodafoneBulkImportOpen] = useState(false);
+  const [isVodafoneAddDataOpen, setIsVodafoneAddDataOpen] = useState(false);
+  const [vodafoneEditingSiteCode, setVodafoneEditingSiteCode] = useState<string | undefined>(undefined);
+  const [vodafoneEditingRecord, setVodafoneEditingRecord] = useState<VodafoneRecord | null>(null);
+  const [vodafoneModalMode, setVodafoneModalMode] = useState<'add' | 'edit'>('edit');
 
   // Availability / Etaha specific UI states & live dataset
   const {
@@ -1509,16 +1516,16 @@ export const Dashboard: React.FC = () => {
                         variant="vodafone"
                         label="إدارة وعمليات المواقع"
                         onAdd={() => {
-                          setEditingSiteCode(undefined);
-                          setEditingRecord(null);
-                          setWeModalMode('add');
-                          setIsWeAddDataOpen(true);
+                          setVodafoneEditingSiteCode(undefined);
+                          setVodafoneEditingRecord(null);
+                          setVodafoneModalMode('add');
+                          setIsVodafoneAddDataOpen(true);
                         }}
                         onEdit={() => {
-                          setEditingSiteCode(undefined);
-                          setEditingRecord(null);
-                          setWeModalMode('edit');
-                          setIsWeAddDataOpen(true);
+                          setVodafoneEditingSiteCode(undefined);
+                          setVodafoneEditingRecord(null);
+                          setVodafoneModalMode('edit');
+                          setIsVodafoneAddDataOpen(true);
                         }}
                         onDelete={() => setIsQuickDeleteModalOpen(true)}
                       />
@@ -1815,6 +1822,11 @@ export const Dashboard: React.FC = () => {
                           setOrangeEditingRecord(null);
                           setOrangeModalMode('add');
                           setIsOrangeAddDataOpen(true);
+                        } else if (filters.company === 'Vodafone') {
+                          setVodafoneEditingSiteCode(undefined);
+                          setVodafoneEditingRecord(null);
+                          setVodafoneModalMode('add');
+                          setIsVodafoneAddDataOpen(true);
                         } else {
                           setEditingSiteCode(undefined);
                           setEditingRecord(null);
@@ -1833,6 +1845,11 @@ export const Dashboard: React.FC = () => {
                           setOrangeEditingRecord(null);
                           setOrangeModalMode('edit');
                           setIsOrangeAddDataOpen(true);
+                        } else if (filters.company === 'Vodafone') {
+                          setVodafoneEditingSiteCode(undefined);
+                          setVodafoneEditingRecord(null);
+                          setVodafoneModalMode('edit');
+                          setIsVodafoneAddDataOpen(true);
                         } else {
                           setEditingSiteCode(undefined);
                           setEditingRecord(null);
@@ -1910,7 +1927,8 @@ export const Dashboard: React.FC = () => {
           const matched =
             authorizedScopeData.find((s) => s.siteCode.toUpperCase() === siteCode.toUpperCase()) ||
             liveWeSites.find((s) => s.siteCode.toUpperCase() === siteCode.toUpperCase()) ||
-            orangeSites.find((s) => s.siteCode.toUpperCase() === siteCode.toUpperCase());
+            orangeSites.find((s) => s.siteCode.toUpperCase() === siteCode.toUpperCase()) ||
+            vodafoneSites.find((s) => s.siteCode.toUpperCase() === siteCode.toUpperCase());
 
           if (matched?.company === 'Orange') {
             const orgRec = orangeRecords.find(
@@ -1920,6 +1938,17 @@ export const Dashboard: React.FC = () => {
             setOrangeEditingRecord(orgRec || null);
             setOrangeModalMode('edit');
             setIsOrangeAddDataOpen(true);
+            return;
+          }
+
+          if (matched?.company === 'Vodafone') {
+            const vdfRec = vodafoneRecords.find(
+              (r) => (r['Site code'] || r['site code'] || '').toUpperCase() === siteCode.toUpperCase()
+            );
+            setVodafoneEditingSiteCode(siteCode);
+            setVodafoneEditingRecord(vdfRec || null);
+            setVodafoneModalMode('edit');
+            setIsVodafoneAddDataOpen(true);
             return;
           }
 
@@ -1962,6 +1991,11 @@ export const Dashboard: React.FC = () => {
             setOrangeEditingRecord(null);
             setOrangeModalMode('add');
             setIsOrangeAddDataOpen(true);
+          } else if (filters.company === 'Vodafone') {
+            setVodafoneEditingSiteCode(undefined);
+            setVodafoneEditingRecord(null);
+            setVodafoneModalMode('add');
+            setIsVodafoneAddDataOpen(true);
           } else {
             setEditingSiteCode(undefined);
             setEditingRecord(null);
@@ -2149,10 +2183,36 @@ export const Dashboard: React.FC = () => {
         }}
         onSwitchToManual={() => {
           setIsVodafoneBulkImportOpen(false);
-          setEditingSiteCode(undefined);
-          setEditingRecord(null);
-          setWeModalMode('edit');
-          setIsWeAddDataOpen(true);
+          setVodafoneEditingSiteCode(undefined);
+          setVodafoneEditingRecord(null);
+          setVodafoneModalMode('edit');
+          setIsVodafoneAddDataOpen(true);
+        }}
+      />
+
+      {/* Vodafone Add / Edit Data Modal */}
+      <VodafoneAddDataModal
+        isOpen={isVodafoneAddDataOpen}
+        onClose={() => {
+          setIsVodafoneAddDataOpen(false);
+          setVodafoneEditingSiteCode(undefined);
+          setVodafoneEditingRecord(null);
+        }}
+        allSiteCodes={vodafoneSites.map((s) => s.siteCode)}
+        initialSiteCode={vodafoneEditingSiteCode}
+        initialRecord={vodafoneEditingRecord}
+        mode={vodafoneModalMode}
+        sitesData={vodafoneSites}
+        onSave={async (record) => {
+          const res = await saveVodafoneRecord(record);
+          if (res.success) {
+            setToastMessage(`تم حفظ وتحديث بيانات موقع Vodafone (${record['Site code'] || record['site code'] || ''}) بنجاح ✅`);
+          }
+          return res;
+        }}
+        onSwitchToBulk={() => {
+          setIsVodafoneAddDataOpen(false);
+          setIsVodafoneBulkImportOpen(true);
         }}
       />
 

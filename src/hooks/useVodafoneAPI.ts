@@ -1,12 +1,14 @@
 // src/hooks/useVodafoneAPI.ts
-// Live state & persistence API hook for Vodafone FTTS dataset (with localStorage & fallback)
+// Live state & persistence API hook for Vodafone FTTS dataset (with Supabase sync & localStorage fallback)
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { SiteRecord } from '../types/dashboard';
 import type { VodafoneRecord } from '../types/vodafone';
 import { VODAFONE_RAW_RECORDS } from '../data/vodafoneSites';
+import { supabase } from '../lib/supabase';
 
 const STORAGE_KEY = 'ftts_vodafone_records_v1';
+const VODAFONE_TABLE_CANDIDATES = ['vodafone_records', 'vodafone'];
 
 export function mapVodafoneRecordToSiteRecord(r: VodafoneRecord, index = 0): SiteRecord {
   const rawCode = r[' Site code'] || r['Site code'] || r['site code'] || r.site_code || `VDF-${index + 1}`;
@@ -131,6 +133,34 @@ export function useVodafoneAPI() {
   const refetchVodafoneRecords = useCallback(async () => {
     setLoading(true);
     try {
+      // 1. Attempt to fetch live from Supabase tables
+      for (const table of VODAFONE_TABLE_CANDIDATES) {
+        try {
+          const { data, error: sbError } = await supabase.from(table).select('*').limit(5000);
+          if (!sbError && data && data.length > 0) {
+            const baseMap = new Map<string, VodafoneRecord>();
+            loadStoredVodafoneRecords().forEach((r) => {
+              const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
+              if (c) baseMap.set(c, r);
+            });
+            data.forEach((row: any) => {
+              const rowData = row.data && typeof row.data === 'object' ? row.data : row;
+              const code = String(
+                row.site_code || row['site code'] || row['Site code'] || rowData['Site code'] || rowData['site code'] || row.id || ''
+              ).trim().toUpperCase();
+              if (code) {
+                const prev = baseMap.get(code) || {};
+                baseMap.set(code, { ...prev, ...rowData, ...row, 'Site code': code, 'site code': code });
+              }
+            });
+            const merged = Array.from(baseMap.values());
+            saveStoredVodafoneRecords(merged);
+            setVodafoneRecords(merged);
+            return;
+          }
+        } catch { }
+      }
+
       const records = loadStoredVodafoneRecords();
       setVodafoneRecords([...records]);
     } catch (err: any) {
@@ -139,6 +169,10 @@ export function useVodafoneAPI() {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    refetchVodafoneRecords();
+  }, [refetchVodafoneRecords]);
 
   const saveVodafoneRecord = useCallback(async (record: VodafoneRecord): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -171,6 +205,25 @@ export function useVodafoneAPI() {
 
       saveStoredVodafoneRecords(updated);
       setVodafoneRecords(updated);
+
+      // Persist directly into Supabase vodafone tables
+      for (const table of VODAFONE_TABLE_CANDIDATES) {
+        try {
+          const payload: any = {
+            id: code,
+            site_code: code,
+            'site code': code,
+            'Site code': code,
+            data: enriched,
+            ...enriched,
+            updated_at: now,
+          };
+          await supabase.from(table).upsert(payload, { onConflict: 'id' });
+        } catch (err) {
+          console.warn(`[Vodafone Supabase] Error saving to ${table}:`, err);
+        }
+      }
+
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err?.message || 'فشل حفظ بيانات الموقع' };
@@ -187,6 +240,14 @@ export function useVodafoneAPI() {
       });
       saveStoredVodafoneRecords(filtered);
       setVodafoneRecords(filtered);
+
+      // Delete from Supabase tables
+      for (const table of VODAFONE_TABLE_CANDIDATES) {
+        try {
+          await supabase.from(table).delete().or(`site_code.eq."${norm}",site code.eq."${norm}",id.eq."${norm}"`);
+        } catch { }
+      }
+
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err?.message || 'فشل حذف الموقع' };
@@ -204,6 +265,17 @@ export function useVodafoneAPI() {
       });
       saveStoredVodafoneRecords(filtered);
       setVodafoneRecords(filtered);
+
+      // Batch delete from Supabase tables
+      const codeArray = Array.from(codeSet);
+      for (const table of VODAFONE_TABLE_CANDIDATES) {
+        try {
+          await supabase.from(table).delete().in('site_code', codeArray);
+          await supabase.from(table).delete().in('site code', codeArray);
+          await supabase.from(table).delete().in('id', codeArray);
+        } catch { }
+      }
+
       return { success: true, count: current.length - filtered.length };
     } catch (err: any) {
       return { success: false, error: err?.message || 'فشل حذف مواقع Vodafone' };
@@ -221,31 +293,54 @@ export function useVodafoneAPI() {
 
       const now = new Date().toISOString();
       let savedCount = 0;
+      const supabaseBatch: any[] = [];
 
       recordsToImport.forEach((rec) => {
         const rawCode = rec[' Site code'] || rec['Site code'] || rec['site code'] || rec.site_code;
         const c = String(rawCode || '').trim().toUpperCase();
         if (!c) return;
         const existing = recordMap.get(c);
+        let finalRec: VodafoneRecord;
         if (existing) {
-          recordMap.set(c, {
+          finalRec = {
             ...existing,
             ...rec,
             _updatedAt: now,
-          });
+          };
+          recordMap.set(c, finalRec);
         } else {
-          recordMap.set(c, {
+          finalRec = {
             ...rec,
             _createdAt: now,
             _updatedAt: now,
-          });
+          };
+          recordMap.set(c, finalRec);
         }
+        supabaseBatch.push({
+          id: c,
+          site_code: c,
+          'site code': c,
+          'Site code': c,
+          data: finalRec,
+          ...finalRec,
+          updated_at: now,
+        });
         savedCount++;
       });
 
       const merged = Array.from(recordMap.values());
       saveStoredVodafoneRecords(merged);
       setVodafoneRecords(merged);
+
+      // Batch save to Supabase
+      if (supabaseBatch.length > 0) {
+        for (const table of VODAFONE_TABLE_CANDIDATES) {
+          try {
+            await supabase.from(table).upsert(supabaseBatch, { onConflict: 'id' });
+          } catch { }
+        }
+      }
+
       return { success: true, savedCount };
     } catch (err: any) {
       return { success: false, savedCount: 0, error: err?.message || 'فشل الاستيراد الجماعي' };

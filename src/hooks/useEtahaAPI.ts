@@ -149,6 +149,32 @@ export function useEtahaAPI() {
   const refetchEtahaRecords = useCallback(async () => {
     setLoading(true);
     try {
+      // Attempt live fetch from Supabase availability tables
+      for (const table of ['etaha_records', 'etaha', 'availability']) {
+        try {
+          const { data, error: sbError } = await supabase.from(table).select('*').limit(5000);
+          if (!sbError && data && data.length > 0) {
+            const baseMap = new Map<string, EtahaRecord>();
+            loadStoredEtahaRecords().forEach((r) => {
+              const c = String(r.Code || r.code || '').trim().toUpperCase();
+              if (c) baseMap.set(c, r);
+            });
+            data.forEach((row: any) => {
+              const rowData = row.data && typeof row.data === 'object' ? row.data : row;
+              const code = String(row.Code || row.code || row.id || rowData.Code || rowData.code || '').trim().toUpperCase();
+              if (code) {
+                const prev = baseMap.get(code) || {};
+                baseMap.set(code, { ...prev, ...rowData, ...row, Code: code });
+              }
+            });
+            const merged = Array.from(baseMap.values());
+            saveStoredEtahaRecords(merged);
+            setEtahaRecords(merged);
+            return;
+          }
+        } catch { }
+      }
+
       const records = loadStoredEtahaRecords();
       setEtahaRecords([...records]);
     } catch (err: any) {
@@ -157,6 +183,10 @@ export function useEtahaAPI() {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    refetchEtahaRecords();
+  }, [refetchEtahaRecords]);
 
   const saveEtahaRecord = useCallback(async (record: EtahaRecord): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -289,6 +319,27 @@ export function useEtahaAPI() {
       const merged = Array.from(recordMap.values());
       saveStoredEtahaRecords(merged);
       setEtahaRecords(merged);
+
+      // Save batch to Supabase
+      const supabaseBatch = recordsToImport.map((rec) => {
+        const c = String(rec.Code || rec.code || '').trim().toUpperCase();
+        return {
+          id: c,
+          code: c,
+          Code: c,
+          data: rec,
+          ...rec,
+          updated_at: now,
+        };
+      });
+      if (supabaseBatch.length > 0) {
+        for (const table of ['etaha_records', 'etaha', 'availability']) {
+          try {
+            await supabase.from(table).upsert(supabaseBatch, { onConflict: 'id' });
+          } catch { }
+        }
+      }
+
       return { success: true, savedCount };
     } catch (err: any) {
       return { success: false, savedCount: 0, error: err?.message || 'فشل الاستيراد الجماعي' };

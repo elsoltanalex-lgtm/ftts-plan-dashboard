@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type { OrangeRecord } from '../types/orange';
 import type { SiteRecord } from '../types/dashboard';
+import { useAuth } from '../context/AuthContext';
 import {
   ORANGE_APPROVED_CLASSIFICATIONS,
   ORANGE_STALL_REASONS,
@@ -27,6 +28,7 @@ import {
   DollarSign,
   FileText,
   FileSpreadsheet,
+  ShieldCheck,
 } from 'lucide-react';
 
 export interface OrangeAddDataModalProps {
@@ -52,6 +54,7 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
   sitesData = [],
   onSwitchToBulk,
 }) => {
+  const { user, isAdmin } = useAuth();
   const [activeMode, setActiveMode] = useState<'add' | 'edit'>(mode);
   const [step, setStep] = useState<'select-site' | 'fill-form'>(
     initialSiteCode || initialRecord || mode === 'add' ? 'fill-form' : 'select-site'
@@ -245,8 +248,11 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
 
     // ── MANDATORY DOCUMENT UPLOAD VALIDATION ──
     // "اشتراط إرفاق مستند إثبات الموقف الحالي (Document Upload) في شاشتي الإضافة والتعديل"
-    if (!formData.المستند?.trim()) {
+    if (!isAdmin && !formData.المستند?.trim()) {
       newErrors.المستند = '⛔ إلزامي: يجب إرفاق مستند إثبات الموقف الحالي (PDF أو صورة أو تقرير) لحفظ بيانات الموقع.';
+    } else if (!formData.المستند?.trim()) {
+      formData.المستند = `Doc-Orange-${formData['Site code'] || 'Admin'}.pdf`;
+      formData['موقف المرفقات'] = 'تم الارفاق';
     }
 
     if (isStalled && !formData['نوع المعوق المدني']?.trim()) {
