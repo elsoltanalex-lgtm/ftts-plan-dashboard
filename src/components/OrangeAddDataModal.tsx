@@ -94,7 +94,7 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
   const filteredCodes = useMemo(() => {
     if (!siteCodeSearch.trim()) return allSiteCodes.slice(0, 40);
     const q = siteCodeSearch.trim().toLowerCase();
-    return allSiteCodes.filter((c) => c.toLowerCase().includes(q)).slice(0, 40);
+    return allSiteCodes.filter((c) => String(c || '').toLowerCase().includes(q)).slice(0, 40);
   }, [allSiteCodes, siteCodeSearch]);
 
   // Handle Document Upload
@@ -126,8 +126,8 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
   // Select Site to Edit
   const handleSelectSiteCode = useCallback(
     (code: string) => {
-      const norm = code.trim().toUpperCase();
-      const matchedSite = sitesData.find((s) => s.siteCode.toUpperCase() === norm);
+      const norm = String(code || '').trim().toUpperCase();
+      const matchedSite = sitesData.find((s) => String(s?.siteCode || '').trim().toUpperCase() === norm);
 
       if (!matchedSite) {
         setErrors({ _general: `لم يتم العثور على بيانات الموقع: ${code}` });

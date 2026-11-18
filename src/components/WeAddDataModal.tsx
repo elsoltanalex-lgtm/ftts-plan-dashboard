@@ -625,7 +625,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
     setFormData((prev) => ({
       ...prev,
-      [csvColumn]: csvColumn === 'site code' ? value.toUpperCase() : value,
+      [csvColumn]: csvColumn === 'site code' ? String(value || '').toUpperCase() : value,
     }));
 
     if (errors[csvColumn]) {

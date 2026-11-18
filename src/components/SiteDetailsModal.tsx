@@ -544,8 +544,10 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                               type="button"
                               onClick={() => {
                                 if (onEditSite) {
+                                  const code = site?.siteCode ? String(site.siteCode).trim() : '';
+                                  if (!code) return;
                                   onClose();
-                                  onEditSite(site.siteCode);
+                                  onEditSite(code);
                                 }
                               }}
                               className="px-3 py-1.5 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-xs hover:shadow-amber-500/25 active:scale-95"

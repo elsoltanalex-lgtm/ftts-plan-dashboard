@@ -43,6 +43,7 @@ import { EtahaAddDataModal } from '../components/EtahaAddDataModal';
 import { WeExecutiveReportView } from '../components/WeExecutiveReportView';
 import { SiteActionDropdown } from '../components/SiteActionDropdown';
 import { BackupEmailConfigModal } from '../components/BackupEmailConfigModal';
+import { ModalErrorBoundary } from '../components/ModalErrorBoundary';
 
 
 import {
@@ -360,7 +361,8 @@ export const Dashboard: React.FC = () => {
         const liveMap = new Map<string, SiteRecord>();
         weCentralRecords.forEach((r, i) => {
           const s = mapWeRecordToSiteRecord(r, i);
-          liveMap.set(s.siteCode.toUpperCase(), s);
+          const c = String(s?.siteCode || '').trim().toUpperCase();
+          if (c) liveMap.set(c, s);
         });
         const merged: SiteRecord[] = [];
         const seen = new Set<string>();
@@ -369,7 +371,8 @@ export const Dashboard: React.FC = () => {
           seen.add(code);
         }
         for (const site of WE_EXCEL_SITES) {
-          if (!seen.has(site.siteCode.toUpperCase())) {
+          const c = String(site?.siteCode || '').trim().toUpperCase();
+          if (c && !seen.has(c)) {
             merged.push(site);
           }
         }
@@ -498,7 +501,8 @@ export const Dashboard: React.FC = () => {
 
   const selectedDeleteSite = useMemo(() => {
     if (!quickDeleteSelectedCode) return null;
-    return authorizedScopeData.find((s) => String(s?.siteCode || '').toUpperCase() === quickDeleteSelectedCode.toUpperCase()) || null;
+    const targetNorm = String(quickDeleteSelectedCode).trim().toUpperCase();
+    return authorizedScopeData.find((s) => String(s?.siteCode || '').trim().toUpperCase() === targetNorm) || null;
   }, [authorizedScopeData, quickDeleteSelectedCode]);
 
   // Base dataset for interactive filtering (strictly scoped to selected operator, e.g. "WE")
@@ -1902,151 +1906,169 @@ export const Dashboard: React.FC = () => {
         </footer>
       </div>
 
-      {/* Drill-down Modal */}
-      <SiteDetailsModal
-        isOpen={isDetailsModalOpen}
-        onClose={() => setIsDetailsModalOpen(false)}
-        sites={filteredSites}
-        activeStatusFilter={modalFilterStatus || filters.status || undefined}
-        onEditSite={(siteCode) => {
-          if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
-            const matchedEtaha = etahaSites.find(
-              (s) => String(s?.siteCode || '').toUpperCase() === siteCode.toUpperCase()
-            );
-            const etRec = etahaRecords.find(
-              (r) => (r['Code'] || r['siteCode'] || '').toUpperCase() === siteCode.toUpperCase()
-            ) || (matchedEtaha?.rawRecord as EtahaRecord) || null;
+      {/* Drill-down Modal with Error Boundary */}
+      <ModalErrorBoundary onClose={() => setIsDetailsModalOpen(false)} title="نافذة تفاصيل المواقع">
+        <SiteDetailsModal
+          isOpen={isDetailsModalOpen}
+          onClose={() => setIsDetailsModalOpen(false)}
+          sites={filteredSites}
+          activeStatusFilter={modalFilterStatus || filters.status || undefined}
+          onEditSite={(siteCode) => {
+            try {
+              const targetCode = String(siteCode || '').trim().toUpperCase();
+              if (!targetCode) return;
 
-            setEtahaEditingSiteCode(siteCode);
-            setEtahaEditingRecord(etRec);
-            setEtahaModalMode('edit');
-            setIsEtahaAddDataOpen(true);
-            return;
-          }
+              if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+                const matchedEtaha = etahaSites.find(
+                  (s) => String(s?.siteCode || '').trim().toUpperCase() === targetCode
+                );
+                const etRec = etahaRecords.find(
+                  (r) => String(r?.['Code'] || r?.['siteCode'] || r?.Code || '').trim().toUpperCase() === targetCode
+                ) || (matchedEtaha?.rawRecord as EtahaRecord) || null;
 
-          const matched =
-            authorizedScopeData.find((s) => s.siteCode.toUpperCase() === siteCode.toUpperCase()) ||
-            liveWeSites.find((s) => s.siteCode.toUpperCase() === siteCode.toUpperCase()) ||
-            orangeSites.find((s) => s.siteCode.toUpperCase() === siteCode.toUpperCase()) ||
-            vodafoneSites.find((s) => s.siteCode.toUpperCase() === siteCode.toUpperCase());
+                setEtahaEditingSiteCode(targetCode);
+                setEtahaEditingRecord(etRec);
+                setEtahaModalMode('edit');
+                setIsEtahaAddDataOpen(true);
+                return;
+              }
 
-          if (matched?.company === 'Orange') {
-            const orgRec = orangeRecords.find(
-              (r) => (r['Site code'] || '').toUpperCase() === siteCode.toUpperCase()
-            );
-            setOrangeEditingSiteCode(siteCode);
-            setOrangeEditingRecord(orgRec || null);
-            setOrangeModalMode('edit');
-            setIsOrangeAddDataOpen(true);
-            return;
-          }
+              const matched =
+                authorizedScopeData.find((s) => String(s?.siteCode || '').trim().toUpperCase() === targetCode) ||
+                liveWeSites.find((s) => String(s?.siteCode || '').trim().toUpperCase() === targetCode) ||
+                orangeSites.find((s) => String(s?.siteCode || '').trim().toUpperCase() === targetCode) ||
+                vodafoneSites.find((s) => String(s?.siteCode || '').trim().toUpperCase() === targetCode);
 
-          if (matched?.company === 'Vodafone') {
-            const vdfRec = vodafoneRecords.find(
-              (r) => (r['Site code'] || r['site code'] || '').toUpperCase() === siteCode.toUpperCase()
-            );
-            setVodafoneEditingSiteCode(siteCode);
-            setVodafoneEditingRecord(vdfRec || null);
-            setVodafoneModalMode('edit');
-            setIsVodafoneAddDataOpen(true);
-            return;
-          }
+              if (matched?.company === 'Orange') {
+                const orgRec = orangeRecords.find(
+                  (r) => String(r?.['Site code'] || r?.['Site Code'] || r?.siteCode || '').trim().toUpperCase() === targetCode
+                ) || (matched?.rawRecord as OrangeRecord) || null;
+                setOrangeEditingSiteCode(targetCode);
+                setOrangeEditingRecord(orgRec);
+                setOrangeModalMode('edit');
+                setIsOrangeAddDataOpen(true);
+                return;
+              }
 
-          if (matched) {
-            setEditingRecord({
-              'site code': matched.siteCode,
-              'Exc sector': matched.sector,
-              'Sectores': matched.sector,
-              'Sectore': matched.sector,
-              'السنترال': matched.central || '',
-              'الادارة العامة لتنفيذ الشبكات': matched.generalAdmin || '',
-              'اداره التنفيذ المختصه': matched.competentAdmin || '',
-              'Zone': matched.competentAdmin || '',
-              'Exc Zone': matched.generalAdmin || '',
-              'المسئولية': matched.civilContractor || '',
-              'Type': matched.classification || 'FTTS',
-              'Site Status': matched.status === 'تم التسليم' ? 'ON AIR' : matched.status,
-              'التصنيف': matched.classification || matched.status || 'جاري مدني',
-              'اسباب التعذر': matched.obstacleReason || 'لا يوجد تعذر',
-              'نسبة الإنجاز %': String(matched.progressPercent || 0),
-              'التاريخ المتوقع للانتهاء': matched.expectedDate || '',
-              'الملاحظات': matched.notes || '',
-              _id: matched.id || '',
-            });
-          } else {
-            setEditingRecord(null);
-          }
-          setEditingSiteCode(siteCode);
-          setWeModalMode('edit');
-          setIsWeAddDataOpen(true);
-        }}
-        onAddNewSite={() => {
-          if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
-            setEtahaEditingSiteCode(undefined);
-            setEtahaEditingRecord(null);
-            setEtahaModalMode('add');
-            setIsEtahaAddDataOpen(true);
-          } else if (filters.company === 'Orange') {
-            setOrangeEditingSiteCode(undefined);
-            setOrangeEditingRecord(null);
-            setOrangeModalMode('add');
-            setIsOrangeAddDataOpen(true);
-          } else if (filters.company === 'Vodafone') {
-            setVodafoneEditingSiteCode(undefined);
-            setVodafoneEditingRecord(null);
-            setVodafoneModalMode('add');
-            setIsVodafoneAddDataOpen(true);
-          } else {
-            setEditingSiteCode(undefined);
-            setEditingRecord(null);
-            setWeModalMode('add');
-            setIsWeAddDataOpen(true);
-          }
-        }}
-        onDeleteSite={async (siteOrCode) => {
-          const code = typeof siteOrCode === 'string' ? siteOrCode : siteOrCode.siteCode;
-          const matched = authorizedScopeData.find((s) => String(s?.siteCode || '').toUpperCase() === code.toUpperCase());
-          if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY' || matched?.company === 'Availability' || matched?.company === 'الإتاحة') {
-            await deleteEtahaRecord(code);
-            setToastMessage(`تم حذف وإلغاء مشروع الإتاحة (${code}) بنجاح ✅`);
-          } else if (matched?.company === 'Orange') {
-            await deleteOrangeRecord(code);
-            setToastMessage(`تم حذف وإلغاء موقع Orange (${code}) بنجاح ✅`);
-          } else if (matched?.company === 'Vodafone') {
-            await deleteVodafoneRecord(code);
-            setToastMessage(`تم حذف وإلغاء موقع Vodafone (${code}) بنجاح ✅`);
-          } else {
-            handleDeleteSite(siteOrCode);
-          }
-        }}
-        onDeleteBulkSites={async (siteCodes) => {
-          if (!siteCodes || siteCodes.length === 0) return;
-          try {
-            if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
-              await deleteEtahaRecordsBulk(siteCodes);
-              setToastMessage(`تم حذف ${siteCodes.length} مشروع بنجاح من قاعدة بيانات الإتاحة ✅`);
-            } else if (filters.company === 'Orange') {
-              await deleteOrangeRecordsBulk(siteCodes);
-              setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Orange ✅`);
-            } else if (filters.company === 'Vodafone') {
-              await deleteVodafoneRecordsBulk(siteCodes);
-              setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Vodafone ✅`);
-            } else {
-              await deleteRecordsBulk(siteCodes);
-              removeRecordsLocally(siteCodes);
-              setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من قاعدة بيانات Supabase ✅`);
+              if (matched?.company === 'Vodafone') {
+                const vdfRec = vodafoneRecords.find(
+                  (r) => String(r?.['Site code'] || r?.['site code'] || r?.siteCode || '').trim().toUpperCase() === targetCode
+                ) || (matched?.rawRecord as VodafoneRecord) || null;
+                setVodafoneEditingSiteCode(targetCode);
+                setVodafoneEditingRecord(vdfRec);
+                setVodafoneModalMode('edit');
+                setIsVodafoneAddDataOpen(true);
+                return;
+              }
+
+              if (matched) {
+                setEditingRecord({
+                  'site code': matched.siteCode || targetCode,
+                  'Exc sector': matched.sector,
+                  'Sectores': matched.sector,
+                  'Sectore': matched.sector,
+                  'السنترال': matched.central || '',
+                  'الادارة العامة لتنفيذ الشبكات': matched.generalAdmin || '',
+                  'اداره التنفيذ المختصه': matched.competentAdmin || '',
+                  'Zone': matched.competentAdmin || '',
+                  'Exc Zone': matched.generalAdmin || '',
+                  'المسئولية': matched.civilContractor || '',
+                  'Type': matched.classification || 'FTTS',
+                  'Site Status': matched.status === 'تم التسليم' ? 'ON AIR' : matched.status,
+                  'التصنيف': matched.classification || matched.status || 'جاري مدني',
+                  'اسباب التعذر': matched.obstacleReason || 'لا يوجد تعذر',
+                  'نسبة الإنجاز %': String(matched.progressPercent || 0),
+                  'التاريخ المتوقع للانتهاء': matched.expectedDate || '',
+                  'الملاحظات': matched.notes || '',
+                  _id: matched.id || '',
+                });
+              } else {
+                setEditingRecord(null);
+              }
+              setEditingSiteCode(targetCode);
+              setWeModalMode('edit');
+              setIsWeAddDataOpen(true);
+            } catch (err: any) {
+              console.error('Error opening edit site modal:', err);
+              setToastMessage(`تعذر فتح نافذة التعديل للموقع (${siteCode}): ${err?.message || ''}`);
             }
-            setDeletedSiteCodes((prev) => {
-              const next = new Set(prev);
-              siteCodes.forEach((c) => next.add(String(c).trim().toUpperCase()));
-              persistDeletedSiteCodes(next);
-              return next;
-            });
-          } catch (err: any) {
-            setToastMessage(`حدث خطأ أثناء حذف المواقع: ${err?.message || ''}`);
-          }
-        }}
-      />
+          }}
+          onAddNewSite={() => {
+            if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+              setEtahaEditingSiteCode(undefined);
+              setEtahaEditingRecord(null);
+              setEtahaModalMode('add');
+              setIsEtahaAddDataOpen(true);
+            } else if (filters.company === 'Orange') {
+              setOrangeEditingSiteCode(undefined);
+              setOrangeEditingRecord(null);
+              setOrangeModalMode('add');
+              setIsOrangeAddDataOpen(true);
+            } else if (filters.company === 'Vodafone') {
+              setVodafoneEditingSiteCode(undefined);
+              setVodafoneEditingRecord(null);
+              setVodafoneModalMode('add');
+              setIsVodafoneAddDataOpen(true);
+            } else {
+              setEditingSiteCode(undefined);
+              setEditingRecord(null);
+              setWeModalMode('add');
+              setIsWeAddDataOpen(true);
+            }
+          }}
+          onDeleteSite={async (siteOrCode) => {
+            try {
+              const rawCode = typeof siteOrCode === 'string' ? siteOrCode : siteOrCode?.siteCode;
+              const code = String(rawCode || '').trim();
+              if (!code) return;
+              const targetCode = code.toUpperCase();
+              const matched = authorizedScopeData.find((s) => String(s?.siteCode || '').trim().toUpperCase() === targetCode);
+              if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY' || matched?.company === 'Availability' || matched?.company === 'الإتاحة') {
+                await deleteEtahaRecord(code);
+                setToastMessage(`تم حذف وإلغاء مشروع الإتاحة (${code}) بنجاح ✅`);
+              } else if (matched?.company === 'Orange') {
+                await deleteOrangeRecord(code);
+                setToastMessage(`تم حذف وإلغاء موقع Orange (${code}) بنجاح ✅`);
+              } else if (matched?.company === 'Vodafone') {
+                await deleteVodafoneRecord(code);
+                setToastMessage(`تم حذف وإلغاء موقع Vodafone (${code}) بنجاح ✅`);
+              } else {
+                handleDeleteSite(siteOrCode);
+              }
+            } catch (err: any) {
+              console.error('Error deleting site:', err);
+              setToastMessage(`حدث خطأ أثناء حذف الموقع: ${err?.message || ''}`);
+            }
+          }}
+          onDeleteBulkSites={async (siteCodes) => {
+            if (!siteCodes || siteCodes.length === 0) return;
+            try {
+              if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+                await deleteEtahaRecordsBulk(siteCodes);
+                setToastMessage(`تم حذف ${siteCodes.length} مشروع بنجاح من قاعدة بيانات الإتاحة ✅`);
+              } else if (filters.company === 'Orange') {
+                await deleteOrangeRecordsBulk(siteCodes);
+                setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Orange ✅`);
+              } else if (filters.company === 'Vodafone') {
+                await deleteVodafoneRecordsBulk(siteCodes);
+                setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Vodafone ✅`);
+              } else {
+                await deleteRecordsBulk(siteCodes);
+                removeRecordsLocally(siteCodes);
+                setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من قاعدة بيانات Supabase ✅`);
+              }
+              setDeletedSiteCodes((prev) => {
+                const next = new Set(prev);
+                siteCodes.forEach((c) => next.add(String(c).trim().toUpperCase()));
+                persistDeletedSiteCodes(next);
+                return next;
+              });
+            } catch (err: any) {
+              setToastMessage(`حدث خطأ أثناء حذف المواقع: ${err?.message || ''}`);
+            }
+          }}
+        />
+      </ModalErrorBoundary>
 
       <WeDataAnalysisModal
         isOpen={isWeAnalysisOpen}
@@ -2074,26 +2096,35 @@ export const Dashboard: React.FC = () => {
           setIsWeAddDataOpen(true);
         }}
       />
-      <WeAddDataModal
-        isOpen={isWeAddDataOpen}
+      <ModalErrorBoundary
         onClose={() => {
           setIsWeAddDataOpen(false);
           setEditingSiteCode(undefined);
           setEditingRecord(null);
         }}
-        allSiteCodes={authorizedWeCodes}
-        initialSiteCode={editingSiteCode}
-        initialRecord={editingRecord}
-        mode={weModalMode}
-        sitesData={authorizedScopeData}
-        onSaved={handleWeRecordSaved}
-        onSave={handleWeRecordSaved}
-        onSubmit={handleWeRecordSaved}
-        onSwitchToBulk={() => {
-          setIsWeAddDataOpen(false);
-          setIsBulkImportOpen(true);
-        }}
-      />
+        title="نافذة تعديل موقع WE"
+      >
+        <WeAddDataModal
+          isOpen={isWeAddDataOpen}
+          onClose={() => {
+            setIsWeAddDataOpen(false);
+            setEditingSiteCode(undefined);
+            setEditingRecord(null);
+          }}
+          allSiteCodes={authorizedWeCodes}
+          initialSiteCode={editingSiteCode}
+          initialRecord={editingRecord}
+          mode={weModalMode}
+          sitesData={authorizedScopeData}
+          onSaved={handleWeRecordSaved}
+          onSave={handleWeRecordSaved}
+          onSubmit={handleWeRecordSaved}
+          onSwitchToBulk={() => {
+            setIsWeAddDataOpen(false);
+            setIsBulkImportOpen(true);
+          }}
+        />
+      </ModalErrorBoundary>
       {/* Excel Bulk Import Modal with Constant Protection & Validation */}
       <WeBulkImportModal
         isOpen={isBulkImportOpen}
@@ -2127,30 +2158,39 @@ export const Dashboard: React.FC = () => {
         }
       />
 
-      <OrangeAddDataModal
-        isOpen={isOrangeAddDataOpen}
+      <ModalErrorBoundary
         onClose={() => {
           setIsOrangeAddDataOpen(false);
           setOrangeEditingSiteCode(undefined);
           setOrangeEditingRecord(null);
         }}
-        allSiteCodes={orangeSites.map((s) => s.siteCode)}
-        initialSiteCode={orangeEditingSiteCode}
-        initialRecord={orangeEditingRecord}
-        mode={orangeModalMode}
-        sitesData={orangeSites}
-        onSave={async (record) => {
-          const res = await saveOrangeRecord(record);
-          if (res.success) {
-            setToastMessage(`تم حفظ وتحديث بيانات موقع Orange (${record['Site code']}) بنجاح ✅`);
-          }
-          return res;
-        }}
-        onSwitchToBulk={() => {
-          setIsOrangeAddDataOpen(false);
-          setIsOrangeBulkImportOpen(true);
-        }}
-      />
+        title="نافذة تعديل موقع Orange"
+      >
+        <OrangeAddDataModal
+          isOpen={isOrangeAddDataOpen}
+          onClose={() => {
+            setIsOrangeAddDataOpen(false);
+            setOrangeEditingSiteCode(undefined);
+            setOrangeEditingRecord(null);
+          }}
+          allSiteCodes={orangeSites.map((s) => s.siteCode)}
+          initialSiteCode={orangeEditingSiteCode}
+          initialRecord={orangeEditingRecord}
+          mode={orangeModalMode}
+          sitesData={orangeSites}
+          onSave={async (record) => {
+            const res = await saveOrangeRecord(record);
+            if (res.success) {
+              setToastMessage(`تم حفظ وتحديث بيانات موقع Orange (${record['Site code']}) بنجاح ✅`);
+            }
+            return res;
+          }}
+          onSwitchToBulk={() => {
+            setIsOrangeAddDataOpen(false);
+            setIsOrangeBulkImportOpen(true);
+          }}
+        />
+      </ModalErrorBoundary>
 
       <OrangeBulkImportModal
         isOpen={isOrangeBulkImportOpen}
@@ -2191,30 +2231,39 @@ export const Dashboard: React.FC = () => {
       />
 
       {/* Vodafone Add / Edit Data Modal */}
-      <VodafoneAddDataModal
-        isOpen={isVodafoneAddDataOpen}
+      <ModalErrorBoundary
         onClose={() => {
           setIsVodafoneAddDataOpen(false);
           setVodafoneEditingSiteCode(undefined);
           setVodafoneEditingRecord(null);
         }}
-        allSiteCodes={vodafoneSites.map((s) => s.siteCode)}
-        initialSiteCode={vodafoneEditingSiteCode}
-        initialRecord={vodafoneEditingRecord}
-        mode={vodafoneModalMode}
-        sitesData={vodafoneSites}
-        onSave={async (record) => {
-          const res = await saveVodafoneRecord(record);
-          if (res.success) {
-            setToastMessage(`تم حفظ وتحديث بيانات موقع Vodafone (${record['Site code'] || record['site code'] || ''}) بنجاح ✅`);
-          }
-          return res;
-        }}
-        onSwitchToBulk={() => {
-          setIsVodafoneAddDataOpen(false);
-          setIsVodafoneBulkImportOpen(true);
-        }}
-      />
+        title="نافذة تعديل موقع Vodafone"
+      >
+        <VodafoneAddDataModal
+          isOpen={isVodafoneAddDataOpen}
+          onClose={() => {
+            setIsVodafoneAddDataOpen(false);
+            setVodafoneEditingSiteCode(undefined);
+            setVodafoneEditingRecord(null);
+          }}
+          allSiteCodes={vodafoneSites.map((s) => s.siteCode)}
+          initialSiteCode={vodafoneEditingSiteCode}
+          initialRecord={vodafoneEditingRecord}
+          mode={vodafoneModalMode}
+          sitesData={vodafoneSites}
+          onSave={async (record) => {
+            const res = await saveVodafoneRecord(record);
+            if (res.success) {
+              setToastMessage(`تم حفظ وتحديث بيانات موقع Vodafone (${record['Site code'] || record['site code'] || ''}) بنجاح ✅`);
+            }
+            return res;
+          }}
+          onSwitchToBulk={() => {
+            setIsVodafoneAddDataOpen(false);
+            setIsVodafoneBulkImportOpen(true);
+          }}
+        />
+      </ModalErrorBoundary>
 
       {/* Availability (الإتاحة) Bulk Import Modal */}
       <EtahaBulkImportModal
@@ -2237,32 +2286,41 @@ export const Dashboard: React.FC = () => {
       />
 
       {/* Availability (الإتاحة) Add / Edit Data Modal */}
-      <EtahaAddDataModal
-        isOpen={isEtahaAddDataOpen}
+      <ModalErrorBoundary
         onClose={() => {
           setIsEtahaAddDataOpen(false);
           setEtahaEditingSiteCode(undefined);
           setEtahaEditingRecord(null);
         }}
-        allSiteCodes={etahaSites.map((s) => s.siteCode)}
-        initialSiteCode={etahaEditingSiteCode}
-        initialRecord={etahaEditingRecord}
-        mode={etahaModalMode}
-        sitesData={etahaSites}
-        onSave={async (record) => {
-          const res = await saveEtahaRecord(record);
-          if (res.success) {
-            setToastMessage(`تم حفظ وتحديث بيانات مشروع الإتاحة (${record['Code'] || record['siteCode'] || ''}) بنجاح ✅`);
-          } else {
-            setToastMessage(`حدث خطأ أثناء حفظ بيانات الإتاحة: ${res.error || ''}`);
-          }
-          return res;
-        }}
-        onSwitchToBulk={() => {
-          setIsEtahaAddDataOpen(false);
-          setIsEtahaBulkImportOpen(true);
-        }}
-      />
+        title="نافذة تعديل مشروع Availability"
+      >
+        <EtahaAddDataModal
+          isOpen={isEtahaAddDataOpen}
+          onClose={() => {
+            setIsEtahaAddDataOpen(false);
+            setEtahaEditingSiteCode(undefined);
+            setEtahaEditingRecord(null);
+          }}
+          allSiteCodes={etahaSites.map((s) => s.siteCode)}
+          initialSiteCode={etahaEditingSiteCode}
+          initialRecord={etahaEditingRecord}
+          mode={etahaModalMode}
+          sitesData={etahaSites}
+          onSave={async (record) => {
+            const res = await saveEtahaRecord(record);
+            if (res.success) {
+              setToastMessage(`تم حفظ وتحديث بيانات مشروع الإتاحة (${record['Code'] || record['siteCode'] || ''}) بنجاح ✅`);
+            } else {
+              setToastMessage(`حدث خطأ أثناء حفظ بيانات الإتاحة: ${res.error || ''}`);
+            }
+            return res;
+          }}
+          onSwitchToBulk={() => {
+            setIsEtahaAddDataOpen(false);
+            setIsEtahaBulkImportOpen(true);
+          }}
+        />
+      </ModalErrorBoundary>
 
       {/* Excel Uploader Modal */}
       <ExcelUploaderModal

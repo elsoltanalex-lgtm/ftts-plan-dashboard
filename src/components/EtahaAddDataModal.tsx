@@ -215,12 +215,13 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
   const filteredCodes = useMemo(() => {
     if (!siteCodeSearch.trim()) return allSiteCodes.slice(0, 40);
     const q = siteCodeSearch.trim().toLowerCase();
-    return allSiteCodes.filter((c) => c.toLowerCase().includes(q)).slice(0, 40);
+    return allSiteCodes.filter((c) => String(c || '').toLowerCase().includes(q)).slice(0, 40);
   }, [allSiteCodes, siteCodeSearch]);
 
   const handleSelectSiteCode = (code: string) => {
+    const norm = String(code || '').trim().toUpperCase();
     const site = sitesData.find(
-      (s) => String(s.siteCode || '').trim().toUpperCase() === code.trim().toUpperCase()
+      (s) => String(s?.siteCode || '').trim().toUpperCase() === norm
     );
     const raw = (site?.rawRecord as EtahaRecord) || null;
     if (raw) {
