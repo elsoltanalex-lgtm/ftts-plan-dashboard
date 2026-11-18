@@ -220,7 +220,7 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
 
       const res = await onSave(payload);
       if (res.success) {
-        setSuccessMessage(`تم حفظ وتحديث بيانات موقع Vodafone (${code}) بنجاح في قاعدة البيانات ✅`);
+        setSuccessMessage(res.message || `تم حفظ وتحديث بيانات موقع Vodafone (${code}) بنجاح في قاعدة البيانات ✅`);
         setTimeout(() => {
           onClose();
           setSuccessMessage('');

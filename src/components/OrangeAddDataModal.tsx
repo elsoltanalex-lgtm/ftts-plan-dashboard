@@ -269,7 +269,7 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
     try {
       const res = await onSave(formData);
       if (res.success) {
-        setSuccessMessage('✅ تم حفظ وتحديث بيانات موقع Orange بنجاح!');
+        setSuccessMessage(res.message || '✅ تم حفظ وتحديث بيانات موقع Orange بنجاح في قاعدة البيانات!');
         setTimeout(() => {
           onClose();
           setSuccessMessage('');

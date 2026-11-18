@@ -179,7 +179,7 @@ export function useOrangeAPI() {
     refetchOrangeRecords();
   }, [refetchOrangeRecords]);
 
-  const saveOrangeRecord = useCallback(async (record: OrangeRecord): Promise<{ success: boolean; error?: string }> => {
+  const saveOrangeRecord = useCallback(async (record: OrangeRecord): Promise<{ success: boolean; cloudSaved?: boolean; message?: string; error?: string }> => {
     try {
       const rawCode = record[' Site code'] || record['Site code'] || record['site code'] || (record as any).site_code;
       const code = String(rawCode || '').trim().toUpperCase();
@@ -197,6 +197,8 @@ export function useOrangeAPI() {
         ...record,
         'Site code': code,
         'site code': code,
+        'التصنيف': record['التصنيف'] || record['التصنيف (مدني)'] || '',
+        'التصنيف (مدني)': record['التصنيف (مدني)'] || record['التصنيف'] || '',
         _updatedAt: now,
       };
 
@@ -211,25 +213,74 @@ export function useOrangeAPI() {
       saveStoredOrangeRecords(updated);
       setOrangeRecords(updated);
 
-      // Persist directly into Supabase orange tables
+      // Persist directly into Supabase orange tables with UPDATE / INSERT queries
+      let cloudSaved = false;
       for (const table of ORANGE_TABLE_CANDIDATES) {
         try {
           const payload: any = {
-            id: code,
             site_code: code,
             'site code': code,
             'Site code': code,
+            central: enriched['سنترال الربط'] || '',
+            sector: enriched['رئاسة قطاعات التنفيذ'] || enriched['رئاسة القطاعات '] || enriched['رئاسة القطاعات'] || '',
+            general_admin: enriched['الادارة العامة لتنفيذ الشبكات'] || enriched['الادارة العامة للتنفيذ'] || enriched['الادارة العامة'] || '',
+            competent_admin: enriched['ادارة التنفيذ الفرعية'] || enriched['الادارة العامة للمنطقة'] || enriched['المنطقة'] || '',
+            status: enriched['التصنيف (مدني)'] || enriched['التصنيف'] || '',
+            classification: enriched['التصنيف'] || enriched['التصنيف (مدني)'] || '',
+            'التصنيف': enriched['التصنيف'] || enriched['التصنيف (مدني)'] || '',
+            'الملاحظات': enriched['الملاحظات'] || '',
+            'مسئولية التنفيذ': enriched['مسئولية التنفيذ'] || enriched['مسئوليه التنفيذ'] || '',
             data: enriched,
-            ...enriched,
             updated_at: now,
           };
-          await supabase.from(table).upsert(payload, { onConflict: 'id' });
+
+          // 1. Attempt UPDATE on existing record in Supabase
+          const { data: updateData, error: updateErr } = await supabase
+            .from(table)
+            .update(payload)
+            .or(`site_code.eq."${code}",site code.eq."${code}"`)
+            .select();
+
+          if (!updateErr && updateData && updateData.length > 0) {
+            cloudSaved = true;
+            break;
+          }
+
+          // 2. If record doesn't exist yet, perform INSERT
+          const { data: insertData, error: insertErr } = await supabase
+            .from(table)
+            .insert([payload])
+            .select();
+
+          if (!insertErr && insertData && insertData.length > 0) {
+            cloudSaved = true;
+            break;
+          }
+
+          // 3. Fallback: attempt upsert by onConflict if supported
+          const { data: upsertData, error: upsertErr } = await supabase
+            .from(table)
+            .upsert(payload, { onConflict: 'site_code' })
+            .select();
+
+          if (!upsertErr && upsertData && upsertData.length > 0) {
+            cloudSaved = true;
+            break;
+          }
         } catch (err) {
           console.warn(`[Orange Supabase] Error saving to ${table}:`, err);
         }
       }
 
-      return { success: true };
+      const successMsg = cloudSaved
+        ? `تم حفظ وتحديث بيانات موقع Orange (${code}) بنجاح في قاعدة بيانات Supabase السحابية ✅`
+        : `تم حفظ وتحديث بيانات موقع Orange (${code}) بنجاح ✅`;
+
+      return {
+        success: true,
+        cloudSaved,
+        message: successMsg,
+      };
     } catch (err: any) {
       return { success: false, error: err?.message || 'فشل حفظ بيانات الموقع' };
     }

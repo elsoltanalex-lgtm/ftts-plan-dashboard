@@ -174,7 +174,7 @@ export function useVodafoneAPI() {
     refetchVodafoneRecords();
   }, [refetchVodafoneRecords]);
 
-  const saveVodafoneRecord = useCallback(async (record: VodafoneRecord): Promise<{ success: boolean; error?: string }> => {
+  const saveVodafoneRecord = useCallback(async (record: VodafoneRecord): Promise<{ success: boolean; cloudSaved?: boolean; message?: string; error?: string }> => {
     try {
       const rawCode = record[' Site code'] || record['Site code'] || record['site code'] || record.site_code;
       const code = String(rawCode || '').trim().toUpperCase();
@@ -206,25 +206,74 @@ export function useVodafoneAPI() {
       saveStoredVodafoneRecords(updated);
       setVodafoneRecords(updated);
 
-      // Persist directly into Supabase vodafone tables
+      // Persist directly into Supabase vodafone tables with UPDATE / INSERT queries
+      let cloudSaved = false;
       for (const table of VODAFONE_TABLE_CANDIDATES) {
         try {
           const payload: any = {
-            id: code,
             site_code: code,
             'site code': code,
             'Site code': code,
+            central: enriched['سنترال الربط'] || '',
+            sector: enriched['رئاسة قطاعات التنفيذ'] || '',
+            general_admin: enriched['الادارة العامة لتنفيذ الشبكات'] || enriched['الادارة العامة للمنطقة'] || '',
+            competent_admin: enriched['ادارة التنفيذ الفرعية'] || '',
+            status: enriched['التصنيف'] || '',
+            classification: enriched['التصنيف'] || '',
+            'التصنيف': enriched['التصنيف'] || '',
+            'الملاحظات': enriched['الملاحظات'] || '',
+            'مسئولية التنفيذ': enriched['مسئولية التنفيذ'] || '',
             data: enriched,
-            ...enriched,
             updated_at: now,
           };
-          await supabase.from(table).upsert(payload, { onConflict: 'id' });
+
+          // 1. Attempt UPDATE on existing record in Supabase
+          const { data: updateData, error: updateErr } = await supabase
+            .from(table)
+            .update(payload)
+            .or(`site_code.eq."${code}",site code.eq."${code}"`)
+            .select();
+
+          if (!updateErr && updateData && updateData.length > 0) {
+            cloudSaved = true;
+            break;
+          }
+
+          // 2. If record doesn't exist yet, perform INSERT
+          const { data: insertData, error: insertErr } = await supabase
+            .from(table)
+            .insert([payload])
+            .select();
+
+          if (!insertErr && insertData && insertData.length > 0) {
+            cloudSaved = true;
+            break;
+          }
+
+          // 3. Fallback: attempt upsert by onConflict if supported
+          const { data: upsertData, error: upsertErr } = await supabase
+            .from(table)
+            .upsert(payload, { onConflict: 'site_code' })
+            .select();
+
+          if (!upsertErr && upsertData && upsertData.length > 0) {
+            cloudSaved = true;
+            break;
+          }
         } catch (err) {
           console.warn(`[Vodafone Supabase] Error saving to ${table}:`, err);
         }
       }
 
-      return { success: true };
+      const successMsg = cloudSaved
+        ? `تم حفظ وتحديث بيانات موقع Vodafone (${code}) بنجاح في قاعدة بيانات Supabase السحابية ✅`
+        : `تم حفظ وتحديث بيانات موقع Vodafone (${code}) بنجاح ✅`;
+
+      return {
+        success: true,
+        cloudSaved,
+        message: successMsg,
+      };
     } catch (err: any) {
       return { success: false, error: err?.message || 'فشل حفظ بيانات الموقع' };
     }

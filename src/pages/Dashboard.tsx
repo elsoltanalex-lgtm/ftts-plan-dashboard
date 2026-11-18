@@ -2193,7 +2193,16 @@ export const Dashboard: React.FC = () => {
           onSave={async (record) => {
             const res = await saveOrangeRecord(record);
             if (res.success) {
-              setToastMessage(`تم حفظ وتحديث بيانات موقع Orange (${record['Site code']}) بنجاح ✅`);
+              const code = record['Site code'] || record['site code'] || (record as any).site_code || '';
+              if (code) {
+                setDeletedSiteCodes((prev) => {
+                  const next = new Set(prev);
+                  next.delete(String(code).trim().toUpperCase());
+                  persistDeletedSiteCodes(next);
+                  return next;
+                });
+              }
+              setToastMessage(res.message || `تم حفظ وتحديث بيانات موقع Orange (${code}) بنجاح في قاعدة البيانات ✅`);
             }
             return res;
           }}
@@ -2267,7 +2276,16 @@ export const Dashboard: React.FC = () => {
           onSave={async (record) => {
             const res = await saveVodafoneRecord(record);
             if (res.success) {
-              setToastMessage(`تم حفظ وتحديث بيانات موقع Vodafone (${record['Site code'] || record['site code'] || ''}) بنجاح ✅`);
+              const code = record['Site code'] || record['site code'] || (record as any).site_code || '';
+              if (code) {
+                setDeletedSiteCodes((prev) => {
+                  const next = new Set(prev);
+                  next.delete(String(code).trim().toUpperCase());
+                  persistDeletedSiteCodes(next);
+                  return next;
+                });
+              }
+              setToastMessage(res.message || `تم حفظ وتحديث بيانات موقع Vodafone (${code}) بنجاح في قاعدة البيانات ✅`);
             }
             return res;
           }}

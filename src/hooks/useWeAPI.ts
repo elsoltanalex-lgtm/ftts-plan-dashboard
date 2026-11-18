@@ -434,24 +434,28 @@ export async function saveRecord(
     // Attempt save in Supabase candidate tables ('we', then 'we_records')
     for (const table of WE_TABLE_CANDIDATES) {
       try {
-        // 1. If we have a targetId, try to update existing record by ID
-        if (targetId) {
-          const { data: updated, error: updateErr } = await supabase
-            .from(table)
-            .update(payload)
-            .eq('id', targetId)
-            .select()
-            .maybeSingle();
+        // 1. Direct UPDATE in Supabase by site_code or ID
+        if (isEditMode || forceUpdate || Boolean(targetId)) {
+          let updateQuery = supabase.from(table).update(payload);
+          if (targetId && !isNaN(Number(targetId))) {
+            updateQuery = updateQuery.or(`id.eq.${Number(targetId)},site_code.eq."${siteCode}",site code.eq."${siteCode}"`);
+          } else if (targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(targetId))) {
+            updateQuery = updateQuery.or(`id.eq."${targetId}",site_code.eq."${siteCode}",site code.eq."${siteCode}"`);
+          } else {
+            updateQuery = updateQuery.or(`site_code.eq."${siteCode}",site code.eq."${siteCode}"`);
+          }
 
-          if (!updateErr && updated) {
+          const { data: updated, error: updateErr } = await updateQuery.select();
+
+          if (!updateErr && updated && updated.length > 0) {
             cloudSaved = true;
-            savedRow = updated;
+            savedRow = updated[0];
             actionType = 'updated';
             break;
           }
         }
 
-        // 2. Search existing rows by siteCode
+        // 2. Search existing rows by siteCode to verify if row exists
         const { data: existingRows } = await supabase
           .from(table)
           .select('*')
@@ -459,27 +463,27 @@ export async function saveRecord(
 
         const existingNormalized = (existingRows || []).map(normalizeRecord);
 
-        // If edit mode or forceUpdate, and an existing record is found for this site code
-        if ((isEditMode || forceUpdate) && existingNormalized.length > 0) {
+        // If existing record found, perform UPDATE
+        if (existingNormalized.length > 0) {
           const match = existingNormalized.find(
             (r) => r['التصنيف'] === activity && r['التاريخ المتوقع للانتهاء'] === dateWeek
           ) || existingNormalized[0];
 
           const rowId = match._id || (match as any).id;
-          if (rowId) {
-            const { data: updated, error: updateErr } = await supabase
-              .from(table)
-              .update(payload)
-              .eq('id', rowId)
-              .select()
-              .maybeSingle();
+          let updateBuilder = supabase.from(table).update(payload);
+          if (rowId && !isNaN(Number(rowId))) {
+            updateBuilder = updateBuilder.eq('id', Number(rowId));
+          } else {
+            updateBuilder = updateBuilder.or(`site_code.eq."${siteCode}",site code.eq."${siteCode}"`);
+          }
 
-            if (!updateErr && updated) {
-              cloudSaved = true;
-              savedRow = updated;
-              actionType = 'updated';
-              break;
-            }
+          const { data: updated, error: updateErr } = await updateBuilder.select();
+
+          if (!updateErr && updated && updated.length > 0) {
+            cloudSaved = true;
+            savedRow = updated[0];
+            actionType = 'updated';
+            break;
           }
         }
 
@@ -497,40 +501,43 @@ export async function saveRecord(
           };
         }
 
-        // 4. Insert new record
-        const insertPayload = {
+        // 4. Insert new record (omit string ID if not numeric or UUID to prevent 22P02 bigint error)
+        const insertPayload: Record<string, any> = {
           ...payload,
-          id: fullData._id,
           created_at: fullData._createdAt,
         };
+        if (targetId && !isNaN(Number(targetId))) {
+          insertPayload.id = Number(targetId);
+        } else if (targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(targetId))) {
+          insertPayload.id = targetId;
+        }
 
         const { data: inserted, error: insertErr } = await supabase
           .from(table)
           .insert([insertPayload])
-          .select()
-          .single();
+          .select();
 
-        if (!insertErr && inserted) {
+        if (!insertErr && inserted && inserted.length > 0) {
           cloudSaved = true;
-          savedRow = inserted;
+          savedRow = inserted[0];
           actionType = 'created';
           break;
         } else if (insertErr) {
-          // If insert failed due to column mismatch (e.g. table has only id, created_at before running SQL schema),
-          // try inserting minimal payload with data JSONB or fallback
+          // If insert failed due to column mismatch, retry with minimal payload + JSONB data
           const minimalPayload: Record<string, any> = {
-            id: fullData._id,
+            site_code: siteCode,
+            data: fullData,
             created_at: fullData._createdAt,
+            updated_at: now,
           };
           const { data: miniInserted, error: miniErr } = await supabase
             .from(table)
             .insert([minimalPayload])
-            .select()
-            .single();
+            .select();
 
-          if (!miniErr && miniInserted) {
+          if (!miniErr && miniInserted && miniInserted.length > 0) {
             cloudSaved = true;
-            savedRow = miniInserted;
+            savedRow = miniInserted[0];
             actionType = 'created';
             break;
           }
