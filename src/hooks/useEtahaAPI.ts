@@ -1,7 +1,7 @@
 // src/hooks/useEtahaAPI.ts
 // Live state & persistence API hook for Availability / Etaha project dataset
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { SiteRecord } from '../types/dashboard';
 import { ETAHA_RAW_RECORDS, type EtahaRecord } from '../data/etahaSites';
 import { supabase } from '../lib/supabase';
