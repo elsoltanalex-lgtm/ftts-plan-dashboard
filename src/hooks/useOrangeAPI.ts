@@ -177,6 +177,23 @@ export function useOrangeAPI() {
 
   useEffect(() => {
     refetchOrangeRecords();
+
+    // Force real-time refresh whenever mobile/desktop user switches back to the tab or unlocks screen
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refetchOrangeRecords();
+      }
+    };
+    const handleFocus = () => {
+      refetchOrangeRecords();
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [refetchOrangeRecords]);
 
   const saveOrangeRecord = useCallback(async (record: OrangeRecord): Promise<{ success: boolean; cloudSaved?: boolean; message?: string; error?: string }> => {

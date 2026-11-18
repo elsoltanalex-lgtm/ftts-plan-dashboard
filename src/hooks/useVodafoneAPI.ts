@@ -172,6 +172,23 @@ export function useVodafoneAPI() {
 
   useEffect(() => {
     refetchVodafoneRecords();
+
+    // Force real-time refresh whenever mobile/desktop user switches back to the tab or unlocks screen
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refetchVodafoneRecords();
+      }
+    };
+    const handleFocus = () => {
+      refetchVodafoneRecords();
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [refetchVodafoneRecords]);
 
   const saveVodafoneRecord = useCallback(async (record: VodafoneRecord): Promise<{ success: boolean; cloudSaved?: boolean; message?: string; error?: string }> => {

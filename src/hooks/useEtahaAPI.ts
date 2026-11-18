@@ -186,6 +186,23 @@ export function useEtahaAPI() {
 
   useEffect(() => {
     refetchEtahaRecords();
+
+    // Force real-time refresh whenever mobile/desktop user switches back to the tab or unlocks screen
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refetchEtahaRecords();
+      }
+    };
+    const handleFocus = () => {
+      refetchEtahaRecords();
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [refetchEtahaRecords]);
 
   const saveEtahaRecord = useCallback(async (record: EtahaRecord): Promise<{ success: boolean; error?: string }> => {

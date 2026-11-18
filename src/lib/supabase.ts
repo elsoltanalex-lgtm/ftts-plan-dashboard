@@ -7,6 +7,13 @@ export const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_pu
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Fallback Supabase client hosting live we_records with full permissions
+export const FALLBACK_SUPABASE_URL = 'https://fzdmdvgmorzifysygkhp.supabase.co';
+export const FALLBACK_SUPABASE_KEY = 'sb_publishable_J-ecQDFtFrIXGPP3caANTw_lup9wJay';
+export const supabaseFallback = createClient(FALLBACK_SUPABASE_URL, FALLBACK_SUPABASE_KEY);
+
+export const supabaseClients = [supabase, supabaseFallback];
+
 /**
  * Supabase Storage Buckets
  */
