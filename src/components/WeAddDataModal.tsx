@@ -641,23 +641,23 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    const code = (formData['site code'] || masterRecord?.['site code'] || '').trim();
+    const code = String(formData['site code'] || masterRecord?.['site code'] || '').trim();
     if (!code) {
       newErrors['site code'] = 'كود الموقع مطلوب (Site Code)';
     }
 
     if (activeMode === 'add') {
-      if (!formData['التصنيف']?.trim()) {
+      if (!String(formData['التصنيف'] || '').trim()) {
         newErrors['التصنيف'] = 'التصنيف مطلوب';
       }
-      const statusVal = (formData['Site Status'] || '').trim();
+      const statusVal = String(formData['Site Status'] || '').trim();
       if (!statusVal) {
         newErrors['Site Status'] = 'حالة الموقع مطلوبة';
       }
 
       sortedFields.forEach((field) => {
         if (field.required && field.color !== 'blue' && field.csvColumn !== 'Site Status') {
-          const val = formData[field.csvColumn]?.trim();
+          const val = String(formData[field.csvColumn] || '').trim();
           if (!val) {
             newErrors[field.csvColumn] = `${field.label} مطلوب`;
           }
@@ -666,7 +666,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     }
 
     purpleFields.forEach((field) => {
-      const val = formData[field.csvColumn]?.trim();
+      const val = String(formData[field.csvColumn] || '').trim();
       if (val) {
         if (field.inputType === 'number' || field.inputType === 'currency' || field.inputType === 'coordinate') {
           const num = parseFloat(val);
@@ -685,7 +685,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     });
 
     // Strict mandatory document upload requirement (مستند إثبات وتوثيق الموقف الحالي إلزامي)
-    const doc = (formData['المستند'] || masterRecord?.['المستند'] || '').trim();
+    const doc = String(formData['المستند'] || masterRecord?.['المستند'] || '').trim();
     if (!doc) {
       newErrors['المستند'] = 'إرفاق مستند إثبات وتوثيق الموقف الحالي إلزامي للمتابعة (* مطلوب)';
     }

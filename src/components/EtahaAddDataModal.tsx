@@ -258,13 +258,13 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-    if (!formData.Code?.trim()) {
+    if (!String(formData.Code || '').trim()) {
       newErrors.Code = 'كود المشروع مطلوب';
     }
-    if (!formData['اسم العميل']?.trim()) {
+    if (!String(formData['اسم العميل'] || '').trim()) {
       newErrors['اسم العميل'] = 'اسم العميل / الجهة مطلوب';
     }
-    if (!formData.القطاعات?.trim()) {
+    if (!String(formData.القطاعات || '').trim()) {
       newErrors.القطاعات = 'القطاع مطلوب';
     }
     setErrors(newErrors);
@@ -490,7 +490,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                     </label>
                     <input
                       type="text"
-                      value={formData.Code}
+                      value={formData.Code || ''}
                       onChange={(e) => handleInputChange('Code', e.target.value)}
                       placeholder="مثال: 40-1-8 أو 055-1-92"
                       disabled={activeMode === 'edit' && !isAdmin}
@@ -508,7 +508,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                     </label>
                     <input
                       type="text"
-                      value={formData['اسم العميل']}
+                      value={formData['اسم العميل'] || ''}
                       onChange={(e) => handleInputChange('اسم العميل', e.target.value)}
                       placeholder="مثال: جامعة الأزهر - بنك مصر - مستشفى..."
                       className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 ${
@@ -527,7 +527,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                     </label>
                     <input
                       type="text"
-                      value={formData['اسم الفرع']}
+                      value={formData['اسم الفرع'] || ''}
                       onChange={(e) => handleInputChange('اسم الفرع', e.target.value)}
                       placeholder="مثال: طنطا - القنايات - المعادي..."
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20"
@@ -540,7 +540,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                       المحافظة
                     </label>
                     <select
-                      value={formData.المحافظة}
+                      value={formData.المحافظة || 'الغربية'}
                       onChange={(e) => handleInputChange('المحافظة', e.target.value)}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer"
                     >
@@ -573,8 +573,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                     </label>
                     <input
                       type="text"
-                      value={formData.العنوان}
-                      onChange={(e) => handleInputChange.bind(null, 'العنوان')(e.target.value)}
+                      value={formData.العنوان || ''}
+                      onChange={(e) => handleInputChange('العنوان', e.target.value)}
                       placeholder="العنوان التفصيلي وموقع المبنى..."
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                     />
@@ -598,7 +598,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                       القطاع الجغرافي <span className="text-rose-500">*</span>
                     </label>
                     <select
-                      value={formData.القطاعات}
+                      value={formData.القطاعات || 'المناطق الغربية'}
                       onChange={(e) => handleInputChange('القطاعات', e.target.value)}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer"
                     >
@@ -617,7 +617,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                     </label>
                     <input
                       type="text"
-                      value={formData['الادارة العامة المنفذة']}
+                      value={formData['الادارة العامة المنفذة'] || ''}
                       onChange={(e) => handleInputChange('الادارة العامة المنفذة', e.target.value)}
                       placeholder="مثال: تنفيذ شبكات وسط الدلتا"
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20"
@@ -631,7 +631,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                     </label>
                     <input
                       type="text"
-                      value={formData['قطاع التنفيذ']}
+                      value={formData['قطاع التنفيذ'] || ''}
                       onChange={(e) => handleInputChange('قطاع التنفيذ', e.target.value)}
                       placeholder="مثال: قطاع تنفيذ شبكات الغربية"
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20"
@@ -645,7 +645,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                     </label>
                     <input
                       type="text"
-                      value={formData['ادارة التنفيذ']}
+                      value={formData['ادارة التنفيذ'] || ''}
                       onChange={(e) => handleInputChange('ادارة التنفيذ', e.target.value)}
                       placeholder="مثال: الغربية الأولى - الزقازيق..."
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20"
@@ -660,7 +660,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                     <div className="relative">
                       <input
                         type="text"
-                        value={formData['اسم ورقم تليفون مدير الادارة']}
+                        value={formData['اسم ورقم تليفون مدير الادارة'] || ''}
                         onChange={(e) => handleInputChange('اسم ورقم تليفون مدير الادارة', e.target.value)}
                         placeholder="مثال: م / عمرو جعفر - 010xxxxxxxx"
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20"
@@ -687,7 +687,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                       المسار الداخلي (Internal Route)
                     </label>
                     <select
-                      value={formData['المسار الداخلى']}
+                      value={formData['المسار الداخلى'] || 'لم يتم البدء'}
                       onChange={(e) => handleInputChange('المسار الداخلى', e.target.value)}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-teal-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer"
                     >
@@ -705,7 +705,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                       المسار الخارجي (External Route)
                     </label>
                     <select
-                      value={formData['المسار الخارجي']}
+                      value={formData['المسار الخارجي'] || 'لم يتم البدء'}
                       onChange={(e) => handleInputChange('المسار الخارجي', e.target.value)}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-teal-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer"
                     >
@@ -723,7 +723,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                       موقف اللحامات
                     </label>
                     <select
-                      value={formData['موقف اللحامات']}
+                      value={formData['موقف اللحامات'] || 'لم يتم البدء'}
                       onChange={(e) => handleInputChange('موقف اللحامات', e.target.value)}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer"
                     >
@@ -741,7 +741,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                       موقف التسليم النهائي
                     </label>
                     <select
-                      value={formData['موقف التسليم']}
+                      value={formData['موقف التسليم'] || 'لم يتم'}
                       onChange={(e) => handleInputChange('موقف التسليم', e.target.value)}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-emerald-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer"
                     >
@@ -759,7 +759,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                       التصنيف العام (Overall Classification)
                     </label>
                     <select
-                      value={formData['التصنيف']}
+                      value={formData['التصنيف'] || 'جاري العمل'}
                       onChange={(e) => handleInputChange('التصنيف', e.target.value)}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-indigo-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer"
                     >

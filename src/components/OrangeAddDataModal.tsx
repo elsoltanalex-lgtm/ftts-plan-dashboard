@@ -238,7 +238,7 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
-    if (!formData['Site code']?.trim()) {
+    if (!String(formData['Site code'] || '').trim()) {
       newErrors['Site code'] = 'كود الموقع مطلوب.';
     }
 
@@ -248,14 +248,14 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
 
     // ── MANDATORY DOCUMENT UPLOAD VALIDATION ──
     // "اشتراط إرفاق مستند إثبات الموقف الحالي (Document Upload) في شاشتي الإضافة والتعديل"
-    if (!isAdmin && !formData.المستند?.trim()) {
+    if (!isAdmin && !String(formData.المستند || '').trim()) {
       newErrors.المستند = '⛔ إلزامي: يجب إرفاق مستند إثبات الموقف الحالي (PDF أو صورة أو تقرير) لحفظ بيانات الموقع.';
-    } else if (!formData.المستند?.trim()) {
+    } else if (!String(formData.المستند || '').trim()) {
       formData.المستند = `Doc-Orange-${formData['Site code'] || 'Admin'}.pdf`;
       formData['موقف المرفقات'] = 'تم الارفاق';
     }
 
-    if (isStalled && !formData['نوع المعوق المدني']?.trim()) {
+    if (isStalled && !String(formData['نوع المعوق المدني'] || '').trim()) {
       newErrors['نوع المعوق المدني'] = 'يرجى اختيار سبب التعذر.';
     }
 

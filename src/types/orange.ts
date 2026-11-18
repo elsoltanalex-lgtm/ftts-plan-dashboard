@@ -153,7 +153,7 @@ export const ORANGE_SUPPORT_ENTITIES = [
 
 export function normalizeOrangeClassification(raw?: string | null): string {
   if (!raw) return 'جاري المعاينة';
-  const trimmed = raw.trim();
+  const trimmed = String(raw).trim();
   if (trimmed.includes('تم الانتهاء') || trimmed.includes('انتهاء') || trimmed.includes('تسليم')) {
     return 'تم الانتهاء مدني';
   }

@@ -193,7 +193,7 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
     if (!String(code || '').trim()) {
       newErrors['Site code'] = 'كود الموقع مطلوب (Site Code)';
     }
-    if (!formData['التصنيف']?.trim()) {
+    if (!String(formData['التصنيف'] || '').trim()) {
       newErrors['التصنيف'] = 'التصنيف الميداني مطلوب';
     }
     setErrors(newErrors);

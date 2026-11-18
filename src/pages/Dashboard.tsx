@@ -1917,7 +1917,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Drill-down Modal with Error Boundary */}
-      <ModalErrorBoundary onClose={() => setIsDetailsModalOpen(false)} title="نافذة تفاصيل المواقع">
+      <ModalErrorBoundary isOpen={isDetailsModalOpen} onClose={() => setIsDetailsModalOpen(false)} title="نافذة تفاصيل المواقع">
         <SiteDetailsModal
           isOpen={isDetailsModalOpen}
           onClose={() => setIsDetailsModalOpen(false)}
@@ -2107,6 +2107,7 @@ export const Dashboard: React.FC = () => {
         }}
       />
       <ModalErrorBoundary
+        isOpen={isWeAddDataOpen}
         onClose={() => {
           setIsWeAddDataOpen(false);
           setEditingSiteCode(undefined);
@@ -2169,6 +2170,7 @@ export const Dashboard: React.FC = () => {
       />
 
       <ModalErrorBoundary
+        isOpen={isOrangeAddDataOpen}
         onClose={() => {
           setIsOrangeAddDataOpen(false);
           setOrangeEditingSiteCode(undefined);
@@ -2242,6 +2244,7 @@ export const Dashboard: React.FC = () => {
 
       {/* Vodafone Add / Edit Data Modal */}
       <ModalErrorBoundary
+        isOpen={isVodafoneAddDataOpen}
         onClose={() => {
           setIsVodafoneAddDataOpen(false);
           setVodafoneEditingSiteCode(undefined);
@@ -2297,6 +2300,7 @@ export const Dashboard: React.FC = () => {
 
       {/* Availability (الإتاحة) Add / Edit Data Modal */}
       <ModalErrorBoundary
+        isOpen={isEtahaAddDataOpen}
         onClose={() => {
           setIsEtahaAddDataOpen(false);
           setEtahaEditingSiteCode(undefined);
