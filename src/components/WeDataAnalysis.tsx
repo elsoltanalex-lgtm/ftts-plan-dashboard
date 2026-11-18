@@ -159,11 +159,11 @@ export const WeDataAnalysis: React.FC<WeDataAnalysisProps> = ({ weSites }) => {
       // 5. Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const code = (site.siteCode || '').toLowerCase();
-        const name = (site.siteName || '').toLowerCase();
-        const cent = (site.central || '').toLowerCase();
-        const sec = (site.sector || '').toLowerCase();
-        const status = (site.status || '').toLowerCase();
+        const code = String(site?.siteCode || '').toLowerCase();
+        const name = String(site?.siteName || '').toLowerCase();
+        const cent = String(site?.central || '').toLowerCase();
+        const sec = String(site?.sector || '').toLowerCase();
+        const status = String(site?.status || '').toLowerCase();
         if (
           !code.includes(q) &&
           !name.includes(q) &&

@@ -475,8 +475,8 @@ export const Dashboard: React.FC = () => {
     let base = currentScopeData;
     if (deletedSiteCodes.size > 0) {
       base = base.filter((s) => {
-        const c = String(s.siteCode || '').trim().toUpperCase();
-        const id = String(s.id || '').trim().toUpperCase();
+        const c = String(s?.siteCode || '').trim().toUpperCase();
+        const id = String(s?.id || '').trim().toUpperCase();
         return !deletedSiteCodes.has(c) && !deletedSiteCodes.has(id);
       });
     }
@@ -508,7 +508,7 @@ export const Dashboard: React.FC = () => {
   // Base dataset for interactive filtering (strictly scoped to selected operator, e.g. "WE")
   const baseFilterSites = useMemo(() => {
     if (filters.company && filters.company !== 'All') {
-      return authorizedScopeData.filter((s) => s.company === filters.company);
+      return authorizedScopeData.filter((s) => s?.company === filters.company);
     }
     return authorizedScopeData;
   }, [authorizedScopeData, filters.company]);
@@ -543,20 +543,25 @@ export const Dashboard: React.FC = () => {
     const searchQuery = (filters.searchQuery || '').toLowerCase().trim();
 
     return authorizedScopeData.filter((site) => {
+      if (!site) return false;
       // 1. Company / Category Filter
       if (filters.company !== 'All') {
         if (activeScope === 'FTTS') {
           if (site.company !== filters.company) return false;
         } else if (activeScope === 'ETAHA') {
           // Filter by client category or classification
-          if (filters.company === 'التعليم' && !site.siteName.includes('التربية والتعليم') && !site.classification.includes('تعليم')) return false;
-          if (filters.company === 'البنوك' && !site.siteName.includes('بنك') && !site.siteName.includes('مصرف') && !site.siteName.includes('الأهلي') && !site.siteName.includes('مصر')) return false;
-          if (filters.company === 'الجمارك والضرائب' && !site.siteName.includes('جمارك') && !site.siteName.includes('ضرائب')) return false;
+          const sName = String(site.siteName || '');
+          const sCls = String(site.classification || '');
+          if (filters.company === 'التعليم' && !sName.includes('التربية والتعليم') && !sCls.includes('تعليم')) return false;
+          if (filters.company === 'البنوك' && !sName.includes('بنك') && !sName.includes('مصرف') && !sName.includes('الأهلي') && !sName.includes('مصر')) return false;
+          if (filters.company === 'الجمارك والضرائب' && !sName.includes('جمارك') && !sName.includes('ضرائب')) return false;
         } else if (activeScope === 'TAHAWOL') {
           // Filter by ministry
-          if (filters.company === 'الداخلية' && !site.siteName.includes('الداخلية') && !site.classification.includes('الداخلية')) return false;
-          if (filters.company === 'العدل' && !site.siteName.includes('العدل') && !site.classification.includes('العدل')) return false;
-          if (filters.company === 'الصحة' && !site.siteName.includes('الصحة') && !site.classification.includes('الصحة')) return false;
+          const sName = String(site.siteName || '');
+          const sCls = String(site.classification || '');
+          if (filters.company === 'الداخلية' && !sName.includes('الداخلية') && !sCls.includes('الداخلية')) return false;
+          if (filters.company === 'العدل' && !sName.includes('العدل') && !sCls.includes('العدل')) return false;
+          if (filters.company === 'الصحة' && !sName.includes('الصحة') && !sCls.includes('الصحة')) return false;
         } else if (site.company !== filters.company) {
           return false;
         }
@@ -647,12 +652,12 @@ export const Dashboard: React.FC = () => {
 
       // 10. Quick Site Search Query (Site ID, Site Code, Site Name, Central)
       if (searchQuery) {
-        const code = (site.siteCode || '').toLowerCase();
-        const id = (site.id || '').toLowerCase();
-        const name = (site.siteName || '').toLowerCase();
-        const central = (site.central || '').toLowerCase();
-        const sector = (site.sector || '').toLowerCase();
-        const notes = (site.notes || '').toLowerCase();
+        const code = String(site?.siteCode || '').toLowerCase();
+        const id = String(site?.id || '').toLowerCase();
+        const name = String(site?.siteName || '').toLowerCase();
+        const central = String(site?.central || '').toLowerCase();
+        const sector = String(site?.sector || '').toLowerCase();
+        const notes = String(site?.notes || '').toLowerCase();
 
         const matchSearch =
           code.includes(searchQuery) ||
@@ -711,18 +716,23 @@ export const Dashboard: React.FC = () => {
     const searchQuery = (filters.searchQuery || '').toLowerCase().trim();
 
     return authorizedScopeData.filter((site) => {
+      if (!site) return false;
       // 1. Company Filter
       if (filters.company !== 'All') {
         if (activeScope === 'FTTS') {
           if (site.company !== filters.company) return false;
         } else if (activeScope === 'ETAHA') {
-          if (filters.company === 'التعليم' && !site.siteName.includes('التربية والتعليم') && !site.classification.includes('تعليم')) return false;
-          if (filters.company === 'البنوك' && !site.siteName.includes('بنك') && !site.siteName.includes('مصرف') && !site.siteName.includes('الأهلي') && !site.siteName.includes('مصر')) return false;
-          if (filters.company === 'الجمارك والضرائب' && !site.siteName.includes('جمارك') && !site.siteName.includes('ضرائب')) return false;
+          const sName = String(site.siteName || '');
+          const sCls = String(site.classification || '');
+          if (filters.company === 'التعليم' && !sName.includes('التربية والتعليم') && !sCls.includes('تعليم')) return false;
+          if (filters.company === 'البنوك' && !sName.includes('بنك') && !sName.includes('مصرف') && !sName.includes('الأهلي') && !sName.includes('مصر')) return false;
+          if (filters.company === 'الجمارك والضرائب' && !sName.includes('جمارك') && !sName.includes('ضرائب')) return false;
         } else if (activeScope === 'TAHAWOL') {
-          if (filters.company === 'الداخلية' && !site.siteName.includes('الداخلية') && !site.classification.includes('الداخلية')) return false;
-          if (filters.company === 'العدل' && !site.siteName.includes('العدل') && !site.classification.includes('العدل')) return false;
-          if (filters.company === 'الصحة' && !site.siteName.includes('الصحة') && !site.classification.includes('الصحة')) return false;
+          const sName = String(site.siteName || '');
+          const sCls = String(site.classification || '');
+          if (filters.company === 'الداخلية' && !sName.includes('الداخلية') && !sCls.includes('الداخلية')) return false;
+          if (filters.company === 'العدل' && !sName.includes('العدل') && !sCls.includes('العدل')) return false;
+          if (filters.company === 'الصحة' && !sName.includes('الصحة') && !sCls.includes('الصحة')) return false;
         } else if (site.company !== filters.company) {
           return false;
         }
@@ -762,10 +772,10 @@ export const Dashboard: React.FC = () => {
       }
       // 9. Quick Search Query
       if (searchQuery) {
-        const code = (site.siteCode || '').toLowerCase();
-        const id = (site.id || '').toLowerCase();
-        const name = (site.siteName || '').toLowerCase();
-        const central = (site.central || '').toLowerCase();
+        const code = String(site?.siteCode || '').toLowerCase();
+        const id = String(site?.id || '').toLowerCase();
+        const name = String(site?.siteName || '').toLowerCase();
+        const central = String(site?.central || '').toLowerCase();
         if (!code.includes(searchQuery) && !id.includes(searchQuery) && !name.includes(searchQuery) && !central.includes(searchQuery)) {
           return false;
         }

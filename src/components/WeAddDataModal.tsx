@@ -1959,10 +1959,10 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                   {/* حقل إرفاق مستند إثبات الموقف الحالي (إلزامي لجميع الحالات)    */}
                   {/* ──────────────────────────────────────────────────────────── */}
                   <div className={`p-4 sm:p-5 rounded-2xl border-2 transition-all ${errors['المستند']
-                      ? 'bg-rose-50/80 border-rose-400 ring-2 ring-rose-200'
-                      : formData['المستند']
-                        ? 'bg-emerald-50/70 border-emerald-300'
-                        : 'bg-slate-50 border-slate-300'
+                    ? 'bg-rose-50/80 border-rose-400 ring-2 ring-rose-200'
+                    : formData['المستند']
+                      ? 'bg-emerald-50/70 border-emerald-300'
+                      : 'bg-slate-50 border-slate-300'
                     }`}>
                     <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                       <label className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -2000,8 +2000,8 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                       </button>
 
                       <div className={`flex-1 rounded-xl px-3.5 py-2.5 text-xs flex items-center justify-between border ${formData['المستند']
-                          ? 'bg-white border-emerald-300 text-emerald-900 font-mono font-bold'
-                          : 'bg-white border-slate-300 text-slate-400 italic'
+                        ? 'bg-white border-emerald-300 text-emerald-900 font-mono font-bold'
+                        : 'bg-white border-slate-300 text-slate-400 italic'
                         }`}>
                         <div className="flex items-center gap-2 min-w-0">
                           {formData['المستند'] ? (
@@ -2248,10 +2248,10 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                   {/* حقل إرفاق مستند إثبات الموقف الحالي (إلزامي في الإضافة)      */}
                   {/* ──────────────────────────────────────────────────────────── */}
                   <div className={`p-4 sm:p-5 rounded-2xl border-2 transition-all ${errors['المستند']
-                      ? 'bg-rose-50/80 border-rose-400 ring-2 ring-rose-200'
-                      : formData['المستند']
-                        ? 'bg-emerald-50/70 border-emerald-300'
-                        : 'bg-slate-50 border-slate-300'
+                    ? 'bg-rose-50/80 border-rose-400 ring-2 ring-rose-200'
+                    : formData['المستند']
+                      ? 'bg-emerald-50/70 border-emerald-300'
+                      : 'bg-slate-50 border-slate-300'
                     }`}>
                     <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                       <label className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -2288,8 +2288,8 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                       </button>
 
                       <div className={`flex-1 rounded-xl px-3.5 py-2.5 text-xs flex items-center justify-between border ${formData['المستند']
-                          ? 'bg-white border-emerald-300 text-emerald-900 font-mono font-bold'
-                          : 'bg-white border-slate-300 text-slate-400 italic'
+                        ? 'bg-white border-emerald-300 text-emerald-900 font-mono font-bold'
+                        : 'bg-white border-slate-300 text-slate-400 italic'
                         }`}>
                         <div className="flex items-center gap-2 min-w-0">
                           {formData['المستند'] ? (

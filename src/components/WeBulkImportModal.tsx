@@ -153,12 +153,12 @@ export const WeBulkImportModal: React.FC<WeBulkImportModalProps> = ({
     if (filterMode === 'ISSUES' && row.status === 'VALID') return false;
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchCode = row.data.siteCode.toLowerCase().includes(q);
-      const matchName = row.data.siteName.toLowerCase().includes(q);
-      const matchStatus = row.data.siteStatus.toLowerCase().includes(q);
-      const matchErrors = row.errors.some((e) => e.toLowerCase().includes(q));
-      const matchWarnings = row.warnings.some((w) => w.toLowerCase().includes(q));
+      const q = searchQuery.toLowerCase().trim();
+      const matchCode = String(row.data?.siteCode || '').toLowerCase().includes(q);
+      const matchName = String(row.data?.siteName || '').toLowerCase().includes(q);
+      const matchStatus = String(row.data?.siteStatus || '').toLowerCase().includes(q);
+      const matchErrors = (row.errors || []).some((e) => String(e || '').toLowerCase().includes(q));
+      const matchWarnings = (row.warnings || []).some((w) => String(w || '').toLowerCase().includes(q));
       return matchCode || matchName || matchStatus || matchErrors || matchWarnings;
     }
     return true;

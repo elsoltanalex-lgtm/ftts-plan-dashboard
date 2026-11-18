@@ -602,7 +602,7 @@ export function getSiteClassification(site: SiteRecord): string {
  * Checks if a classification is Completed / Achieved
  */
 export function isClassificationCompleted(cat: string): boolean {
-  const c = cat.toLowerCase();
+  const c = String(cat || '').toLowerCase();
   return (
     c.includes('انتهاء') ||
     c.includes('تسليم') ||
@@ -618,7 +618,7 @@ export function isClassificationCompleted(cat: string): boolean {
  * Checks if a classification is Blocked / Stalled / Obstacle
  */
 export function isClassificationBlocked(cat: string): boolean {
-  const c = cat.toLowerCase();
+  const c = String(cat || '').toLowerCase();
   return (
     c.includes('معوق') ||
     c.includes('متعذر') ||
@@ -633,7 +633,7 @@ export function isClassificationBlocked(cat: string): boolean {
  * Checks if a classification is Permits
  */
 export function isClassificationPermits(cat: string): boolean {
-  const c = cat.toLowerCase();
+  const c = String(cat || '').toLowerCase();
   return c.includes('تصاريح') || c.includes('تصريح') || c.includes('طرق');
 }
 
@@ -641,7 +641,7 @@ export function isClassificationPermits(cat: string): boolean {
  * Checks if a classification is In Progress (Civil, Electricity, Execution)
  */
 export function isClassificationInProgress(cat: string): boolean {
-  const c = cat.toLowerCase();
+  const c = String(cat || '').toLowerCase();
   return (
     c.includes('عمل') ||
     c.includes('مدني') ||
@@ -657,7 +657,7 @@ export function isClassificationInProgress(cat: string): boolean {
  * Checks if a classification is Under Inspection / Planned
  */
 export function isClassificationPlanned(cat: string): boolean {
-  const c = cat.toLowerCase();
+  const c = String(cat || '').toLowerCase();
   return c.includes('معاين') || c.includes('مخطط');
 }
 

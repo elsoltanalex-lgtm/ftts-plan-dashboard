@@ -321,7 +321,7 @@ export async function fetchSiteRecord(siteCode: string): Promise<WeRecord | null
     } catch { }
 
     // 3. Check preloaded sites as fallback
-    const preloaded = WE_EXCEL_SITES.find(s => s.siteCode.toLowerCase() === cleanCode.toLowerCase());
+    const preloaded = WE_EXCEL_SITES.find(s => String(s?.siteCode || '').trim().toLowerCase() === cleanCode.toLowerCase());
     if (preloaded) {
       return {
         'site code': preloaded.siteCode,

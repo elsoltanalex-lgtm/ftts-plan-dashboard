@@ -503,8 +503,8 @@ export function parseAndValidateBulkExcel(
   // Build lookup index of baseline sites by siteCode (case-insensitive)
   const baselineMap = new Map<string, SiteRecord>();
   baselineSites.forEach((s) => {
-    if (s.siteCode) {
-      baselineMap.set(s.siteCode.trim().toLowerCase(), s);
+    if (s?.siteCode) {
+      baselineMap.set(String(s.siteCode).trim().toLowerCase(), s);
     }
   });
 
@@ -577,7 +577,7 @@ export function parseAndValidateBulkExcel(
     }
 
     // 2. Duplicate check within the same sheet
-    const cleanCode = siteCode.toLowerCase();
+    const cleanCode = String(siteCode || '').toLowerCase();
     if (seenCodes.has(cleanCode)) {
       warnings.push(`كود الموقع (${siteCode}) مكرر أكثر من مرة في نفس الملف.`);
     } else {
