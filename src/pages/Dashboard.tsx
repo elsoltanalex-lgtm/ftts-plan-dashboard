@@ -35,7 +35,9 @@ import { OrangeDataAnalysisModal } from '../components/OrangeDataAnalysisModal';
 import { useVodafoneAPI } from '../hooks/useVodafoneAPI';
 import { VodafoneBulkImportModal } from '../components/VodafoneBulkImportModal';
 import { useEtahaAPI } from '../hooks/useEtahaAPI';
+import type { EtahaRecord } from '../data/etahaSites';
 import { EtahaBulkImportModal } from '../components/EtahaBulkImportModal';
+import { EtahaAddDataModal } from '../components/EtahaAddDataModal';
 import { WeExecutiveReportView } from '../components/WeExecutiveReportView';
 import { SiteActionDropdown } from '../components/SiteActionDropdown';
 import { BackupEmailConfigModal } from '../components/BackupEmailConfigModal';
@@ -234,6 +236,10 @@ export const Dashboard: React.FC = () => {
     refetchEtahaRecords,
   } = useEtahaAPI();
   const [isEtahaBulkImportOpen, setIsEtahaBulkImportOpen] = useState(false);
+  const [isEtahaAddDataOpen, setIsEtahaAddDataOpen] = useState(false);
+  const [etahaEditingSiteCode, setEtahaEditingSiteCode] = useState<string | undefined>(undefined);
+  const [etahaEditingRecord, setEtahaEditingRecord] = useState<EtahaRecord | null>(null);
+  const [etahaModalMode, setEtahaModalMode] = useState<'add' | 'edit'>('edit');
 
   // Quick delete site states from control panel
   const [isQuickDeleteModalOpen, setIsQuickDeleteModalOpen] = useState(false);
@@ -1646,16 +1652,16 @@ export const Dashboard: React.FC = () => {
                       label="إدارة وعمليات المشروعات"
                       itemTypeLabel="مشروع"
                       onAdd={() => {
-                        setEditingSiteCode(undefined);
-                        setEditingRecord(null);
-                        setWeModalMode('add');
-                        setIsWeAddDataOpen(true);
+                        setEtahaEditingSiteCode(undefined);
+                        setEtahaEditingRecord(null);
+                        setEtahaModalMode('add');
+                        setIsEtahaAddDataOpen(true);
                       }}
                       onEdit={() => {
-                        setEditingSiteCode(undefined);
-                        setEditingRecord(null);
-                        setWeModalMode('edit');
-                        setIsWeAddDataOpen(true);
+                        setEtahaEditingSiteCode(undefined);
+                        setEtahaEditingRecord(null);
+                        setEtahaModalMode('edit');
+                        setIsEtahaAddDataOpen(true);
                       }}
                       onDelete={() => setIsQuickDeleteModalOpen(true)}
                     />
@@ -1799,7 +1805,12 @@ export const Dashboard: React.FC = () => {
                             activeScope === 'ETAHA' ? 'etaha' : 'we'
                       }
                       onAddNewSite={() => {
-                        if (filters.company === 'Orange') {
+                        if (activeScope === 'ETAHA') {
+                          setEtahaEditingSiteCode(undefined);
+                          setEtahaEditingRecord(null);
+                          setEtahaModalMode('add');
+                          setIsEtahaAddDataOpen(true);
+                        } else if (filters.company === 'Orange') {
                           setOrangeEditingSiteCode(undefined);
                           setOrangeEditingRecord(null);
                           setOrangeModalMode('add');
@@ -1812,7 +1823,12 @@ export const Dashboard: React.FC = () => {
                         }
                       }}
                       onEditSite={() => {
-                        if (filters.company === 'Orange') {
+                        if (activeScope === 'ETAHA') {
+                          setEtahaEditingSiteCode(undefined);
+                          setEtahaEditingRecord(null);
+                          setEtahaModalMode('edit');
+                          setIsEtahaAddDataOpen(true);
+                        } else if (filters.company === 'Orange') {
                           setOrangeEditingSiteCode(undefined);
                           setOrangeEditingRecord(null);
                           setOrangeModalMode('edit');
@@ -1876,6 +1892,17 @@ export const Dashboard: React.FC = () => {
         sites={filteredSites}
         activeStatusFilter={modalFilterStatus || filters.status || undefined}
         onEditSite={(siteCode) => {
+          if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+            const etRec = etahaRecords.find(
+              (r) => (r['Code'] || r['siteCode'] || '').toUpperCase() === siteCode.toUpperCase()
+            );
+            setEtahaEditingSiteCode(siteCode);
+            setEtahaEditingRecord(etRec || null);
+            setEtahaModalMode('edit');
+            setIsEtahaAddDataOpen(true);
+            return;
+          }
+
           const matched =
             authorizedScopeData.find((s) => s.siteCode.toUpperCase() === siteCode.toUpperCase()) ||
             liveWeSites.find((s) => s.siteCode.toUpperCase() === siteCode.toUpperCase()) ||
@@ -1921,7 +1948,12 @@ export const Dashboard: React.FC = () => {
           setIsWeAddDataOpen(true);
         }}
         onAddNewSite={() => {
-          if (filters.company === 'Orange') {
+          if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+            setEtahaEditingSiteCode(undefined);
+            setEtahaEditingRecord(null);
+            setEtahaModalMode('add');
+            setIsEtahaAddDataOpen(true);
+          } else if (filters.company === 'Orange') {
             setOrangeEditingSiteCode(undefined);
             setOrangeEditingRecord(null);
             setOrangeModalMode('add');
@@ -2133,10 +2165,38 @@ export const Dashboard: React.FC = () => {
         }}
         onSwitchToManual={() => {
           setIsEtahaBulkImportOpen(false);
-          setEditingSiteCode(undefined);
-          setEditingRecord(null);
-          setWeModalMode('edit');
-          setIsWeAddDataOpen(true);
+          setEtahaEditingSiteCode(undefined);
+          setEtahaEditingRecord(null);
+          setEtahaModalMode('edit');
+          setIsEtahaAddDataOpen(true);
+        }}
+      />
+
+      {/* Availability (الإتاحة) Add / Edit Data Modal */}
+      <EtahaAddDataModal
+        isOpen={isEtahaAddDataOpen}
+        onClose={() => {
+          setIsEtahaAddDataOpen(false);
+          setEtahaEditingSiteCode(undefined);
+          setEtahaEditingRecord(null);
+        }}
+        allSiteCodes={etahaSites.map((s) => s.siteCode)}
+        initialSiteCode={etahaEditingSiteCode}
+        initialRecord={etahaEditingRecord}
+        mode={etahaModalMode}
+        sitesData={etahaSites}
+        onSave={async (record) => {
+          const res = await saveEtahaRecord(record);
+          if (res.success) {
+            setToastMessage(`تم حفظ وتحديث بيانات مشروع الإتاحة (${record['Code'] || record['siteCode'] || ''}) بنجاح ✅`);
+          } else {
+            setToastMessage(`حدث خطأ أثناء حفظ بيانات الإتاحة: ${res.error || ''}`);
+          }
+          return res;
+        }}
+        onSwitchToBulk={() => {
+          setIsEtahaAddDataOpen(false);
+          setIsEtahaBulkImportOpen(true);
         }}
       />
 

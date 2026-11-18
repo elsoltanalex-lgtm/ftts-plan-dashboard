@@ -184,6 +184,22 @@ export function useEtahaAPI() {
 
       saveStoredEtahaRecords(updated);
       setEtahaRecords(updated);
+
+      // Persist directly into Supabase availability / etaha tables
+      for (const table of ['etaha_records', 'etaha', 'availability']) {
+        try {
+          const payload: any = {
+            id: code,
+            code: code,
+            Code: code,
+            data: enriched,
+            ...enriched,
+            updated_at: now,
+          };
+          await supabase.from(table).upsert(payload, { onConflict: 'id' });
+        } catch { }
+      }
+
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err?.message || 'فشل حفظ بيانات المشروع' };
