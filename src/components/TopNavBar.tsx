@@ -171,7 +171,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
   ];
 
   // The 3 Sub-navigation Tabs under "Availability":
-  // 1. Availability (Linked exclusively to the 360 sites Excel sheet)
+  // 1. Availability (Linked exclusively to the Availability Excel sheet)
   // 2. Digital Transformation
   // 3. Egypt Post
   const availabilitySubTabs = [
@@ -181,8 +181,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
       nameEn: 'مشروعات الإتاحة',
       arSubtitle: 'مشروعات الإتاحة المعتمدة (الشيت المرفوع)',
       icon: Globe,
-      count: stats.etahaCount || 360,
-      countLabel: 'مشروع معتمد',
+      count: stats.etahaCount || 0,
+      countLabel: 'مشروعات معتمدة',
       badge: 'شيت الإتاحة المرفوع ✅',
       activeGradient:
         'bg-gradient-to-r from-teal-700 via-emerald-700 to-teal-800 text-white shadow-md ring-2 ring-emerald-500/30 border-teal-600',
@@ -377,19 +377,9 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                   <Globe className="w-5 h-5" />
                 </div>
                 <div className="truncate">
-                  <div className="flex items-center gap-2">
-                    <span className="font-extrabold text-sm sm:text-base leading-tight tracking-tight">
-                      Availability
-                    </span>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${isAvailabilityActive
-                        ? 'bg-white/20 text-white'
-                        : 'bg-emerald-100 text-emerald-800'
-                        }`}
-                    >
-                      {(stats.etahaCount || 360).toLocaleString()} Projects
-                    </span>
-                  </div>
+                  <span className="font-extrabold text-sm sm:text-base leading-tight tracking-tight block">
+                    Availability
+                  </span>
                   <span
                     className={`text-[11px] block mt-0.5 truncate ${isAvailabilityActive ? 'text-teal-100' : 'text-slate-400'
                       }`}
@@ -460,7 +450,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
-                            {subTab.id === 'ETAHA' ? `${subTab.count} موقع` : subTab.countLabel}
+                            {subTab.countLabel}
                           </span>
                           {isSelected && <Check className="w-4 h-4 text-teal-600" />}
                         </div>
@@ -672,26 +662,12 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                     {/* Bottom Row: Count & Badge */}
                     <div className="pt-2 border-t border-slate-100/30 flex items-center justify-between">
                       <div>
-                        {subTab.id === 'ETAHA' ? (
-                          <>
-                            <span
-                              className={`text-[10px] block font-medium ${isSelected ? 'text-white/70' : 'text-slate-400'
-                                }`}
-                            >
-                              إجمالي مشروعات الإكسيل
-                            </span>
-                            <span className="font-mono text-base sm:text-lg font-black tracking-tight leading-none">
-                              {(stats.etahaCount || 360).toLocaleString()} موقع
-                            </span>
-                          </>
-                        ) : (
-                          <span
-                            className={`text-xs font-bold ${isSelected ? 'text-white' : 'text-slate-600'
-                              }`}
-                          >
-                            {subTab.countLabel}
-                          </span>
-                        )}
+                        <span
+                          className={`text-xs font-bold ${isSelected ? 'text-white' : 'text-slate-600'
+                            }`}
+                        >
+                          {subTab.countLabel}
+                        </span>
                       </div>
 
                       <span
