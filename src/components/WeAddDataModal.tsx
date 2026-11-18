@@ -24,6 +24,7 @@ import { useAuth } from '../context/AuthContext';
 import { isRecordInSector } from '../utils/sectorPermissions';
 import {
   Lock,
+  ShieldCheck,
   CheckCircle2,
   AlertCircle,
   ShieldAlert,
