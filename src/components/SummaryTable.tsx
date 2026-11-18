@@ -109,7 +109,8 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
             {onAddNewSite && onEditSite && onDeleteSite && (
               <SiteActionDropdown
                 variant={companyVariant || 'default'}
-                label="إدارة المواقع"
+                label={companyVariant === 'etaha' ? 'إدارة المشروعات' : 'إدارة المواقع'}
+                itemTypeLabel={companyVariant === 'etaha' ? 'مشروع' : 'موقع'}
                 onAdd={onAddNewSite}
                 onEdit={onEditSite}
                 onDelete={onDeleteSite}

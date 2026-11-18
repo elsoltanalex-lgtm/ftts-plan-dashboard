@@ -382,7 +382,7 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                   <th className="py-2.5 px-3">التاريخ المستهدف</th>
                   <th className="py-2.5 px-3">المقاول / التعذر</th>
                   <th className="py-2.5 px-3 min-w-[200px]">الملاحظات (Notes)</th>
-                  <th className="py-2.5 px-3 text-center min-w-[140px] bg-slate-200/60">إجراءات التحكم</th>
+                  <th className="py-2.5 px-3 text-center min-w-[160px] bg-indigo-50 text-indigo-950 font-extrabold border-l border-r border-indigo-200">إجراءات التحكم (تعديل / حذف)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -537,8 +537,8 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                           )}
                         </td>
                         {/* إجراءات التحكم بجانب كل موقع */}
-                        <td className="py-2.5 px-3 text-center bg-slate-50/50">
-                          <div className="flex items-center justify-center gap-1.5">
+                        <td className="py-2.5 px-3 text-center bg-slate-50/70 border-l border-r border-slate-200">
+                          <div className="flex items-center justify-center gap-2">
                             {/* 1. زر تعديل البيانات */}
                             <button
                               type="button"
@@ -548,10 +548,10 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                                   onEditSite(site.siteCode);
                                 }
                               }}
-                              className="px-2.5 py-1 text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg border border-amber-300 transition cursor-pointer flex items-center gap-1 shadow-2xs"
-                              title={`تعديل بيانات الموقع ${site.siteCode}`}
+                              className="px-3 py-1.5 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-xs hover:shadow-amber-500/25 active:scale-95"
+                              title={`تعديل بيانات (${site.siteCode})`}
                             >
-                              <Edit3 className="w-3 h-3 text-amber-600" />
+                              <Edit3 className="w-3.5 h-3.5" />
                               <span>تعديل</span>
                             </button>
 
@@ -561,10 +561,10 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                               onClick={() => {
                                 setSiteToDelete(site);
                               }}
-                              className="px-2.5 py-1 text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg border border-rose-300 transition cursor-pointer flex items-center gap-1 shadow-2xs"
-                              title={`إلغاء أو حذف الموقع ${site.siteCode}`}
+                              className="px-3 py-1.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-xs hover:shadow-rose-600/25 active:scale-95"
+                              title={`حذف وإلغاء (${site.siteCode})`}
                             >
-                              <Trash2 className="w-3 h-3 text-rose-600" />
+                              <Trash2 className="w-3.5 h-3.5" />
                               <span>حذف</span>
                             </button>
                           </div>

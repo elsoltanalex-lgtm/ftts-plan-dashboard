@@ -304,8 +304,14 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     existingRecord: WeRecord;
   } | null>(null);
 
-  // Admin Toggle for full field editing
-  const [adminFullEditMode, setAdminFullEditMode] = useState(false);
+  // Admin Toggle for full field editing (defaults to TRUE for admin)
+  const [adminFullEditMode, setAdminFullEditMode] = useState(true);
+
+  React.useEffect(() => {
+    if (isAdmin) {
+      setAdminFullEditMode(true);
+    }
+  }, [isAdmin, isOpen]);
 
   // Computed values
   const currentStatus = formData['Site Status'] || masterRecord?.['Site Status'] || 'On Air';
@@ -1155,35 +1161,121 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                             <span className="text-[11px] font-normal text-slate-500 hidden sm:inline">(Base Site Information)</span>
                           </h3>
                           <p className="text-[11px] text-slate-500">
-                            البيانات المرجعية الثابتة للموقع المعتمَدة في خطة FTTS
+                            {isAdmin
+                              ? 'صلاحية الأدمن الكاملة مفعّلة: يمكنك تعديل كافة الحقول المرجعية والتنفيذية بحرية'
+                              : 'البيانات المرجعية الثابتة للموقع المعتمَدة في خطة FTTS'}
                           </p>
                         </div>
                       </div>
-                      <span className="text-[11px] text-slate-600 font-bold bg-slate-100 px-3 py-1 rounded-full border border-slate-300 shadow-2xs flex items-center gap-1.5 shrink-0">
-                        <Lock className="w-3.5 h-3.5 text-slate-500" />
-                        <span>ثابتة لمسؤول القطاع (Read-only)</span>
-                      </span>
+                      {isAdmin ? (
+                        <span className="text-[11px] text-purple-700 font-bold bg-purple-100 px-3 py-1 rounded-full border border-purple-300 shadow-2xs flex items-center gap-1.5 shrink-0">
+                          <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                          <span>تعديل كامل متاح (Full Admin)</span>
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-slate-600 font-bold bg-slate-100 px-3 py-1 rounded-full border border-slate-300 shadow-2xs flex items-center gap-1.5 shrink-0">
+                          <Lock className="w-3.5 h-3.5 text-slate-500" />
+                          <span>ثابتة لمسؤول القطاع (Read-only)</span>
+                        </span>
+                      )}
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
-                      {[
-                        { label: 'كود الموقع', val: formData['site code'] || masterRecord?.['site code'] || '—', isCode: true },
-                        { label: 'قطاع التنفيذ', val: formData['Exc sector'] || formData['Sectores'] || masterRecord?.['Exc sector'] || '—' },
-                        { label: 'قطاع المناطق', val: formData['Zone'] || formData['قطاع المناطق'] || masterRecord?.['Zone'] || '—' },
-                        { label: 'إدارة الشبكات', val: formData['Exc Zone'] || formData['اداره التنفيذ المختصه'] || masterRecord?.['Exc Zone'] || '—' },
-                        { label: 'مسؤولية التنفيذ', val: formData['المسئولية'] || formData['مسئولية التنفيذ'] || masterRecord?.['المسئولية'] || '—' },
-                        { label: 'النوع', val: formData['Type'] || formData['النوع'] || masterRecord?.['Type'] || '—' },
-                        { label: 'الخطة', val: formData['خطة'] || formData['Plan'] || masterRecord?.['خطة'] || '—' },
-                        { label: 'السنترال', val: formData['السنترال'] || masterRecord?.['السنترال'] || '—' },
-                      ].map((item, i) => (
-                        <div key={i} className="bg-white border border-slate-200 rounded-xl p-2.5 shadow-2xs hover:border-blue-200 transition">
-                          <span className="text-[10px] text-slate-400 block font-semibold mb-0.5">{item.label}</span>
-                          <span className={`font-bold text-slate-900 text-xs sm:text-sm truncate block ${item.isCode ? 'font-mono text-blue-700' : ''}`} title={item.val}>
-                            {item.val}
-                          </span>
+                    {isAdmin && adminFullEditMode ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs bg-purple-50/50 p-3 rounded-xl border border-purple-200">
+                        <div>
+                          <label className="text-[11px] text-purple-900 block font-bold mb-1">كود الموقع (Site Code)</label>
+                          <input
+                            type="text"
+                            value={formData['site code'] || masterRecord?.['site code'] || ''}
+                            onChange={(e) => handleFieldChange('site code', e.target.value)}
+                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-blue-700 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                          />
                         </div>
-                      ))}
-                    </div>
+                        <div>
+                          <label className="text-[11px] text-purple-900 block font-bold mb-1">قطاع التنفيذ</label>
+                          <input
+                            type="text"
+                            value={formData['Exc sector'] || formData['Sectores'] || masterRecord?.['Exc sector'] || ''}
+                            onChange={(e) => handleFieldChange('Exc sector', e.target.value)}
+                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-purple-900 block font-bold mb-1">قطاع المناطق</label>
+                          <input
+                            type="text"
+                            value={formData['Zone'] || formData['قطاع المناطق'] || masterRecord?.['Zone'] || ''}
+                            onChange={(e) => handleFieldChange('Zone', e.target.value)}
+                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-purple-900 block font-bold mb-1">إدارة الشبكات</label>
+                          <input
+                            type="text"
+                            value={formData['Exc Zone'] || formData['اداره التنفيذ المختصه'] || masterRecord?.['Exc Zone'] || ''}
+                            onChange={(e) => handleFieldChange('Exc Zone', e.target.value)}
+                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-purple-900 block font-bold mb-1">مسؤولية التنفيذ</label>
+                          <input
+                            type="text"
+                            value={formData['المسئولية'] || formData['مسئولية التنفيذ'] || masterRecord?.['المسئولية'] || ''}
+                            onChange={(e) => handleFieldChange('المسئولية', e.target.value)}
+                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-purple-900 block font-bold mb-1">النوع (Type)</label>
+                          <input
+                            type="text"
+                            value={formData['Type'] || formData['النوع'] || masterRecord?.['Type'] || ''}
+                            onChange={(e) => handleFieldChange('Type', e.target.value)}
+                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-purple-900 block font-bold mb-1">الخطة (Plan)</label>
+                          <input
+                            type="text"
+                            value={formData['خطة'] || formData['Plan'] || masterRecord?.['خطة'] || ''}
+                            onChange={(e) => handleFieldChange('خطة', e.target.value)}
+                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-purple-900 block font-bold mb-1">السنترال</label>
+                          <input
+                            type="text"
+                            value={formData['السنترال'] || masterRecord?.['السنترال'] || ''}
+                            onChange={(e) => handleFieldChange('السنترال', e.target.value)}
+                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
+                        {[
+                          { label: 'كود الموقع', val: formData['site code'] || masterRecord?.['site code'] || '—', isCode: true },
+                          { label: 'قطاع التنفيذ', val: formData['Exc sector'] || formData['Sectores'] || masterRecord?.['Exc sector'] || '—' },
+                          { label: 'قطاع المناطق', val: formData['Zone'] || formData['قطاع المناطق'] || masterRecord?.['Zone'] || '—' },
+                          { label: 'إدارة الشبكات', val: formData['Exc Zone'] || formData['اداره التنفيذ المختصه'] || masterRecord?.['Exc Zone'] || '—' },
+                          { label: 'مسؤولية التنفيذ', val: formData['المسئولية'] || formData['مسئولية التنفيذ'] || masterRecord?.['المسئولية'] || '—' },
+                          { label: 'النوع', val: formData['Type'] || formData['النوع'] || masterRecord?.['Type'] || '—' },
+                          { label: 'الخطة', val: formData['خطة'] || formData['Plan'] || masterRecord?.['خطة'] || '—' },
+                          { label: 'السنترال', val: formData['السنترال'] || masterRecord?.['السنترال'] || '—' },
+                        ].map((item, i) => (
+                          <div key={i} className="bg-white border border-slate-200 rounded-xl p-2.5 shadow-2xs hover:border-blue-200 transition">
+                            <span className="text-[10px] text-slate-400 block font-semibold mb-0.5">{item.label}</span>
+                            <span className={`font-bold text-slate-900 text-xs sm:text-sm truncate block ${item.isCode ? 'font-mono text-blue-700' : ''}`} title={item.val}>
+                              {item.val}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* ═══════════════════════════════════════════════════════════════════════════════════ */}
@@ -1204,10 +1296,17 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                           <Activity className="w-4 h-4 text-sky-600" />
                           <span>حالة الموقع (Site Status)</span>
                         </label>
-                        <span className="text-[11px] font-bold text-slate-500 bg-slate-200 px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-slate-300">
-                          <Lock className="w-3 h-3 text-slate-500" />
-                          <span>ثابتة لمسؤول القطاع (Read-only)</span>
-                        </span>
+                        {isAdmin ? (
+                          <span className="text-[11px] font-bold text-purple-700 bg-purple-100 px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-purple-300">
+                            <ShieldCheck className="w-3 h-3 text-purple-600" />
+                            <span>متاح للتعديل الكامل (Admin)</span>
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-bold text-slate-500 bg-slate-200 px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-slate-300">
+                            <Lock className="w-3 h-3 text-slate-500" />
+                            <span>ثابتة لمسؤول القطاع (Read-only)</span>
+                          </span>
+                        )}
                       </div>
 
                       {/* Display of Site Status + Pulse Indicator if On Air */}

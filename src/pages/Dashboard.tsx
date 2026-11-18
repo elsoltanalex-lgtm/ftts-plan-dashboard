@@ -1893,11 +1893,15 @@ export const Dashboard: React.FC = () => {
         activeStatusFilter={modalFilterStatus || filters.status || undefined}
         onEditSite={(siteCode) => {
           if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+            const matchedEtaha = etahaSites.find(
+              (s) => String(s?.siteCode || '').toUpperCase() === siteCode.toUpperCase()
+            );
             const etRec = etahaRecords.find(
               (r) => (r['Code'] || r['siteCode'] || '').toUpperCase() === siteCode.toUpperCase()
-            );
+            ) || (matchedEtaha?.rawRecord as EtahaRecord) || null;
+
             setEtahaEditingSiteCode(siteCode);
-            setEtahaEditingRecord(etRec || null);
+            setEtahaEditingRecord(etRec);
             setEtahaModalMode('edit');
             setIsEtahaAddDataOpen(true);
             return;
@@ -1968,15 +1972,15 @@ export const Dashboard: React.FC = () => {
         onDeleteSite={async (siteOrCode) => {
           const code = typeof siteOrCode === 'string' ? siteOrCode : siteOrCode.siteCode;
           const matched = authorizedScopeData.find((s) => String(s?.siteCode || '').toUpperCase() === code.toUpperCase());
-          if (matched?.company === 'Orange') {
+          if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY' || matched?.company === 'Availability' || matched?.company === 'الإتاحة') {
+            await deleteEtahaRecord(code);
+            setToastMessage(`تم حذف وإلغاء مشروع الإتاحة (${code}) بنجاح ✅`);
+          } else if (matched?.company === 'Orange') {
             await deleteOrangeRecord(code);
             setToastMessage(`تم حذف وإلغاء موقع Orange (${code}) بنجاح ✅`);
           } else if (matched?.company === 'Vodafone') {
             await deleteVodafoneRecord(code);
             setToastMessage(`تم حذف وإلغاء موقع Vodafone (${code}) بنجاح ✅`);
-          } else if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
-            await deleteEtahaRecord(code);
-            setToastMessage(`تم حذف وإلغاء مشروع الإتاحة (${code}) بنجاح ✅`);
           } else {
             handleDeleteSite(siteOrCode);
           }

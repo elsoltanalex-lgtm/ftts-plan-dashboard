@@ -12,11 +12,11 @@ import { isSectorMatch, extractRecordSector, isRecordInSector } from '../utils/s
 export const PRESET_ACCOUNTS: DemoAccount[] = [
   {
     username: 'admin',
-    displayName: 'الإدارة العامة المركزية',
+    displayName: 'الإدارة العامة المركزية (Admin)',
     plainPassword: 'Admin@2026',
     sector: 'ALL',
     role: 'admin',
-    description: 'صلاحية كاملة لرؤية وإدارة كافة القطاعات (إضافة وتعديل وحذف واستعراض شامل)',
+    description: 'صلاحية كاملة لرؤية وإدارة كافة القطاعات والمشروعات (إضافة وتعديل وحذف وتحكم شامل بدون قيود)',
     tagColor: 'bg-purple-500/10 text-purple-700 border-purple-300',
   },
   {
@@ -145,12 +145,22 @@ function isUsernameMatch(accUser: string, input?: string | null): boolean {
   return false;
 }
 
+export const DEFAULT_ADMIN_USER: AuthUser = {
+  id: 'admin',
+  username: 'admin',
+  displayName: 'الإدارة العامة المركزية (Admin)',
+  sector: 'ALL',
+  role: 'admin',
+  permissions: ['view_all', 'edit_all', 'delete_all'],
+  loginTime: new Date().toISOString(),
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(DEFAULT_ADMIN_USER);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
-  // Restore saved session on load
+  // Restore saved session on load or default to Full Admin Access
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -160,19 +170,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (validAccount) {
           setUser(parsed);
         } else {
-          localStorage.removeItem(STORAGE_KEY);
-          setUser(null);
-          setIsLoginModalOpen(true);
+          setUser(DEFAULT_ADMIN_USER);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_ADMIN_USER));
         }
       } else {
-        // Require login if no session
-        setUser(null);
-        setIsLoginModalOpen(true);
+        // Default to Full Admin Access so user is never locked out
+        setUser(DEFAULT_ADMIN_USER);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_ADMIN_USER));
       }
     } catch {
-      localStorage.removeItem(STORAGE_KEY);
-      setUser(null);
-      setIsLoginModalOpen(true);
+      setUser(DEFAULT_ADMIN_USER);
     } finally {
       setIsLoading(false);
     }
@@ -282,7 +289,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check if current user has permission to edit this record
   const canEditRecord = useCallback(
     (record: any): boolean => {
-      if (!user) return false;
+      if (!user) return true; // Full admin access fallback
       if (user.role === 'admin' || user.sector === 'ALL') return true;
       if (user.role === 'viewer') return false;
 
@@ -294,7 +301,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check if current user has permission to delete this record (Admin only)
   const canDeleteRecord = useCallback(
     (_record?: any): boolean => {
-      if (!user) return false;
+      if (!user) return true; // Full admin access fallback
       return user.role === 'admin' || user.sector === 'ALL';
     },
     [user]
@@ -303,7 +310,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check if current user can create a site (Admin only)
   const canCreateForSector = useCallback(
     (_targetSector?: string): boolean => {
-      if (!user) return false;
+      if (!user) return true; // Full admin access fallback
       return user.role === 'admin' || user.sector === 'ALL';
     },
     [user]
@@ -316,11 +323,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!user) {
         return {
-          canEdit: false,
-          isOwnSector: false,
+          canEdit: true,
+          isOwnSector: true,
           recordSector,
-          userSector: 'غير مسجل',
-          reason: 'يرجى تسجيل الدخول للوصول إلى النظام',
+          userSector: 'الإدارة العامة (Admin)',
+          reason: 'صلاحية كاملة لجميع القطاعات والمشروعات (Full Admin Access)',
         };
       }
 
@@ -330,7 +337,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isOwnSector: true,
           recordSector,
           userSector: 'الإدارة العامة (كافة القطاعات)',
-          reason: 'صلاحية كاملة لجميع القطاعات (Admin)',
+          reason: 'صلاحية كاملة لجميع القطاعات والمشروعات وكافة الحقول (Full Admin Access)',
         };
       }
 
@@ -367,7 +374,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const isAdmin = useMemo(() => {
-    return Boolean(user && (user.role === 'admin' || user.sector === 'ALL'));
+    if (!user) return true; // Default to Full Admin Access
+    return Boolean(user.role === 'admin' || user.sector === 'ALL');
   }, [user]);
 
   const value = useMemo(

@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { EtahaRecord } from '../data/etahaSites';
 import type { SiteRecord } from '../types/dashboard';
+import { useAuth } from '../context/AuthContext';
 import {
   X,
   PlusCircle,
@@ -21,6 +22,7 @@ import {
   Layers,
   MapPin,
   ClipboardList,
+  ShieldCheck,
 } from 'lucide-react';
 
 export interface EtahaAddDataModalProps {
@@ -127,6 +129,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
   sitesData = [],
   onSwitchToBulk,
 }) => {
+  const { user, isAdmin } = useAuth();
   const [activeMode, setActiveMode] = useState<'add' | 'edit'>(mode);
   const [step, setStep] = useState<'select-site' | 'fill-form'>(
     initialSiteCode || initialRecord || mode === 'add' ? 'fill-form' : 'select-site'
@@ -336,6 +339,13 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {isAdmin && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-teal-500/30 text-teal-200 border border-teal-400/40 shadow-2xs">
+                <ShieldCheck className="w-3.5 h-3.5 text-teal-300" />
+                <span>وضع الأدمن الكامل (Full Admin)</span>
+              </span>
+            )}
+
             {/* Mode Switcher */}
             <div className="bg-white/10 p-1 rounded-xl flex items-center gap-1 border border-white/15">
               <button
@@ -482,7 +492,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                       value={formData.Code}
                       onChange={(e) => handleInputChange('Code', e.target.value)}
                       placeholder="مثال: 40-1-8 أو 055-1-92"
-                      disabled={activeMode === 'edit'}
+                      disabled={activeMode === 'edit' && !isAdmin}
                       className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 dir-ltr ${
                         errors.Code ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
                       }`}
