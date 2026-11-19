@@ -112,7 +112,7 @@ export const OrangeBulkImportModal: React.FC<OrangeBulkImportModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
-        
+
         {/* Header */}
         <div className="px-6 py-4 bg-gradient-to-r from-orange-600 to-amber-600 text-white flex items-center justify-between shrink-0 shadow-sm">
           <div className="flex items-center gap-3">
@@ -171,7 +171,7 @@ export const OrangeBulkImportModal: React.FC<OrangeBulkImportModalProps> = ({
 
           {/* Action Boxes: Download & Upload */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            
+
             {/* Box 1: Download Protected Template */}
             <div className="border border-orange-200 bg-orange-50/40 rounded-2xl p-5 flex flex-col justify-between space-y-3">
               <div>

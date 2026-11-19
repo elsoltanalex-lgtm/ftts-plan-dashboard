@@ -103,7 +103,7 @@ const MultiFilterDropdown: React.FC<MultiFilterDropdownProps> = ({
     }
     if (filterKey === 'internalPath') {
       const targetTrimmed = String(optVal).trim();
-      return sitesData.filter((s) => String(s.internalPath || s.rawRecord?.['المسار الداخلى'] || s.rawRecord?.['موقف اللحامات'] || '').trim() === targetTrimmed).length;
+      return sitesData.filter((s) => String(s.internalPath || s.rawRecord?.['المسار الداخلى'] || s.rawRecord?.['المسار الداخلي'] || s.rawRecord?.['موقف اللحامات'] || s.rawRecord?.['موقف_اللحامات'] || '').trim() === targetTrimmed).length;
     }
     if (filterKey === 'excelStatus') {
       const targetTrimmed = String(optVal).trim();
@@ -634,7 +634,7 @@ export const Filters: React.FC<FiltersProps> = ({
     const list = Array.from(
       new Set(
         baseSites
-          .map((s) => String(s.internalPath || s.rawRecord?.['المسار الداخلى'] || s.rawRecord?.['موقف اللحامات'] || '').trim())
+          .map((s) => String(s.internalPath || s.rawRecord?.['المسار الداخلى'] || s.rawRecord?.['المسار الداخلي'] || s.rawRecord?.['موقف اللحامات'] || s.rawRecord?.['موقف_اللحامات'] || '').trim())
           .filter(Boolean)
       )
     );

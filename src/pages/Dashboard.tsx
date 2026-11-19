@@ -40,6 +40,12 @@ import { useEtahaAPI } from '../hooks/useEtahaAPI';
 import type { EtahaRecord } from '../data/etahaSites';
 import { EtahaBulkImportModal } from '../components/EtahaBulkImportModal';
 import { EtahaAddDataModal } from '../components/EtahaAddDataModal';
+import {
+  isEtahaInternalDone,
+  isEtahaExternalDone,
+  isEtahaDelivered,
+  computeEtahaKpis,
+} from '../utils/etahaMetrics';
 import { WeExecutiveReportView } from '../components/WeExecutiveReportView';
 import { SiteActionDropdown } from '../components/SiteActionDropdown';
 import { BackupEmailConfigModal } from '../components/BackupEmailConfigModal';
@@ -576,20 +582,13 @@ export const Dashboard: React.FC = () => {
         const match = activeStatuses.some((fs) => {
           if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
             if (fs === 'تم الانتهاء داخلي') {
-              const intVal = String(site.internalPath || site.rawRecord?.['المسار الداخلى'] || site.rawRecord?.['موقف اللحامات'] || '').trim();
-              const del = String(site.deliveryStatus || site.deliveryArea || site.rawRecord?.['موقف التسليم'] || '').trim();
-              const cls = String(site.excelStatus || site.classification || site.rawRecord?.['التصنيف'] || '').trim();
-              return intVal === 'تم الانتهاء' || intVal === 'تم الانتهاء بالكامل' || del === 'تم التسليم' || cls === 'تم الانتهاء والتسليم';
+              return isEtahaInternalDone(site);
             }
             if (fs === 'تم الانتهاء خارجي') {
-              const ext = String(site.externalPath || site.rawRecord?.['المسار الخارجي'] || '').trim();
-              const cls = String(site.excelStatus || site.classification || site.rawRecord?.['التصنيف'] || '').trim();
-              return ext === 'تم الانتهاء' || cls === 'تم الانتهاء والتسليم' || cls.includes('تم خارجي');
+              return isEtahaExternalDone(site);
             }
             if (fs === 'تم التسليم') {
-              const del = String(site.deliveryStatus || site.deliveryArea || site.rawRecord?.['موقف التسليم'] || '').trim();
-              const cls = String(site.excelStatus || site.classification || site.rawRecord?.['التصنيف'] || '').trim();
-              return del === 'تم التسليم' || cls === 'تم الانتهاء والتسليم';
+              return isEtahaDelivered(site);
             }
           }
           if (siteCat === fs || siteStatus === fs || siteCls === fs) return true;
@@ -853,29 +852,7 @@ export const Dashboard: React.FC = () => {
 
   // Compute Etaha KPI statistics (Total Sites, Internal Done, External Done, Delivered)
   const etahaKpis = useMemo(() => {
-    const totalSites = kpiScopeSites.length;
-    let internalDone = 0;
-    let externalDone = 0;
-    let delivered = 0;
-
-    kpiScopeSites.forEach((site) => {
-      const ext = String(site.externalPath || site.rawRecord?.['المسار الخارجي'] || '').trim();
-      const intVal = String(site.internalPath || site.rawRecord?.['المسار الداخلى'] || site.rawRecord?.['موقف اللحامات'] || '').trim();
-      const del = String(site.deliveryStatus || site.deliveryArea || site.rawRecord?.['موقف التسليم'] || '').trim();
-      const cls = String(site.excelStatus || site.classification || site.rawRecord?.['التصنيف'] || '').trim();
-
-      if (ext === 'تم الانتهاء' || cls === 'تم الانتهاء والتسليم' || cls.includes('تم خارجي')) {
-        externalDone++;
-      }
-      if (intVal === 'تم الانتهاء' || intVal === 'تم الانتهاء بالكامل' || del === 'تم التسليم' || cls === 'تم الانتهاء والتسليم') {
-        internalDone++;
-      }
-      if (del === 'تم التسليم' || cls === 'تم الانتهاء والتسليم') {
-        delivered++;
-      }
-    });
-
-    return { totalSites, internalDone, externalDone, delivered };
+    return computeEtahaKpis(kpiScopeSites);
   }, [kpiScopeSites]);
 
   // FTTS Operator cards stats scoped to user's authorized dataset
@@ -897,8 +874,9 @@ export const Dashboard: React.FC = () => {
       vodafoneLinks: vodafoneSites.reduce((sum, s) => sum + s.linksCount, 0),
       orangeCount: orangeSites.length,
       orangeLinks: orangeSites.reduce((sum, s) => sum + s.linksCount, 0),
+      etahaCount: etahaSites.length,
     };
-  }, [combinedFttsSites, user]);
+  }, [combinedFttsSites, etahaSites, user]);
 
   // Active filters count
   const activeFiltersCount = useMemo(() => {

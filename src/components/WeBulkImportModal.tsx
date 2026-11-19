@@ -233,8 +233,8 @@ export const WeBulkImportModal: React.FC<WeBulkImportModalProps> = ({
           <div className="flex items-center gap-4">
             <span
               className={`flex items-center gap-1.5 pb-1 border-b-2 transition-colors ${activeStep === 'upload'
-                  ? 'border-blue-600 text-blue-700 font-extrabold'
-                  : 'border-transparent text-slate-400'
+                ? 'border-blue-600 text-blue-700 font-extrabold'
+                : 'border-transparent text-slate-400'
                 }`}
             >
               <Upload className="w-3.5 h-3.5" />
@@ -242,8 +242,8 @@ export const WeBulkImportModal: React.FC<WeBulkImportModalProps> = ({
             </span>
             <span
               className={`flex items-center gap-1.5 pb-1 border-b-2 transition-colors ${activeStep === 'preview'
-                  ? 'border-blue-600 text-blue-700 font-extrabold'
-                  : 'border-transparent text-slate-400'
+                ? 'border-blue-600 text-blue-700 font-extrabold'
+                : 'border-transparent text-slate-400'
                 }`}
             >
               <ShieldCheck className="w-3.5 h-3.5" />
@@ -251,8 +251,8 @@ export const WeBulkImportModal: React.FC<WeBulkImportModalProps> = ({
             </span>
             <span
               className={`flex items-center gap-1.5 pb-1 border-b-2 transition-colors ${activeStep === 'executing' || activeStep === 'done'
-                  ? 'border-emerald-600 text-emerald-700 font-extrabold'
-                  : 'border-transparent text-slate-400'
+                ? 'border-emerald-600 text-emerald-700 font-extrabold'
+                : 'border-transparent text-slate-400'
                 }`}
             >
               <Database className="w-3.5 h-3.5" />
@@ -366,8 +366,8 @@ export const WeBulkImportModal: React.FC<WeBulkImportModalProps> = ({
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
                   className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center transition-all cursor-pointer flex flex-col items-center justify-center ${isDragging
-                      ? 'border-blue-500 bg-blue-50/70 scale-[0.99]'
-                      : 'border-slate-300 hover:border-blue-400 bg-slate-50/60 hover:bg-slate-50'
+                    ? 'border-blue-500 bg-blue-50/70 scale-[0.99]'
+                    : 'border-slate-300 hover:border-blue-400 bg-slate-50/60 hover:bg-slate-50'
                     }`}
                 >
                   <input
@@ -493,8 +493,8 @@ export const WeBulkImportModal: React.FC<WeBulkImportModalProps> = ({
                     type="button"
                     onClick={() => setFilterMode('ALL')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${filterMode === 'ALL'
-                        ? 'bg-slate-800 text-white shadow-2xs'
-                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                      ? 'bg-slate-800 text-white shadow-2xs'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                       }`}
                   >
                     الكل ({validationSummary.totalRows})
@@ -503,8 +503,8 @@ export const WeBulkImportModal: React.FC<WeBulkImportModalProps> = ({
                     type="button"
                     onClick={() => setFilterMode('READY')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${filterMode === 'READY'
-                        ? 'bg-emerald-600 text-white shadow-2xs'
-                        : 'bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50'
                       }`}
                   >
                     السليم فقط ({validationSummary.validCount})
@@ -513,8 +513,8 @@ export const WeBulkImportModal: React.FC<WeBulkImportModalProps> = ({
                     type="button"
                     onClick={() => setFilterMode('ISSUES')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${filterMode === 'ISSUES'
-                        ? 'bg-amber-600 text-white shadow-2xs'
-                        : 'bg-white text-amber-800 border border-amber-200 hover:bg-amber-50'
+                      ? 'bg-amber-600 text-white shadow-2xs'
+                      : 'bg-white text-amber-800 border border-amber-200 hover:bg-amber-50'
                       }`}
                   >
                     المخالفات والأخطاء ({validationSummary.warningCount + validationSummary.errorCount})
@@ -565,10 +565,10 @@ export const WeBulkImportModal: React.FC<WeBulkImportModalProps> = ({
                             <tr
                               key={r.rowNumber}
                               className={`transition-colors ${isError
-                                  ? 'bg-rose-50/50 hover:bg-rose-50'
-                                  : isWarning
-                                    ? 'bg-amber-50/40 hover:bg-amber-50/70'
-                                    : 'hover:bg-slate-50'
+                                ? 'bg-rose-50/50 hover:bg-rose-50'
+                                : isWarning
+                                  ? 'bg-amber-50/40 hover:bg-amber-50/70'
+                                  : 'hover:bg-slate-50'
                                 }`}
                             >
                               <td className="p-2.5 text-center font-mono text-[11px] text-slate-400">
