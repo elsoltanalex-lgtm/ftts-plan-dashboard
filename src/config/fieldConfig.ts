@@ -325,3 +325,30 @@ export function normalizeClassification(raw?: string | null): string {
   const trimmed = String(raw).trim();
   return trimmed || 'غير محدد';
 }
+
+/**
+ * Determines whether a document upload is strictly required for the given site status / classification.
+ * Required ONLY for the 3 specified classifications:
+ * 1. "جاري تصاريح"
+ * 2. "تم الانتهاء" (including "تم الانتهاء مدني" / "تم الانتهاء كهربي")
+ * 3. "تم التشغيل فايبر"
+ * Any other classification returns false.
+ */
+export function isDocumentRequired(classification?: string | null): boolean {
+  if (!classification) return false;
+  const c = String(classification).trim();
+  if (
+    c === 'جاري تصاريح' ||
+    c === 'تم الانتهاء' ||
+    c === 'تم التشغيل فايبر' ||
+    c === 'تم الانتهاء مدني' ||
+    c === 'تم الانتهاء كهربي'
+  ) {
+    return true;
+  }
+  if (c.includes('تصاريح') || c.startsWith('تم الانتهاء') || c.includes('تشغيل فايبر')) {
+    return true;
+  }
+  return false;
+}
+

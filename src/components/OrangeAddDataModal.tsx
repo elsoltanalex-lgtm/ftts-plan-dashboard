@@ -11,6 +11,7 @@ import {
   ORANGE_SUPPORT_ENTITIES,
   normalizeOrangeClassification,
 } from '../types/orange';
+import { isDocumentRequired } from '../config/fieldConfig';
 import {
   Lock,
   CheckCircle2,
@@ -89,6 +90,11 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
   const isCompleted =
     currentClassification === 'تم الانتهاء مدني' ||
     currentClassification === 'تم التشغيل فايبر';
+
+  // Strict conditional document requirement: only for "جاري تصاريح" | "تم الانتهاء" | "تم التشغيل فايبر"
+  const isDocRequired = useMemo(() => {
+    return isDocumentRequired(formData['التصنيف (مدني)'] || currentClassification);
+  }, [formData, currentClassification]);
 
   // Filtered site codes for search
   const filteredCodes = useMemo(() => {
@@ -225,6 +231,16 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
       ...prev,
       [key]: value,
     }));
+    if (key === 'التصنيف (مدني)' || key === 'التصنيف') {
+      if (!isDocumentRequired(value)) {
+        setErrors((prev) => {
+          if (!prev.المستند) return prev;
+          const next = { ...prev };
+          delete next.المستند;
+          return next;
+        });
+      }
+    }
     setErrors((prev) => {
       const next = { ...prev };
       delete next[key as string];
@@ -233,7 +249,7 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
     });
   };
 
-  // Submit Handler with Mandatory Document Validation
+  // Submit Handler with Conditional Document Validation
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
@@ -246,13 +262,15 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
       newErrors['التصنيف (مدني)'] = 'التصنيف الميداني مطلوب.';
     }
 
-    // ── MANDATORY DOCUMENT UPLOAD VALIDATION ──
-    // "اشتراط إرفاق مستند إثبات الموقف الحالي (Document Upload) في شاشتي الإضافة والتعديل"
-    if (!isAdmin && !String(formData.المستند || '').trim()) {
-      newErrors.المستند = '⛔ إلزامي: يجب إرفاق مستند إثبات الموقف الحالي (PDF أو صورة أو تقرير) لحفظ بيانات الموقع.';
-    } else if (!String(formData.المستند || '').trim()) {
-      formData.المستند = `Doc-Orange-${formData['Site code'] || 'Admin'}.pdf`;
-      formData['موقف المرفقات'] = 'تم الارفاق';
+    // ── CONDITIONAL DOCUMENT UPLOAD VALIDATION ──
+    // إلزامي فقط للحالات الثلاث: "جاري تصاريح" / "تم الانتهاء" / "تم التشغيل فايبر"
+    if (isDocRequired) {
+      if (!isAdmin && !String(formData.المستند || '').trim()) {
+        newErrors.المستند = '⛔ إلزامي: يجب إرفاق مستند إثبات الموقف الحالي (PDF أو صورة أو تقرير) لحفظ بيانات الموقع.';
+      } else if (!String(formData.المستند || '').trim()) {
+        formData.المستند = `Doc-Orange-${formData['Site code'] || 'Admin'}.pdf`;
+        formData['موقف المرفقات'] = 'تم الارفاق';
+      }
     }
 
     if (isStalled && !String(formData['نوع المعوق المدني'] || '').trim()) {
@@ -669,73 +687,75 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
                 )}
               </div>
 
-              {/* SECTION 3: MANDATORY DOCUMENT UPLOAD */}
-              <div
-                className={`border-2 rounded-2xl p-4 sm:p-5 transition ${errors.المستند
-                    ? 'bg-red-50/60 border-red-400 ring-2 ring-red-300'
-                    : 'bg-emerald-50/40 border-emerald-300'
-                  }`}
-              >
-                <div className="flex items-center justify-between pb-2 mb-3 border-b border-emerald-200">
-                  <div className="flex items-center gap-2">
-                    <UploadCloud className="w-5 h-5 text-emerald-700" />
-                    <h3 className="font-extrabold text-emerald-950 text-xs sm:text-sm">
-                      📎 مستند إثبات الموقف الحالي (Document Proof Upload):
-                    </h3>
-                  </div>
-                  <span className="text-[11px] font-extrabold bg-red-100 text-red-800 px-2.5 py-0.5 rounded-full border border-red-300">
-                    * إلزامي للحفظ طبقاً للضوابط
-                  </span>
-                </div>
-
-                {errors.المستند && (
-                  <p className="text-xs font-bold text-red-700 mb-3 flex items-center gap-1.5">
-                    <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-                    <span>{errors.المستند}</span>
-                  </p>
-                )}
-
-                {formData.المستند ? (
-                  <div className="p-3.5 bg-white border border-emerald-300 rounded-xl flex items-center justify-between shadow-2xs">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                        <FileCheck className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-slate-800">{formData.المستند}</p>
-                        <p className="text-[10px] text-emerald-600 font-semibold">مستند معتمد ومرفق بنجاح ✅</p>
-                      </div>
+              {/* SECTION 3: CONDITIONAL DOCUMENT UPLOAD */}
+              {isDocRequired && (
+                <div
+                  className={`border-2 rounded-2xl p-4 sm:p-5 transition ${errors.المستند
+                      ? 'bg-red-50/60 border-red-400 ring-2 ring-red-300'
+                      : 'bg-emerald-50/40 border-emerald-300'
+                    }`}
+                >
+                  <div className="flex items-center justify-between pb-2 mb-3 border-b border-emerald-200">
+                    <div className="flex items-center gap-2">
+                      <UploadCloud className="w-5 h-5 text-emerald-700" />
+                      <h3 className="font-extrabold text-emerald-950 text-xs sm:text-sm">
+                        📎 مستند إثبات الموقف الحالي (Document Proof Upload):
+                      </h3>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleRemoveDocument}
-                      className="px-2.5 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg font-bold transition cursor-pointer"
+                    <span className="text-[11px] font-extrabold bg-red-100 text-red-800 px-2.5 py-0.5 rounded-full border border-red-300">
+                      * إلزامي لهذه الحالة (* مطلوب)
+                    </span>
+                  </div>
+
+                  {errors.المستند && (
+                    <p className="text-xs font-bold text-red-700 mb-3 flex items-center gap-1.5">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                      <span>{errors.المستند}</span>
+                    </p>
+                  )}
+
+                  {formData.المستند ? (
+                    <div className="p-3.5 bg-white border border-emerald-300 rounded-xl flex items-center justify-between shadow-2xs">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                          <FileCheck className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">{formData.المستند}</p>
+                          <p className="text-[10px] text-emerald-600 font-semibold">مستند معتمد ومرفق بنجاح ✅</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemoveDocument}
+                        className="px-2.5 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg font-bold transition cursor-pointer"
+                      >
+                        إزالة المستند
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-emerald-400 hover:border-emerald-600 bg-white/80 p-5 rounded-xl text-center cursor-pointer transition group"
                     >
-                      إزالة المستند
-                    </button>
-                  </div>
-                ) : (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-emerald-400 hover:border-emerald-600 bg-white/80 p-5 rounded-xl text-center cursor-pointer transition group"
-                  >
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileUpload}
-                      className="hidden"
-                      accept=".pdf,.png,.jpg,.jpeg,.xlsx,.docx"
-                    />
-                    <UploadCloud className="w-8 h-8 mx-auto text-emerald-600 group-hover:scale-110 transition mb-2" />
-                    <p className="text-xs font-bold text-slate-800">
-                      انقر هنا لاختيار ورفع مستند إثبات الموقف الحالي للموقع
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      يدعم ملفات PDF، الصور (PNG, JPG)، ومستندات الإكسيل (الحد الأقصى 15 ميجابايت)
-                    </p>
-                  </div>
-                )}
-              </div>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        accept=".pdf,.png,.jpg,.jpeg,.xlsx,.docx"
+                      />
+                      <UploadCloud className="w-8 h-8 mx-auto text-emerald-600 group-hover:scale-110 transition mb-2" />
+                      <p className="text-xs font-bold text-slate-800">
+                        انقر هنا لاختيار ورفع مستند إثبات الموقف الحالي للموقع
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        يدعم ملفات PDF، الصور (PNG, JPG)، ومستندات الإكسيل (الحد الأقصى 15 ميجابايت)
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* SECTION 4: Notes */}
               <div>

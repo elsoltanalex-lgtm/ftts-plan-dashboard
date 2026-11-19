@@ -16,6 +16,7 @@ import {
   getSortedFields,
   APPROVED_CLASSIFICATIONS,
   normalizeClassification,
+  isDocumentRequired,
 } from '../config/fieldConfig';
 import type { WeRecord } from '../config/fieldConfig';
 import type { SiteRecord } from '../types/dashboard';
@@ -344,6 +345,11 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     return getObstaclesSubReason(currentReason);
   }, [currentReason]);
 
+  // Strict conditional document requirement: only for "جاري تصاريح" | "تم الانتهاء" | "تم التشغيل فايبر"
+  const isDocRequired = useMemo(() => {
+    return isDocumentRequired(currentClassification);
+  }, [currentClassification]);
+
   // Document file upload handler
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -629,6 +635,17 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       [csvColumn]: csvColumn === 'site code' ? String(value || '').toUpperCase() : value,
     }));
 
+    if (csvColumn === 'التصنيف' || csvColumn === 'Site Status') {
+      if (!isDocumentRequired(value)) {
+        setErrors((prev) => {
+          if (!prev['المستند']) return prev;
+          const next = { ...prev };
+          delete next['المستند'];
+          return next;
+        });
+      }
+    }
+
     if (errors[csvColumn]) {
       setErrors((prev) => {
         const next = { ...prev };
@@ -685,10 +702,13 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       }
     });
 
-    // Strict mandatory document upload requirement (مستند إثبات وتوثيق الموقف الحالي إلزامي)
-    const doc = String(formData['المستند'] || masterRecord?.['المستند'] || '').trim();
-    if (!doc) {
-      newErrors['المستند'] = 'إرفاق مستند إثبات وتوثيق الموقف الحالي إلزامي للمتابعة (* مطلوب)';
+    // Strict conditional document upload requirement:
+    // Only required if classification is: "جاري تصاريح" or "تم الانتهاء" or "تم التشغيل فايبر"
+    if (isDocRequired) {
+      const doc = String(formData['المستند'] || masterRecord?.['المستند'] || '').trim();
+      if (!doc) {
+        newErrors['المستند'] = 'إرفاق مستند إثبات وتوثيق الموقف الحالي إلزامي لهذه الحالة (* مطلوب)';
+      }
     }
 
     setErrors(newErrors);
@@ -1957,83 +1977,85 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                   </div>
 
                   {/* ──────────────────────────────────────────────────────────── */}
-                  {/* حقل إرفاق مستند إثبات الموقف الحالي (إلزامي لجميع الحالات)    */}
+                  {/* حقل إرفاق مستند إثبات الموقف الحالي (شرطي للحالات المحددة)    */}
                   {/* ──────────────────────────────────────────────────────────── */}
-                  <div className={`p-4 sm:p-5 rounded-2xl border-2 transition-all ${errors['المستند']
-                    ? 'bg-rose-50/80 border-rose-400 ring-2 ring-rose-200'
-                    : formData['المستند']
-                      ? 'bg-emerald-50/70 border-emerald-300'
-                      : 'bg-slate-50 border-slate-300'
-                    }`}>
-                    <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                      <label className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
-                        <FileCheck className="w-4 h-4 text-indigo-600" />
-                        <span>إرفاق مستند إثبات وتوثيق الموقف الحالي (Document Upload)</span>
-                        <span className="text-[11px] font-bold text-rose-600 bg-rose-100 px-2.5 py-0.5 rounded-full border border-rose-300">
-                          * إلزامي مطلوب
-                        </span>
-                      </label>
-                      <span className="text-[11px] text-slate-500 font-medium">
-                        يدعم: PDF, الصور (PNG/JPG), مستندات Word/Excel
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-slate-600 mb-3 leading-relaxed">
-                      يجب إرفاق ملف أو محضر أو خطاب رسمي يوثق الموقف الحالي للموقع (مثل: محضر استلام فايبر، تصريح الحفر، خطاب التعذر، أو تقرير المعاينة الميدانية).
-                    </p>
-
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileUpload}
-                        className="hidden"
-                        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xlsx"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isReadOnly}
-                        className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs cursor-pointer disabled:opacity-50 shrink-0"
-                      >
-                        <UploadCloud className="w-4 h-4" />
-                        <span>{formData['المستند'] ? 'تغيير المستند المرفق' : 'رفع مستند الإثبات (Upload File)'}</span>
-                      </button>
-
-                      <div className={`flex-1 rounded-xl px-3.5 py-2.5 text-xs flex items-center justify-between border ${formData['المستند']
-                        ? 'bg-white border-emerald-300 text-emerald-900 font-mono font-bold'
-                        : 'bg-white border-slate-300 text-slate-400 italic'
-                        }`}>
-                        <div className="flex items-center gap-2 min-w-0">
-                          {formData['المستند'] ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                          ) : (
-                            <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />
-                          )}
-                          <span className="truncate">
-                            {formData['المستند'] || 'لم يتم إرفاق مستند حتى الآن (يرجى الضغط على زر رفع مستند الإثبات)'}
+                  {isDocRequired && (
+                    <div className={`p-4 sm:p-5 rounded-2xl border-2 transition-all ${errors['المستند']
+                      ? 'bg-rose-50/80 border-rose-400 ring-2 ring-rose-200'
+                      : formData['المستند']
+                        ? 'bg-emerald-50/70 border-emerald-300'
+                        : 'bg-slate-50 border-slate-300'
+                      }`}>
+                      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                        <label className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                          <FileCheck className="w-4 h-4 text-indigo-600" />
+                          <span>إرفاق مستند إثبات وتوثيق الموقف الحالي (Document Upload)</span>
+                          <span className="text-[11px] font-bold text-rose-600 bg-rose-100 px-2.5 py-0.5 rounded-full border border-rose-300">
+                            * إلزامي مطلوب
                           </span>
-                        </div>
-                        {formData['المستند'] && (
-                          <button
-                            type="button"
-                            onClick={handleRemoveDocument}
-                            className="text-rose-600 hover:text-rose-800 font-bold mr-2 text-xs cursor-pointer px-2 py-0.5 rounded hover:bg-rose-50"
-                            title="إزالة المستند"
-                          >
-                            ✕ حذف
-                          </button>
-                        )}
+                        </label>
+                        <span className="text-[11px] text-slate-500 font-medium">
+                          يدعم: PDF, الصور (PNG/JPG), مستندات Word/Excel
+                        </span>
                       </div>
-                    </div>
 
-                    {errors['المستند'] && (
-                      <div className="mt-2 text-xs font-bold text-rose-600 flex items-center gap-1.5 animate-in fade-in">
-                        <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                        <span>{errors['المستند']}</span>
+                      <p className="text-xs text-slate-600 mb-3 leading-relaxed">
+                        يجب إرفاق ملف أو محضر أو خطاب رسمي يوثق الموقف الحالي للموقع (مثل: محضر استلام فايبر، تصريح الحفر، خطاب التعذر، أو تقرير المعاينة الميدانية).
+                      </p>
+
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleFileUpload}
+                          className="hidden"
+                          accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xlsx"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isReadOnly}
+                          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs cursor-pointer disabled:opacity-50 shrink-0"
+                        >
+                          <UploadCloud className="w-4 h-4" />
+                          <span>{formData['المستند'] ? 'تغيير المستند المرفق' : 'رفع مستند الإثبات (Upload File)'}</span>
+                        </button>
+
+                        <div className={`flex-1 rounded-xl px-3.5 py-2.5 text-xs flex items-center justify-between border ${formData['المستند']
+                          ? 'bg-white border-emerald-300 text-emerald-900 font-mono font-bold'
+                          : 'bg-white border-slate-300 text-slate-400 italic'
+                          }`}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            {formData['المستند'] ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            ) : (
+                              <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />
+                            )}
+                            <span className="truncate">
+                              {formData['المستند'] || 'لم يتم إرفاق مستند حتى الآن (يرجى الضغط على زر رفع مستند الإثبات)'}
+                            </span>
+                          </div>
+                          {formData['المستند'] && (
+                            <button
+                              type="button"
+                              onClick={handleRemoveDocument}
+                              className="text-rose-600 hover:text-rose-800 font-bold mr-2 text-xs cursor-pointer px-2 py-0.5 rounded hover:bg-rose-50"
+                              title="إزالة المستند"
+                            >
+                              ✕ حذف
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </div>
+
+                      {errors['المستند'] && (
+                        <div className="mt-2 text-xs font-bold text-rose-600 flex items-center gap-1.5 animate-in fade-in">
+                          <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                          <span>{errors['المستند']}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               ) : (
                 /* ── activeMode === 'add' (Admin Only): Full Form Sections ── */
@@ -2246,82 +2268,84 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                   </div>
 
                   {/* ──────────────────────────────────────────────────────────── */}
-                  {/* حقل إرفاق مستند إثبات الموقف الحالي (إلزامي في الإضافة)      */}
+                  {/* حقل إرفاق مستند إثبات الموقف الحالي (شرطي للحالات المحددة)  */}
                   {/* ──────────────────────────────────────────────────────────── */}
-                  <div className={`p-4 sm:p-5 rounded-2xl border-2 transition-all ${errors['المستند']
-                    ? 'bg-rose-50/80 border-rose-400 ring-2 ring-rose-200'
-                    : formData['المستند']
-                      ? 'bg-emerald-50/70 border-emerald-300'
-                      : 'bg-slate-50 border-slate-300'
-                    }`}>
-                    <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                      <label className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
-                        <FileCheck className="w-4 h-4 text-indigo-600" />
-                        <span>إرفاق مستند إثبات وتوثيق الموقف الحالي (Document Upload)</span>
-                        <span className="text-[11px] font-bold text-rose-600 bg-rose-100 px-2.5 py-0.5 rounded-full border border-rose-300">
-                          * إلزامي مطلوب
-                        </span>
-                      </label>
-                      <span className="text-[11px] text-slate-500 font-medium">
-                        يدعم: PDF, الصور (PNG/JPG), مستندات Word/Excel
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-slate-600 mb-3 leading-relaxed">
-                      يجب إرفاق ملف أو محضر أو خطاب رسمي يوثق إضافة وموقف الموقع الجديد (مثل: أمر الإسناد، كروكي المعاينة، أو محضر بدء الأعمال).
-                    </p>
-
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileUpload}
-                        className="hidden"
-                        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xlsx"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs cursor-pointer shrink-0"
-                      >
-                        <UploadCloud className="w-4 h-4" />
-                        <span>{formData['المستند'] ? 'تغيير المستند المرفق' : 'رفع مستند الإثبات (Upload File)'}</span>
-                      </button>
-
-                      <div className={`flex-1 rounded-xl px-3.5 py-2.5 text-xs flex items-center justify-between border ${formData['المستند']
-                        ? 'bg-white border-emerald-300 text-emerald-900 font-mono font-bold'
-                        : 'bg-white border-slate-300 text-slate-400 italic'
-                        }`}>
-                        <div className="flex items-center gap-2 min-w-0">
-                          {formData['المستند'] ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                          ) : (
-                            <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />
-                          )}
-                          <span className="truncate">
-                            {formData['المستند'] || 'لم يتم إرفاق مستند حتى الآن (يرجى الضغط على زر رفع مستند الإثبات)'}
+                  {isDocRequired && (
+                    <div className={`p-4 sm:p-5 rounded-2xl border-2 transition-all ${errors['المستند']
+                      ? 'bg-rose-50/80 border-rose-400 ring-2 ring-rose-200'
+                      : formData['المستند']
+                        ? 'bg-emerald-50/70 border-emerald-300'
+                        : 'bg-slate-50 border-slate-300'
+                      }`}>
+                      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                        <label className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                          <FileCheck className="w-4 h-4 text-indigo-600" />
+                          <span>إرفاق مستند إثبات وتوثيق الموقف الحالي (Document Upload)</span>
+                          <span className="text-[11px] font-bold text-rose-600 bg-rose-100 px-2.5 py-0.5 rounded-full border border-rose-300">
+                            * إلزامي مطلوب
                           </span>
-                        </div>
-                        {formData['المستند'] && (
-                          <button
-                            type="button"
-                            onClick={handleRemoveDocument}
-                            className="text-rose-600 hover:text-rose-800 font-bold mr-2 text-xs cursor-pointer px-2 py-0.5 rounded hover:bg-rose-50"
-                            title="إزالة المستند"
-                          >
-                            ✕ حذف
-                          </button>
-                        )}
+                        </label>
+                        <span className="text-[11px] text-slate-500 font-medium">
+                          يدعم: PDF, الصور (PNG/JPG), مستندات Word/Excel
+                        </span>
                       </div>
-                    </div>
 
-                    {errors['المستند'] && (
-                      <div className="mt-2 text-xs font-bold text-rose-600 flex items-center gap-1.5 animate-in fade-in">
-                        <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                        <span>{errors['المستند']}</span>
+                      <p className="text-xs text-slate-600 mb-3 leading-relaxed">
+                        يجب إرفاق ملف أو محضر أو خطاب رسمي يوثق إضافة وموقف الموقع الجديد (مثل: أمر الإسناد، كروكي المعاينة، أو محضر بدء الأعمال).
+                      </p>
+
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleFileUpload}
+                          className="hidden"
+                          accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xlsx"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs cursor-pointer shrink-0"
+                        >
+                          <UploadCloud className="w-4 h-4" />
+                          <span>{formData['المستند'] ? 'تغيير المستند المرفق' : 'رفع مستند الإثبات (Upload File)'}</span>
+                        </button>
+
+                        <div className={`flex-1 rounded-xl px-3.5 py-2.5 text-xs flex items-center justify-between border ${formData['المستند']
+                          ? 'bg-white border-emerald-300 text-emerald-900 font-mono font-bold'
+                          : 'bg-white border-slate-300 text-slate-400 italic'
+                          }`}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            {formData['المستند'] ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            ) : (
+                              <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />
+                            )}
+                            <span className="truncate">
+                              {formData['المستند'] || 'لم يتم إرفاق مستند حتى الآن (يرجى الضغط على زر رفع مستند الإثبات)'}
+                            </span>
+                          </div>
+                          {formData['المستند'] && (
+                            <button
+                              type="button"
+                              onClick={handleRemoveDocument}
+                              className="text-rose-600 hover:text-rose-800 font-bold mr-2 text-xs cursor-pointer px-2 py-0.5 rounded hover:bg-rose-50"
+                              title="إزالة المستند"
+                            >
+                              ✕ حذف
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </div>
+
+                      {errors['المستند'] && (
+                        <div className="mt-2 text-xs font-bold text-rose-600 flex items-center gap-1.5 animate-in fade-in">
+                          <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                          <span>{errors['المستند']}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
 

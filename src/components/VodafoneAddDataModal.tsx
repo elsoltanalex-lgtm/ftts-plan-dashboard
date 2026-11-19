@@ -2,11 +2,12 @@
 // Data-entry and modification modal for Vodafone FTTS sites
 // Matches Vodafone schema with full Supabase integration & Admin access
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type { VodafoneRecord } from '../types/vodafone';
 import type { SiteRecord } from '../types/dashboard';
 import { normalizeVodafoneClassification } from '../types/vodafone';
 import { useAuth } from '../context/AuthContext';
+import { isDocumentRequired } from '../config/fieldConfig';
 import {
   X,
   PlusCircle,
@@ -22,6 +23,8 @@ import {
   MapPin,
   Activity,
   Layers,
+  UploadCloud,
+  FileCheck,
 } from 'lucide-react';
 
 export interface VodafoneAddDataModalProps {
@@ -37,11 +40,13 @@ export interface VodafoneAddDataModalProps {
 }
 
 const APPROVED_CLASSIFICATIONS = [
-  'تم التسليم',
-  'جاري العمل مدني',
+  'تم الانتهاء',
+  'تم التشغيل فايبر',
   'جاري تصاريح',
+  'جاري العمل مدني',
   'جاري المعاينة',
   'جاري كهربي',
+  'تم التسليم',
   'معوقات',
   'متعذر',
 ];
@@ -100,6 +105,28 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [successMessage, setSuccessMessage] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Strict conditional document requirement: only for "جاري تصاريح" | "تم الانتهاء" | "تم التشغيل فايبر"
+  const isDocRequired = useMemo(() => {
+    return isDocumentRequired(formData['التصنيف']);
+  }, [formData]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const fileName = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+    handleInputChange('المستند', fileName);
+    handleInputChange('موقف المرفقات', 'تم الارفاق');
+  };
+
+  const handleRemoveDocument = () => {
+    handleInputChange('المستند', '');
+    handleInputChange('موقف المرفقات', 'لم يتم الارفاق');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   // Synchronize initial record or code
   useEffect(() => {
@@ -178,6 +205,16 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
       ...prev,
       [field]: value,
     }));
+    if (field === 'التصنيف') {
+      if (!isDocumentRequired(value)) {
+        setErrors((prev) => {
+          if (!prev['المستند']) return prev;
+          const next = { ...prev };
+          delete next['المستند'];
+          return next;
+        });
+      }
+    }
     if (errors[field as string]) {
       setErrors((prev) => {
         const next = { ...prev };
@@ -195,6 +232,14 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
     }
     if (!String(formData['التصنيف'] || '').trim()) {
       newErrors['التصنيف'] = 'التصنيف الميداني مطلوب';
+    }
+    // Strict conditional document upload requirement:
+    // Only required if classification is: "جاري تصاريح" or "تم الانتهاء" or "تم التشغيل فايبر"
+    if (isDocRequired) {
+      const doc = String(formData['المستند'] || '').trim();
+      if (!doc) {
+        newErrors['المستند'] = 'إرفاق مستند إثبات وتوثيق الموقف الحالي إلزامي لهذه الحالة (* مطلوب)';
+      }
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -683,6 +728,82 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* CONDITIONAL DOCUMENT UPLOAD */}
+              {isDocRequired && (
+                <div
+                  className={`border-2 rounded-2xl p-4 sm:p-5 transition ${errors['المستند']
+                      ? 'bg-rose-50/70 border-rose-400 ring-2 ring-rose-200'
+                      : formData['المستند']
+                        ? 'bg-emerald-50/60 border-emerald-300'
+                        : 'bg-slate-50 border-slate-300'
+                    }`}
+                >
+                  <div className="flex items-center justify-between pb-2 mb-3 border-b border-rose-200/60">
+                    <div className="flex items-center gap-2">
+                      <UploadCloud className="w-5 h-5 text-rose-700" />
+                      <h3 className="font-extrabold text-slate-900 text-xs sm:text-sm">
+                        📎 إرفاق مستند إثبات وتوثيق الموقف الحالي (Document Upload):
+                      </h3>
+                    </div>
+                    <span className="text-[11px] font-extrabold bg-rose-100 text-rose-800 px-2.5 py-0.5 rounded-full border border-rose-300">
+                      * إلزامي لهذه الحالة (* مطلوب)
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-600 mb-3 leading-relaxed">
+                    يجب إرفاق ملف أو محضر أو خطاب رسمي يوثق الموقف الحالي للموقع (مثل: تصريح الحفر، محضر الاستلام، أو إفادة التشغيل).
+                  </p>
+
+                  {errors['المستند'] && (
+                    <p className="text-xs font-bold text-rose-700 mb-3 flex items-center gap-1.5">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                      <span>{errors['المستند']}</span>
+                    </p>
+                  )}
+
+                  {formData['المستند'] ? (
+                    <div className="p-3.5 bg-white border border-emerald-300 rounded-xl flex items-center justify-between shadow-2xs">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                          <FileCheck className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">{formData['المستند']}</p>
+                          <p className="text-[10px] text-emerald-600 font-semibold">مستند معتمد ومرفق بنجاح ✅</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemoveDocument}
+                        className="px-2.5 py-1 text-xs text-rose-600 hover:bg-rose-50 rounded-lg font-bold transition cursor-pointer"
+                      >
+                        إزالة المستند
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-rose-300 hover:border-rose-500 bg-white/80 p-5 rounded-xl text-center cursor-pointer transition group"
+                    >
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        accept=".pdf,.png,.jpg,.jpeg,.xlsx,.docx"
+                      />
+                      <UploadCloud className="w-8 h-8 mx-auto text-rose-600 group-hover:scale-110 transition mb-2" />
+                      <p className="text-xs font-bold text-slate-800">
+                        انقر هنا لاختيار ورفع مستند إثبات الموقف الحالي للموقع
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        يدعم ملفات PDF، الصور (PNG, JPG)، ومستندات Word/Excel (الحد الأقصى 15 ميجابايت)
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-3 pt-2">
