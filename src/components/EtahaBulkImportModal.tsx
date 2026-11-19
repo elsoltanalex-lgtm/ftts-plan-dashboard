@@ -28,7 +28,7 @@ export interface EtahaBulkImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   baselineSites: SiteRecord[];
-  onSuccess: (savedRecords: EtahaRecord[]) => void;
+  onSuccess: (savedRecords: EtahaRecord[]) => Promise<any> | void;
   onSwitchToManual?: () => void;
 }
 
@@ -100,7 +100,8 @@ export const EtahaBulkImportModal: React.FC<EtahaBulkImportModalProps> = ({
     if (!report || report.recordsToImport.length === 0) return;
     try {
       setImporting(true);
-      onSuccess(report.recordsToImport);
+      setGeneralError('');
+      await onSuccess(report.recordsToImport);
       onClose();
     } catch (err: any) {
       setGeneralError(`فشل إدخال البيانات: ${err?.message}`);

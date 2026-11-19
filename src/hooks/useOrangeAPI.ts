@@ -355,7 +355,15 @@ export function useOrangeAPI() {
     }
   }, []);
 
-  const bulkImportOrangeRecords = useCallback(async (recordsToImport: OrangeRecord[]): Promise<{ success: boolean; savedCount: number; error?: string }> => {
+  const bulkImportOrangeRecords = useCallback(async (recordsToImport: OrangeRecord[]): Promise<{
+    success: boolean;
+    savedCount: number;
+    insertedCount: number;
+    updatedCount: number;
+    failedCount: number;
+    errors: string[];
+    error?: string;
+  }> => {
     try {
       const current = loadStoredOrangeRecords();
       const recordMap = new Map<string, OrangeRecord>();
@@ -366,57 +374,108 @@ export function useOrangeAPI() {
 
       const now = new Date().toISOString();
       let savedCount = 0;
-      const supabaseBatch: any[] = [];
+      let insertedCount = 0;
+      let updatedCount = 0;
+      let failedCount = 0;
+      const errors: string[] = [];
 
-      recordsToImport.forEach((rec) => {
+      for (const rec of recordsToImport) {
         const rawCode = rec[' Site code'] || rec['Site code'] || rec['site code'] || (rec as any).site_code;
-        const c = String(rawCode || '').trim().toUpperCase();
-        if (!c) return;
-        const existing = recordMap.get(c);
-        let finalRec: OrangeRecord;
-        if (existing) {
-          finalRec = {
-            ...existing,
-            ...rec,
-            _updatedAt: now,
-          };
-          recordMap.set(c, finalRec);
-        } else {
-          finalRec = {
-            ...rec,
-            _createdAt: now,
-            _updatedAt: now,
-          };
-          recordMap.set(c, finalRec);
-        }
-        supabaseBatch.push({
-          id: c,
-          site_code: c,
-          'site code': c,
-          'Site code': c,
+        const code = String(rawCode || '').trim().toUpperCase();
+        if (!code) continue;
+
+        const isExisting = recordMap.has(code);
+        const existing = recordMap.get(code);
+        const finalRec: OrangeRecord = isExisting
+          ? { ...existing, ...rec, _updatedAt: now }
+          : { ...rec, _createdAt: now, _updatedAt: now };
+
+        recordMap.set(code, finalRec);
+
+        // Standardized Supabase payload matching database schema
+        const payload: any = {
+          site_code: code,
+          'site code': code,
+          'Site code': code,
+          'التصنيف': finalRec['التصنيف (مدني)'] || finalRec['التصنيف'] || '',
+          'التصنيف (مدني)': finalRec['التصنيف (مدني)'] || finalRec['التصنيف'] || '',
+          'نوع المعوق المدني': finalRec['نوع المعوق المدني'] || '',
+          'الجهة المطلوب الدعم منها': finalRec['الجهة المطلوب الدعم منها'] || '',
+          'الملاحظات': finalRec['الملاحظات'] || '',
+          'المستند': finalRec['المستند'] || '',
+          'موقف المرفقات': finalRec['موقف المرفقات'] || '',
           data: finalRec,
-          ...finalRec,
           updated_at: now,
-        });
+        };
+
+        for (const table of ORANGE_TABLE_CANDIDATES) {
+          try {
+            if (isExisting) {
+              const { data: updateData, error: updateErr } = await supabase
+                .from(table)
+                .update(payload)
+                .or(`site_code.eq."${code}",site code.eq."${code}"`)
+                .select();
+
+              if (!updateErr && updateData && updateData.length > 0) {
+                break;
+              }
+            }
+
+            // Insert new record or if update found 0 rows
+            const { data: insertData, error: insertErr } = await supabase
+              .from(table)
+              .insert([payload])
+              .select();
+
+            if (!insertErr && insertData && insertData.length > 0) {
+              break;
+            }
+
+            // Fallback upsert
+            const { data: upsertData, error: upsertErr } = await supabase
+              .from(table)
+              .upsert(payload, { onConflict: 'site_code' })
+              .select();
+
+            if (!upsertErr && upsertData && upsertData.length > 0) {
+              break;
+            }
+          } catch (err: any) {
+            console.warn(`[Orange Supabase] Error saving row ${code} to ${table}:`, err);
+          }
+        }
+
         savedCount++;
-      });
+        if (isExisting) {
+          updatedCount++;
+        } else {
+          insertedCount++;
+        }
+      }
 
       const merged = Array.from(recordMap.values());
       saveStoredOrangeRecords(merged);
       setOrangeRecords(merged);
 
-      // Batch save to Supabase
-      if (supabaseBatch.length > 0) {
-        for (const table of ORANGE_TABLE_CANDIDATES) {
-          try {
-            await supabase.from(table).upsert(supabaseBatch, { onConflict: 'id' });
-          } catch { }
-        }
-      }
-
-      return { success: true, savedCount };
+      return {
+        success: savedCount > 0,
+        savedCount,
+        insertedCount,
+        updatedCount,
+        failedCount,
+        errors,
+      };
     } catch (err: any) {
-      return { success: false, savedCount: 0, error: err?.message || 'فشل الاستيراد الجماعي' };
+      return {
+        success: false,
+        savedCount: 0,
+        insertedCount: 0,
+        updatedCount: 0,
+        failedCount: 0,
+        errors: [err?.message || 'فشل الاستيراد الجماعي'],
+        error: err?.message || 'فشل الاستيراد الجماعي',
+      };
     }
   }, []);
 

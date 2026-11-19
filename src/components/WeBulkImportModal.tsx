@@ -34,7 +34,7 @@ interface WeBulkImportModalProps {
   baselineSites: SiteRecord[];
   userSector?: string;
   isAdmin?: boolean;
-  onSuccess: (savedRecords: WeRecord[]) => void;
+  onSuccess: (savedRecords: WeRecord[], stats?: { insertedCount: number; updatedCount: number; savedCount: number }) => void;
   onSwitchToManual?: () => void;
 }
 
@@ -143,7 +143,11 @@ export const WeBulkImportModal: React.FC<WeBulkImportModalProps> = ({
     setActiveStep('done');
 
     if (result.savedCount > 0) {
-      onSuccess(recordsToSave);
+      onSuccess(recordsToSave, {
+        insertedCount: result.insertedCount,
+        updatedCount: result.updatedCount,
+        savedCount: result.savedCount,
+      });
     }
   };
 
@@ -708,7 +712,7 @@ export const WeBulkImportModal: React.FC<WeBulkImportModalProps> = ({
                   تم الاستيراد والتحديث بنجاح! 🎉
                 </h4>
                 <p className="text-xs text-slate-600 mt-1">
-                  تم تحديث وحفظ <span className="font-bold text-emerald-800">{executionResult.savedCount}</span> موقع في قاعدة البيانات السحابية المركزية، مع حماية وتأمين كافة الحقول الثابتة.
+                  تم حفظ <span className="font-bold text-emerald-800">{executionResult.savedCount}</span> موقع في قاعدة البيانات السحابية المركزية ({executionResult.insertedCount} إضافة جديدة، {executionResult.updatedCount} تحديث)، مع مطابقة وتأمين كافة الحقول.
                 </p>
               </div>
 

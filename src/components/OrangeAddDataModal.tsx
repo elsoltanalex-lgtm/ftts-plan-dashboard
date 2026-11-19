@@ -691,8 +691,8 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
               {isDocRequired && (
                 <div
                   className={`border-2 rounded-2xl p-4 sm:p-5 transition ${errors.المستند
-                      ? 'bg-red-50/60 border-red-400 ring-2 ring-red-300'
-                      : 'bg-emerald-50/40 border-emerald-300'
+                    ? 'bg-red-50/60 border-red-400 ring-2 ring-red-300'
+                    : 'bg-emerald-50/40 border-emerald-300'
                     }`}
                 >
                   <div className="flex items-center justify-between pb-2 mb-3 border-b border-emerald-200">

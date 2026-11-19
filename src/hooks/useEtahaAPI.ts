@@ -239,10 +239,32 @@ export function useEtahaAPI() {
             id: code,
             code: code,
             Code: code,
+            'المشروع': enriched['المشروع'] || enriched.project || 'اتاحة',
+            'التصنيف': enriched['موقف التسليم'] || enriched.classification || '',
+            'الجهة': enriched['الجهة'] || '',
+            'السنترال': enriched['سنترال الربط'] || enriched.central || '',
+            'القطاع': enriched['رئاسة قطاعات التنفيذ'] || enriched.sector || '',
+            'المحافظة': enriched['المحافظه'] || enriched.governorate || '',
+            'الملاحظات': enriched['الملاحظات'] || enriched.notes || '',
             data: enriched,
-            ...enriched,
             updated_at: now,
           };
+
+          if (idx >= 0) {
+            const { data: updateData, error: updateErr } = await supabase
+              .from(table)
+              .update(payload)
+              .or(`Code.eq."${code}",code.eq."${code}",id.eq."${code}"`)
+              .select();
+            if (!updateErr && updateData && updateData.length > 0) break;
+          }
+
+          const { data: insertData, error: insertErr } = await supabase
+            .from(table)
+            .insert([payload])
+            .select();
+          if (!insertErr && insertData && insertData.length > 0) break;
+
           await supabase.from(table).upsert(payload, { onConflict: 'id' });
         } catch { }
       }
@@ -301,7 +323,15 @@ export function useEtahaAPI() {
     }
   }, []);
 
-  const bulkImportEtahaRecords = useCallback(async (recordsToImport: EtahaRecord[]): Promise<{ success: boolean; savedCount: number; error?: string }> => {
+  const bulkImportEtahaRecords = useCallback(async (recordsToImport: EtahaRecord[]): Promise<{
+    success: boolean;
+    savedCount: number;
+    insertedCount: number;
+    updatedCount: number;
+    failedCount: number;
+    errors: string[];
+    error?: string;
+  }> => {
     try {
       const current = loadStoredEtahaRecords();
       const recordMap = new Map<string, EtahaRecord>();
@@ -312,54 +342,104 @@ export function useEtahaAPI() {
 
       const now = new Date().toISOString();
       let savedCount = 0;
+      let insertedCount = 0;
+      let updatedCount = 0;
+      let failedCount = 0;
+      const errors: string[] = [];
 
-      recordsToImport.forEach((rec) => {
+      for (const rec of recordsToImport) {
         const c = String(rec.Code || rec.code || '').trim().toUpperCase();
-        if (!c) return;
+        if (!c) continue;
+
+        const isExisting = recordMap.has(c);
         const existing = recordMap.get(c);
-        if (existing) {
-          recordMap.set(c, {
-            ...existing,
-            ...rec,
-            _updatedAt: now,
-          });
-        } else {
-          recordMap.set(c, {
-            ...rec,
-            _createdAt: now,
-            _updatedAt: now,
-          });
+        const finalRec: EtahaRecord = isExisting
+          ? { ...existing, ...rec, _updatedAt: now }
+          : { ...rec, _createdAt: now, _updatedAt: now };
+
+        recordMap.set(c, finalRec);
+
+        const payload: any = {
+          id: c,
+          code: c,
+          Code: c,
+          'المشروع': finalRec['المشروع'] || finalRec.project || 'اتاحة',
+          'التصنيف': finalRec['موقف التسليم'] || finalRec.classification || '',
+          'الجهة': finalRec['الجهة'] || '',
+          'السنترال': finalRec['سنترال الربط'] || finalRec.central || '',
+          'القطاع': finalRec['رئاسة قطاعات التنفيذ'] || finalRec.sector || '',
+          'المحافظة': finalRec['المحافظه'] || finalRec.governorate || '',
+          'الملاحظات': finalRec['الملاحظات'] || finalRec.notes || '',
+          data: finalRec,
+          updated_at: now,
+        };
+
+        for (const table of ['etaha_records', 'etaha', 'availability']) {
+          try {
+            if (isExisting) {
+              const { data: updateData, error: updateErr } = await supabase
+                .from(table)
+                .update(payload)
+                .or(`Code.eq."${c}",code.eq."${c}",id.eq."${c}"`)
+                .select();
+
+              if (!updateErr && updateData && updateData.length > 0) {
+                break;
+              }
+            }
+
+            const { data: insertData, error: insertErr } = await supabase
+              .from(table)
+              .insert([payload])
+              .select();
+
+            if (!insertErr && insertData && insertData.length > 0) {
+              break;
+            }
+
+            const { data: upsertData, error: upsertErr } = await supabase
+              .from(table)
+              .upsert(payload, { onConflict: 'id' })
+              .select();
+
+            if (!upsertErr && upsertData && upsertData.length > 0) {
+              break;
+            }
+          } catch (err: any) {
+            console.warn(`[Etaha Supabase] Error saving row ${c} to ${table}:`, err);
+          }
         }
+
         savedCount++;
-      });
+        if (isExisting) {
+          updatedCount++;
+        } else {
+          insertedCount++;
+        }
+      }
 
       const merged = Array.from(recordMap.values());
       saveStoredEtahaRecords(merged);
       setEtahaRecords(merged);
 
-      // Save batch to Supabase
-      const supabaseBatch = recordsToImport.map((rec) => {
-        const c = String(rec.Code || rec.code || '').trim().toUpperCase();
-        return {
-          id: c,
-          code: c,
-          Code: c,
-          data: rec,
-          ...rec,
-          updated_at: now,
-        };
-      });
-      if (supabaseBatch.length > 0) {
-        for (const table of ['etaha_records', 'etaha', 'availability']) {
-          try {
-            await supabase.from(table).upsert(supabaseBatch, { onConflict: 'id' });
-          } catch { }
-        }
-      }
-
-      return { success: true, savedCount };
+      return {
+        success: savedCount > 0,
+        savedCount,
+        insertedCount,
+        updatedCount,
+        failedCount,
+        errors,
+      };
     } catch (err: any) {
-      return { success: false, savedCount: 0, error: err?.message || 'فشل الاستيراد الجماعي' };
+      return {
+        success: false,
+        savedCount: 0,
+        insertedCount: 0,
+        updatedCount: 0,
+        failedCount: 0,
+        errors: [err?.message || 'فشل الاستيراد الجماعي'],
+        error: err?.message || 'فشل الاستيراد الجماعي',
+      };
     }
   }, []);
 

@@ -587,7 +587,12 @@ export function parseAndValidateBulkExcel(
     // 3. Lookup in baseline records
     const baseline = baselineMap.get(cleanCode);
     if (!baseline && siteCode) {
-      errors.push(`كود الموقع [${siteCode}] غير مسجل في قاعدة البيانات المركزية.`);
+      // New site to be inserted
+      if (!isAdmin && userSector && userSector !== 'ALL') {
+        if (sector && cleanStr(sector) !== cleanStr(userSector)) {
+          errors.push(`غير مصرح بإضافة موقع جديد خارج قطاعك المصرح به (${userSector}).`);
+        }
+      }
     }
 
     // 4. Sector Access Permission check (RBAC)
@@ -752,25 +757,45 @@ export function parseAndValidateBulkExcel(
   };
 }
 
+export interface BulkExecutionResult {
+  success: boolean;
+  savedCount: number;
+  insertedCount: number;
+  updatedCount: number;
+  failedCount: number;
+  errors: string[];
+}
+
 // ── 3. Execute Bulk Import in batches with live progress ──
 export async function executeBulkImport(
   recordsToImport: WeRecord[],
   onProgress?: (current: number, total: number) => void
-): Promise<{ success: boolean; savedCount: number; errors: string[] }> {
+): Promise<BulkExecutionResult> {
   let savedCount = 0;
+  let insertedCount = 0;
+  let updatedCount = 0;
+  let failedCount = 0;
   const errors: string[] = [];
   const total = recordsToImport.length;
 
   for (let i = 0; i < total; i++) {
     const record = recordsToImport[i];
     try {
-      const res = await saveRecord(record, true, true);
+      const isEdit = Boolean(record._id);
+      const res = await saveRecord(record, true, isEdit);
       if (res.success) {
         savedCount++;
+        if (res.action === 'created' || !isEdit) {
+          insertedCount++;
+        } else {
+          updatedCount++;
+        }
       } else {
+        failedCount++;
         errors.push(`الموقع [${record['site code']}]: ${res.error || 'فشل الحفظ'}`);
       }
     } catch (err: any) {
+      failedCount++;
       errors.push(`الموقع [${record['site code']}]: ${err?.message || 'خطأ غير متوقع'}`);
     }
 
@@ -782,6 +807,9 @@ export async function executeBulkImport(
   return {
     success: savedCount > 0,
     savedCount,
+    insertedCount,
+    updatedCount,
+    failedCount,
     errors,
   };
 }

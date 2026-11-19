@@ -27,7 +27,7 @@ export interface OrangeBulkImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   baselineSites: SiteRecord[];
-  onSuccess: (savedRecords: OrangeRecord[]) => void;
+  onSuccess: (savedRecords: OrangeRecord[]) => Promise<any> | void;
   onSwitchToManual?: () => void;
 }
 
@@ -99,7 +99,8 @@ export const OrangeBulkImportModal: React.FC<OrangeBulkImportModalProps> = ({
     if (!report || report.recordsToImport.length === 0) return;
     try {
       setImporting(true);
-      onSuccess(report.recordsToImport);
+      setGeneralError('');
+      await onSuccess(report.recordsToImport);
       onClose();
     } catch (err: any) {
       setGeneralError(`فشل إدخال البيانات: ${err?.message}`);

@@ -2150,11 +2150,14 @@ export const Dashboard: React.FC = () => {
           setWeModalMode(user?.role === 'admin' ? 'add' : 'edit');
           setIsWeAddDataOpen(true);
         }}
-        onSuccess={(savedRecords) => {
+        onSuccess={(savedRecords, stats) => {
           savedRecords.forEach((r) => updateOrAddRecordLocally(r));
           refetchWeRecords();
           refetchWeCodes();
-          setToastMessage(`تم استيراد وحفظ ${savedRecords.length} موقع بنجاح في قاعدة البيانات المركزية ✅`);
+          const detail = stats
+            ? ` (${stats.insertedCount} إضافة جديدة، ${stats.updatedCount} تحديث)`
+            : '';
+          setToastMessage(`تم استيراد وحفظ ${savedRecords.length} موقع لـ WE بنجاح في قاعدة البيانات المركزية${detail} ✅`);
         }}
       />
 
@@ -2220,8 +2223,13 @@ export const Dashboard: React.FC = () => {
         onSuccess={async (savedRecords) => {
           const res = await bulkImportOrangeRecords(savedRecords);
           if (res.success) {
-            setToastMessage(`تم استيراد وحفظ ${res.savedCount} موقع لـ Orange بنجاح في قاعدة البيانات ✅`);
+            await refetchOrangeRecords();
+            const detail = ` (${res.insertedCount} إضافة جديدة، ${res.updatedCount} تحديث)`;
+            setToastMessage(`تم استيراد وحفظ ${res.savedCount} موقع لـ Orange بنجاح في قاعدة البيانات${detail} ✅`);
+          } else {
+            setToastMessage(`خطأ أثناء استيراد مواقع Orange: ${res.error || 'فشل الحفظ'}`);
           }
+          return res;
         }}
         onSwitchToManual={() => {
           setIsOrangeBulkImportOpen(false);
@@ -2239,8 +2247,13 @@ export const Dashboard: React.FC = () => {
         onSuccess={async (savedRecords) => {
           const res = await bulkImportVodafoneRecords(savedRecords);
           if (res.success) {
-            setToastMessage(`تم استيراد وحفظ ${res.savedCount} موقع لـ Vodafone بنجاح في قاعدة البيانات ✅`);
+            await refetchVodafoneRecords();
+            const detail = ` (${res.insertedCount} إضافة جديدة، ${res.updatedCount} تحديث)`;
+            setToastMessage(`تم استيراد وحفظ ${res.savedCount} موقع لـ Vodafone بنجاح في قاعدة البيانات${detail} ✅`);
+          } else {
+            setToastMessage(`خطأ أثناء استيراد مواقع Vodafone: ${res.error || 'فشل الحفظ'}`);
           }
+          return res;
         }}
         onSwitchToManual={() => {
           setIsVodafoneBulkImportOpen(false);
@@ -2304,8 +2317,13 @@ export const Dashboard: React.FC = () => {
         onSuccess={async (savedRecords) => {
           const res = await bulkImportEtahaRecords(savedRecords);
           if (res.success) {
-            setToastMessage(`تم استيراد وحفظ ${res.savedCount} مشروع بنجاح في قاعدة بيانات الإتاحة ✅`);
+            await refetchEtahaRecords();
+            const detail = ` (${res.insertedCount} إضافة جديدة، ${res.updatedCount} تحديث)`;
+            setToastMessage(`تم استيراد وحفظ ${res.savedCount} مشروع بنجاح في قاعدة بيانات الإتاحة${detail} ✅`);
+          } else {
+            setToastMessage(`خطأ أثناء استيراد بيانات الإتاحة: ${res.error || 'فشل الحفظ'}`);
           }
+          return res;
         }}
         onSwitchToManual={() => {
           setIsEtahaBulkImportOpen(false);

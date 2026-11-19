@@ -27,7 +27,7 @@ export interface VodafoneBulkImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   baselineSites: SiteRecord[];
-  onSuccess: (savedRecords: VodafoneRecord[]) => void;
+  onSuccess: (savedRecords: VodafoneRecord[]) => Promise<any> | void;
   onSwitchToManual?: () => void;
 }
 

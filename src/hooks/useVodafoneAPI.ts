@@ -348,7 +348,15 @@ export function useVodafoneAPI() {
     }
   }, []);
 
-  const bulkImportVodafoneRecords = useCallback(async (recordsToImport: VodafoneRecord[]): Promise<{ success: boolean; savedCount: number; error?: string }> => {
+  const bulkImportVodafoneRecords = useCallback(async (recordsToImport: VodafoneRecord[]): Promise<{
+    success: boolean;
+    savedCount: number;
+    insertedCount: number;
+    updatedCount: number;
+    failedCount: number;
+    errors: string[];
+    error?: string;
+  }> => {
     try {
       const current = loadStoredVodafoneRecords();
       const recordMap = new Map<string, VodafoneRecord>();
@@ -359,57 +367,107 @@ export function useVodafoneAPI() {
 
       const now = new Date().toISOString();
       let savedCount = 0;
-      const supabaseBatch: any[] = [];
+      let insertedCount = 0;
+      let updatedCount = 0;
+      let failedCount = 0;
+      const errors: string[] = [];
 
-      recordsToImport.forEach((rec) => {
+      for (const rec of recordsToImport) {
         const rawCode = rec[' Site code'] || rec['Site code'] || rec['site code'] || rec.site_code;
-        const c = String(rawCode || '').trim().toUpperCase();
-        if (!c) return;
-        const existing = recordMap.get(c);
-        let finalRec: VodafoneRecord;
-        if (existing) {
-          finalRec = {
-            ...existing,
-            ...rec,
-            _updatedAt: now,
-          };
-          recordMap.set(c, finalRec);
-        } else {
-          finalRec = {
-            ...rec,
-            _createdAt: now,
-            _updatedAt: now,
-          };
-          recordMap.set(c, finalRec);
-        }
-        supabaseBatch.push({
-          id: c,
-          site_code: c,
-          'site code': c,
-          'Site code': c,
+        const code = String(rawCode || '').trim().toUpperCase();
+        if (!code) continue;
+
+        const isExisting = recordMap.has(code);
+        const existing = recordMap.get(code);
+        const finalRec: VodafoneRecord = isExisting
+          ? { ...existing, ...rec, _updatedAt: now }
+          : { ...rec, _createdAt: now, _updatedAt: now };
+
+        recordMap.set(code, finalRec);
+
+        // Standardized Supabase payload
+        const payload: any = {
+          id: code,
+          site_code: code,
+          'site code': code,
+          'Site code': code,
+          'التصنيف': finalRec['التصنيف'] || '',
+          'الملاحظات': finalRec['الملاحظات'] || '',
+          'مسئولية التنفيذ': finalRec['مسئولية التنفيذ'] || '',
+          'المستند': finalRec['المستند'] || '',
+          'موقف المرفقات': finalRec['موقف المرفقات'] || '',
           data: finalRec,
-          ...finalRec,
           updated_at: now,
-        });
+        };
+
+        for (const table of VODAFONE_TABLE_CANDIDATES) {
+          try {
+            if (isExisting) {
+              const { data: updateData, error: updateErr } = await supabase
+                .from(table)
+                .update(payload)
+                .or(`site_code.eq."${code}",site code.eq."${code}"`)
+                .select();
+
+              if (!updateErr && updateData && updateData.length > 0) {
+                break;
+              }
+            }
+
+            // Insert new record or if update found 0 rows
+            const { data: insertData, error: insertErr } = await supabase
+              .from(table)
+              .insert([payload])
+              .select();
+
+            if (!insertErr && insertData && insertData.length > 0) {
+              break;
+            }
+
+            // Fallback upsert
+            const { data: upsertData, error: upsertErr } = await supabase
+              .from(table)
+              .upsert(payload, { onConflict: 'site_code' })
+              .select();
+
+            if (!upsertErr && upsertData && upsertData.length > 0) {
+              break;
+            }
+          } catch (err: any) {
+            console.warn(`[Vodafone Supabase] Error saving row ${code} to ${table}:`, err);
+          }
+        }
+
         savedCount++;
-      });
+        if (isExisting) {
+          updatedCount++;
+        } else {
+          insertedCount++;
+        }
+      }
 
       const merged = Array.from(recordMap.values());
       saveStoredVodafoneRecords(merged);
       setVodafoneRecords(merged);
 
-      // Batch save to Supabase
-      if (supabaseBatch.length > 0) {
-        for (const table of VODAFONE_TABLE_CANDIDATES) {
-          try {
-            await supabase.from(table).upsert(supabaseBatch, { onConflict: 'id' });
-          } catch { }
-        }
-      }
-
-      return { success: true, savedCount };
+      return {
+        success: savedCount > 0,
+        savedCount,
+        insertedCount,
+        updatedCount,
+        failedCount,
+        errors,
+      };
     } catch (err: any) {
-      return { success: false, savedCount: 0, error: err?.message || 'فشل الاستيراد الجماعي' };
+      return {
+        success: false,
+        savedCount: 0,
+        insertedCount: 0,
+        updatedCount: 0,
+        failedCount: 0,
+        errors: [err?.message || 'فشل الاستيراد الجماعي'],
+        error: err?.message || 'فشل الاستيراد الجماعي',
+      };
     }
   }, []);
 
