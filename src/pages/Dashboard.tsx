@@ -1485,62 +1485,26 @@ export const Dashboard: React.FC = () => {
             {/* Action Buttons for Availability (الإتاحة) */}
             {(activeScope === 'AVAILABILITY' || activeScope === 'ETAHA') && (
               <div className="mb-6 p-3.5 bg-white border border-teal-200/90 rounded-2xl shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* 1. زر الرفع الجماعي عبر شيت الإكسيل للإتاحة */}
-                    <button
-                      className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-700 hover:from-teal-700 hover:to-emerald-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                      onClick={() => setIsEtahaBulkImportOpen(true)}
-                      title="تحميل النموذج الاسترشادي والرفع الجماعي لملفات إكسيل مشروعات الإتاحة مع حماية الثوابت"
-                    >
-                      <span>📤</span>
-                      <span>الرفع الجماعي عبر إكسيل (Bulk Import)</span>
-                    </button>
-
-                    {/* 2. زر موحد لإدارة وعمليات المشروعات (إضافة / تعديل / حذف) */}
-                    <SiteActionDropdown
-                      variant="etaha"
-                      label="إدارة وعمليات المشروعات"
-                      itemTypeLabel="مشروع"
-                      onAdd={() => {
-                        setEtahaEditingSiteCode(undefined);
-                        setEtahaEditingRecord(null);
-                        setEtahaModalMode('add');
-                        setIsEtahaAddDataOpen(true);
-                      }}
-                      onEdit={() => {
-                        setEtahaEditingSiteCode(undefined);
-                        setEtahaEditingRecord(null);
-                        setEtahaModalMode('edit');
-                        setIsEtahaAddDataOpen(true);
-                      }}
-                      onDelete={() => setIsQuickDeleteModalOpen(true)}
-                    />
-
-                    {/* 3. زر تحميل النسخة الاحتياطية */}
-                    <button
-                      className="px-3.5 py-2 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-700 hover:to-indigo-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-60"
-                      onClick={handleExportBackup}
-                      disabled={isExportingBackup}
-                      title="تحميل نسخة احتياطية شاملة لكافة مشروعات وجداول البيانات من Supabase (Excel)"
-                    >
-                      {isExportingBackup ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
-                      <span>تحميل النسخة الاحتياطية (Export Backup)</span>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium text-xs flex items-center gap-1.5 transition border border-slate-200 cursor-pointer"
-                      onClick={() => refetchEtahaRecords()}
-                      title="تحديث بيانات مشروعات الإتاحة"
-                    >
-                      🔄 تحديث مباشر
-                    </button>
-                    <span className="px-3 py-1.5 bg-teal-50 text-teal-800 border border-teal-200 rounded-xl text-xs font-bold font-mono">
-                      🌐 قاعدة بيانات Availability: {etahaSites.length} مشروع معتمد
-                    </span>
-                  </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* زر موحد لإدارة وعمليات المشروعات (إضافة / تعديل / حذف) */}
+                  <SiteActionDropdown
+                    variant="etaha"
+                    label="إدارة وعمليات المشروعات"
+                    itemTypeLabel="مشروع"
+                    onAdd={() => {
+                      setEtahaEditingSiteCode(undefined);
+                      setEtahaEditingRecord(null);
+                      setEtahaModalMode('add');
+                      setIsEtahaAddDataOpen(true);
+                    }}
+                    onEdit={() => {
+                      setEtahaEditingSiteCode(undefined);
+                      setEtahaEditingRecord(null);
+                      setEtahaModalMode('edit');
+                      setIsEtahaAddDataOpen(true);
+                    }}
+                    onDelete={() => setIsQuickDeleteModalOpen(true)}
+                  />
                 </div>
               </div>
             )}
