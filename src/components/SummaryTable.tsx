@@ -205,8 +205,8 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
                     id={`table-row-${row.status.replace(/\s+/g, '-')}`}
                     onClick={() => onSelectStatus(isSelected ? '' : row.status)}
                     className={`cursor-pointer transition-colors duration-150 group ${isSelected
-                        ? 'bg-sky-50/90 font-semibold text-sky-950 ring-1 ring-inset ring-sky-300'
-                        : 'hover:bg-slate-50/80 text-slate-700'
+                      ? 'bg-sky-50/90 font-semibold text-sky-950 ring-1 ring-inset ring-sky-300'
+                      : 'hover:bg-slate-50/80 text-slate-700'
                       }`}
                   >
                     {/* Status Column */}
