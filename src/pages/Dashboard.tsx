@@ -2186,9 +2186,21 @@ export const Dashboard: React.FC = () => {
           initialRecord={editingRecord}
           mode={weModalMode}
           sitesData={authorizedScopeData}
-          onSaved={handleWeRecordSaved}
-          onSave={handleWeRecordSaved}
-          onSubmit={handleWeRecordSaved}
+          onSaved={async (saved) => {
+            handleWeRecordSaved(saved);
+            await refetchWeRecords();
+            await refetchWeCodes();
+          }}
+          onSave={async (saved) => {
+            handleWeRecordSaved(saved);
+            await refetchWeRecords();
+            await refetchWeCodes();
+          }}
+          onSubmit={async (saved) => {
+            handleWeRecordSaved(saved);
+            await refetchWeRecords();
+            await refetchWeCodes();
+          }}
           onSwitchToBulk={() => {
             setIsWeAddDataOpen(false);
             setIsBulkImportOpen(true);
@@ -2255,6 +2267,7 @@ export const Dashboard: React.FC = () => {
           onSave={async (record) => {
             const res = await saveOrangeRecord(record);
             if (res.success) {
+              await refetchOrangeRecords();
               const code = record['Site code'] || record['site code'] || (record as any).site_code || '';
               if (code) {
                 setDeletedSiteCodes((prev) => {
@@ -2265,6 +2278,8 @@ export const Dashboard: React.FC = () => {
                 });
               }
               setToastMessage(res.message || `تم حفظ وتحديث بيانات موقع Orange (${code}) بنجاح في قاعدة البيانات ✅`);
+            } else {
+              setToastMessage(`❌ خطأ: ${res.error || 'فشل حفظ وتحديث الموقع في قاعدة البيانات'}`);
             }
             return res;
           }}
@@ -2348,6 +2363,7 @@ export const Dashboard: React.FC = () => {
           onSave={async (record) => {
             const res = await saveVodafoneRecord(record);
             if (res.success) {
+              await refetchVodafoneRecords();
               const code = record['Site code'] || record['site code'] || (record as any).site_code || '';
               if (code) {
                 setDeletedSiteCodes((prev) => {
@@ -2358,6 +2374,8 @@ export const Dashboard: React.FC = () => {
                 });
               }
               setToastMessage(res.message || `تم حفظ وتحديث بيانات موقع Vodafone (${code}) بنجاح في قاعدة البيانات ✅`);
+            } else {
+              setToastMessage(`❌ خطأ: ${res.error || 'فشل حفظ وتحديث الموقع في قاعدة البيانات'}`);
             }
             return res;
           }}

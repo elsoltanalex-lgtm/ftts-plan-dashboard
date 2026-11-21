@@ -6,10 +6,10 @@ import type { SiteRecord } from '../types/dashboard';
 import type { OrangeRecord } from '../types/orange';
 import { normalizeOrangeClassification } from '../types/orange';
 import { ORANGE_RAW_RECORDS, ORANGE_SITES } from '../data/orangeSites';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseFallback, supabaseClients } from '../lib/supabase';
 
 const STORAGE_KEY = 'ftts_orange_records_v3';
-const ORANGE_TABLE_CANDIDATES = ['orange_records', 'orange'];
+const ORANGE_TABLE_CANDIDATES = ['orange_records', 'orange', 'we_records'];
 
 export function mapOrangeRecordToSiteRecord(r: OrangeRecord, index = 0): SiteRecord {
   const rawCode = r[' Site code'] || r['Site code'] || r['site code'] || r['HUBID'] || `ORG-${index + 1}`;
@@ -138,32 +138,38 @@ export function useOrangeAPI() {
   const refetchOrangeRecords = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Attempt to fetch live from Supabase tables
-      for (const table of ORANGE_TABLE_CANDIDATES) {
-        try {
-          const { data, error: sbError } = await supabase.from(table).select('*').limit(5000);
-          if (!sbError && data && data.length > 0) {
-            const baseMap = new Map<string, OrangeRecord>();
-            loadStoredOrangeRecords().forEach((r) => {
-              const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
-              if (c) baseMap.set(c, r);
-            });
-            data.forEach((row: any) => {
-              const rowData = row.data && typeof row.data === 'object' ? row.data : row;
-              const code = String(
-                row.site_code || row['site code'] || row['Site code'] || rowData['Site code'] || rowData['site code'] || row.id || ''
-              ).trim().toUpperCase();
-              if (code) {
-                const prev = baseMap.get(code) || {};
-                baseMap.set(code, { ...prev, ...rowData, ...row, 'Site code': code, 'site code': code });
-              }
-            });
-            const merged = Array.from(baseMap.values());
-            saveStoredOrangeRecords(merged);
-            setOrangeRecords(merged);
-            return;
-          }
-        } catch { }
+      // 1. Attempt to fetch live from Supabase tables across active clients
+      for (const client of supabaseClients) {
+        for (const table of ORANGE_TABLE_CANDIDATES) {
+          try {
+            let query = client.from(table).select('*').limit(5000);
+            if (table === 'we_records') {
+              query = query.eq('data->>company', 'Orange');
+            }
+            const { data, error: sbError } = await query;
+            if (!sbError && data && data.length > 0) {
+              const baseMap = new Map<string, OrangeRecord>();
+              loadStoredOrangeRecords().forEach((r) => {
+                const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
+                if (c) baseMap.set(c, r);
+              });
+              data.forEach((row: any) => {
+                const rowData = row.data && typeof row.data === 'object' ? row.data : row;
+                const code = String(
+                  row.site_code || row['site code'] || row['Site code'] || rowData['Site code'] || rowData['site code'] || row.id || ''
+                ).trim().toUpperCase();
+                if (code) {
+                  const prev = baseMap.get(code) || {};
+                  baseMap.set(code, { ...prev, ...rowData, ...row, 'Site code': code, 'site code': code });
+                }
+              });
+              const merged = Array.from(baseMap.values());
+              saveStoredOrangeRecords(merged);
+              setOrangeRecords(merged);
+              return;
+            }
+          } catch { }
+        }
       }
 
       const records = loadStoredOrangeRecords();
@@ -207,91 +213,99 @@ export function useOrangeAPI() {
         const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
         return c === code;
       });
-      let updated: OrangeRecord[];
 
       const now = new Date().toISOString();
       const enriched: OrangeRecord = {
         ...record,
+        company: 'Orange',
         'Site code': code,
         'site code': code,
+        site_code: code,
         'التصنيف': record['التصنيف'] || record['التصنيف (مدني)'] || '',
         'التصنيف (مدني)': record['التصنيف (مدني)'] || record['التصنيف'] || '',
+        classification: record['التصنيف'] || record['التصنيف (مدني)'] || '',
         _updatedAt: now,
       };
 
-      if (idx >= 0) {
-        updated = [...current];
-        updated[idx] = { ...updated[idx], ...enriched };
-      } else {
-        enriched._createdAt = now;
-        updated = [enriched, ...current];
-      }
+      const safePayload: any = {
+        site_code: code,
+        'site code': code,
+        'Site code': code,
+        'Site Status': enriched['التصنيف (مدني)'] || enriched['التصنيف'] || 'جاري',
+        data: enriched,
+        updated_at: now,
+      };
 
-      saveStoredOrangeRecords(updated);
-      setOrangeRecords(updated);
-
-      // Persist directly into Supabase orange tables with UPDATE / INSERT queries
+      // Persist directly into Supabase orange tables across active clients
       let cloudSaved = false;
-      for (const table of ORANGE_TABLE_CANDIDATES) {
-        try {
-          const payload: any = {
-            site_code: code,
-            'site code': code,
-            'Site code': code,
-            central: enriched['سنترال الربط'] || '',
-            sector: enriched['رئاسة قطاعات التنفيذ'] || enriched['رئاسة القطاعات '] || enriched['رئاسة القطاعات'] || '',
-            general_admin: enriched['الادارة العامة لتنفيذ الشبكات'] || enriched['الادارة العامة للتنفيذ'] || enriched['الادارة العامة'] || '',
-            competent_admin: enriched['ادارة التنفيذ الفرعية'] || enriched['الادارة العامة للمنطقة'] || enriched['المنطقة'] || '',
-            status: enriched['التصنيف (مدني)'] || enriched['التصنيف'] || '',
-            classification: enriched['التصنيف'] || enriched['التصنيف (مدني)'] || '',
-            'التصنيف': enriched['التصنيف'] || enriched['التصنيف (مدني)'] || '',
-            'الملاحظات': enriched['الملاحظات'] || '',
-            'مسئولية التنفيذ': enriched['مسئولية التنفيذ'] || enriched['مسئوليه التنفيذ'] || '',
-            data: enriched,
-            updated_at: now,
-          };
+      clientLoop: for (const client of supabaseClients) {
+        for (const table of ORANGE_TABLE_CANDIDATES) {
+          try {
+            // 1. Direct UPDATE on existing record in Supabase
+            let { data: updateData, error: updateErr } = await client
+              .from(table)
+              .update(safePayload)
+              .eq('site_code', code)
+              .select();
 
-          // 1. Attempt UPDATE on existing record in Supabase
-          const { data: updateData, error: updateErr } = await supabase
-            .from(table)
-            .update(payload)
-            .or(`site_code.eq."${code}",site code.eq."${code}"`)
-            .select();
+            if (updateErr || !updateData || updateData.length === 0) {
+              const retryQuoted = await client
+                .from(table)
+                .update(safePayload)
+                .eq('Site code', code)
+                .select();
+              if (!retryQuoted.error && retryQuoted.data && retryQuoted.data.length > 0) {
+                updateData = retryQuoted.data;
+                updateErr = null;
+              }
+            }
 
-          if (!updateErr && updateData && updateData.length > 0) {
-            cloudSaved = true;
-            break;
+            if (!updateErr && updateData && updateData.length > 0) {
+              cloudSaved = true;
+              break clientLoop;
+            }
+
+            // 2. INSERT if row does not exist
+            const { data: insertData, error: insertErr } = await client
+              .from(table)
+              .insert([{ ...safePayload, created_at: enriched._createdAt || now }])
+              .select();
+
+            if (!insertErr && insertData && insertData.length > 0) {
+              cloudSaved = true;
+              break clientLoop;
+            }
+          } catch (err) {
+            console.warn(`[Orange Supabase] Error saving to ${table}:`, err);
           }
-
-          // 2. If record doesn't exist yet, perform INSERT
-          const { data: insertData, error: insertErr } = await supabase
-            .from(table)
-            .insert([payload])
-            .select();
-
-          if (!insertErr && insertData && insertData.length > 0) {
-            cloudSaved = true;
-            break;
-          }
-
-          // 3. Fallback: attempt upsert by onConflict if supported
-          const { data: upsertData, error: upsertErr } = await supabase
-            .from(table)
-            .upsert(payload, { onConflict: 'site_code' })
-            .select();
-
-          if (!upsertErr && upsertData && upsertData.length > 0) {
-            cloudSaved = true;
-            break;
-          }
-        } catch (err) {
-          console.warn(`[Orange Supabase] Error saving to ${table}:`, err);
         }
       }
 
-      const successMsg = cloudSaved
-        ? `تم حفظ وتحديث بيانات موقع Orange (${code}) بنجاح في قاعدة بيانات Supabase السحابية ✅`
-        : `تم حفظ وتحديث بيانات موقع Orange (${code}) بنجاح ✅`;
+      if (cloudSaved) {
+        let updated: OrangeRecord[];
+        if (idx >= 0) {
+          updated = [...current];
+          updated[idx] = { ...updated[idx], ...enriched };
+        } else {
+          enriched._createdAt = now;
+          updated = [enriched, ...current];
+        }
+        saveStoredOrangeRecords(updated);
+        setOrangeRecords(updated);
+
+        return {
+          success: true,
+          cloudSaved: true,
+          message: `تم حفظ وتحديث بيانات موقع Orange (${code}) وتصنيفه بنجاح في قاعدة بيانات Supabase السحابية ✅`,
+        };
+      }
+
+      // Return explicit error if Supabase save failed (satisfies Requirement 2)
+      return {
+        success: false,
+        cloudSaved: false,
+        error: `فشل تسجيل التحديث لموقع Orange (${code}) في قاعدة بيانات Supabase السحابية. يرجى التحقق من اتصال الإنترنت.`,
+      };
 
       return {
         success: true,
@@ -393,56 +407,43 @@ export function useOrangeAPI() {
         recordMap.set(code, finalRec);
 
         // Standardized Supabase payload matching database schema
+        finalRec.company = 'Orange';
         const payload: any = {
           site_code: code,
           'site code': code,
           'Site code': code,
-          'التصنيف': finalRec['التصنيف (مدني)'] || finalRec['التصنيف'] || '',
-          'التصنيف (مدني)': finalRec['التصنيف (مدني)'] || finalRec['التصنيف'] || '',
-          'نوع المعوق المدني': finalRec['نوع المعوق المدني'] || '',
-          'الجهة المطلوب الدعم منها': finalRec['الجهة المطلوب الدعم منها'] || '',
-          'الملاحظات': finalRec['الملاحظات'] || '',
-          'المستند': finalRec['المستند'] || '',
-          'موقف المرفقات': finalRec['موقف المرفقات'] || '',
+          'Site Status': finalRec['التصنيف (مدني)'] || finalRec['التصنيف'] || 'جاري',
           data: finalRec,
           updated_at: now,
         };
 
-        for (const table of ORANGE_TABLE_CANDIDATES) {
-          try {
-            if (isExisting) {
-              const { data: updateData, error: updateErr } = await supabase
+        clientLoop: for (const client of supabaseClients) {
+          for (const table of ORANGE_TABLE_CANDIDATES) {
+            try {
+              if (isExisting) {
+                const { data: updateData, error: updateErr } = await client
+                  .from(table)
+                  .update(payload)
+                  .eq('site_code', code)
+                  .select();
+
+                if (!updateErr && updateData && updateData.length > 0) {
+                  break clientLoop;
+                }
+              }
+
+              // Insert new record or if update found 0 rows
+              const { data: insertData, error: insertErr } = await client
                 .from(table)
-                .update(payload)
-                .or(`site_code.eq."${code}",site code.eq."${code}"`)
+                .insert([payload])
                 .select();
 
-              if (!updateErr && updateData && updateData.length > 0) {
-                break;
+              if (!insertErr && insertData && insertData.length > 0) {
+                break clientLoop;
               }
+            } catch (err: any) {
+              console.warn(`[Orange Supabase] Error saving row ${code} to ${table}:`, err);
             }
-
-            // Insert new record or if update found 0 rows
-            const { data: insertData, error: insertErr } = await supabase
-              .from(table)
-              .insert([payload])
-              .select();
-
-            if (!insertErr && insertData && insertData.length > 0) {
-              break;
-            }
-
-            // Fallback upsert
-            const { data: upsertData, error: upsertErr } = await supabase
-              .from(table)
-              .upsert(payload, { onConflict: 'site_code' })
-              .select();
-
-            if (!upsertErr && upsertData && upsertData.length > 0) {
-              break;
-            }
-          } catch (err: any) {
-            console.warn(`[Orange Supabase] Error saving row ${code} to ${table}:`, err);
           }
         }
 

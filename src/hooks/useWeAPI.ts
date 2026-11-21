@@ -14,8 +14,8 @@ export const API_BASE = typeof window !== 'undefined' && window.location.hostnam
 
 const LOCAL_API_BASE = API_BASE;
 
-// Candidate table names in Supabase (supports user-created 'we' table or 'we_records')
-export const WE_TABLE_CANDIDATES = ['we', 'we_records'] as const;
+// Candidate table names in Supabase (prioritizes active we_records table)
+export const WE_TABLE_CANDIDATES = ['we_records', 'we'] as const;
 
 export interface APIResponse<T> {
   success: boolean;
@@ -125,7 +125,7 @@ export function useWeRecords() {
 
         if (unsynced.length > 0) {
           for (const u of unsynced) {
-            saveRecord(u, true).catch(() => {});
+            saveRecord(u, true).catch(() => { });
           }
         }
 
@@ -474,7 +474,8 @@ export async function saveRecord(
       _createdBy: record._createdBy || 'user',
     };
 
-    const payload: Record<string, any> = {
+    // Safe payload matching physical Supabase table columns + JSONB data
+    const safePayload: Record<string, any> = {
       site_code: siteCode,
       'site code': siteCode,
       'Exc Sectores': record['Exc Sectores'] || record['Exc sector'] || '',
@@ -483,15 +484,8 @@ export async function saveRecord(
       'Sectore': record['Sectore'] || record['Exc sector'] || '',
       'Exc Zone': record['Exc Zone'] || record['Zone'] || '',
       'Zone': record['Zone'] || record['Exc Zone'] || '',
-      'السنترال': record['السنترال'] || '',
-      'اداره التنفيذ المختصه': record['اداره التنفيذ المختصه'] || '',
       'Type': record['Type'] || '',
-      'التصنيف': record['التصنيف'] || '',
-      'اسباب التعذر': record['اسباب التعذر'] || '',
-      'الجهة المطلوب الدعم منها': record['الجهة المطلوب الدعم منها'] || '',
-      'Site Status': record['Site Status'] || '',
-      'التاريخ المتوقع للانتهاء': record['التاريخ المتوقع للانتهاء'] || '',
-      'التاريخ الفعلى للانتهاء': record['التاريخ الفعلى للانتهاء'] || '',
+      'Site Status': record['Site Status'] || record['التصنيف'] || '',
       'NLongitude': record['NLongitude'] || '',
       'NLatitude': record['NLatitude'] || '',
       data: fullData,
@@ -502,85 +496,68 @@ export async function saveRecord(
     let savedRow: any = null;
     let actionType: 'updated' | 'created' = isEditMode || Boolean(targetId) ? 'updated' : 'created';
 
-    // Attempt save in Supabase candidate tables across active clients
+    // Attempt save in Supabase candidate tables across active clients (Client 2 Fallback hosts active live dataset)
     clientLoop: for (const client of supabaseClients) {
       for (const table of WE_TABLE_CANDIDATES) {
         try {
           // 1. Direct UPDATE in Supabase by site_code or ID
-          if (isEditMode || forceUpdate || Boolean(targetId)) {
-            let updateQuery = client.from(table).update(payload);
-            if (targetId && !isNaN(Number(targetId))) {
-              updateQuery = updateQuery.or(`id.eq.${Number(targetId)},site_code.eq."${siteCode}",site code.eq."${siteCode}"`);
-            } else if (targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(targetId))) {
-              updateQuery = updateQuery.or(`id.eq."${targetId}",site_code.eq."${siteCode}",site code.eq."${siteCode}"`);
-            } else {
-              updateQuery = updateQuery.or(`site_code.eq."${siteCode}",site code.eq."${siteCode}"`);
-            }
+          let updateQuery = client.from(table).update(safePayload).eq('site_code', siteCode);
+          let { data: updated, error: updateErr } = await updateQuery.select();
 
-            const { data: updated, error: updateErr } = await updateQuery.select();
-
-            if (!updateErr && updated && updated.length > 0) {
-              cloudSaved = true;
-              savedRow = updated[0];
-              actionType = 'updated';
-              break clientLoop;
+          // Retry by 'site code' if primary site_code column didn't match
+          if (updateErr || !updated || updated.length === 0) {
+            const retryByQuoted = await client.from(table).update(safePayload).eq('site code', siteCode).select();
+            if (!retryByQuoted.error && retryByQuoted.data && retryByQuoted.data.length > 0) {
+              updated = retryByQuoted.data;
+              updateErr = null;
             }
+          }
+
+          if (!updateErr && updated && updated.length > 0) {
+            cloudSaved = true;
+            savedRow = updated[0];
+            actionType = 'updated';
+            break clientLoop;
           }
 
           // 2. Search existing rows by siteCode to verify if row exists
           const { data: existingRows } = await client
             .from(table)
             .select('*')
-            .or(`site_code.eq."${siteCode}",site code.eq."${siteCode}"`);
+            .eq('site_code', siteCode);
 
-          const existingNormalized = (existingRows || []).map(normalizeRecord);
+          if (existingRows && existingRows.length > 0) {
+            const { data: updatedExisting, error: existingErr } = await client
+              .from(table)
+              .update(safePayload)
+              .eq('site_code', siteCode)
+              .select();
 
-          // If existing record found, perform UPDATE
-          if (existingNormalized.length > 0) {
-            const match = existingNormalized.find(
-              (r) => r['التصنيف'] === activity && r['التاريخ المتوقع للانتهاء'] === dateWeek
-            ) || existingNormalized[0];
-
-            const rowId = match._id || (match as any).id;
-            let updateBuilder = client.from(table).update(payload);
-            if (rowId && !isNaN(Number(rowId))) {
-              updateBuilder = updateBuilder.eq('id', Number(rowId));
-            } else {
-              updateBuilder = updateBuilder.or(`site_code.eq."${siteCode}",site code.eq."${siteCode}"`);
-            }
-
-            const { data: updated, error: updateErr } = await updateBuilder.select();
-
-            if (!updateErr && updated && updated.length > 0) {
+            if (!existingErr && updatedExisting && updatedExisting.length > 0) {
               cloudSaved = true;
-              savedRow = updated[0];
+              savedRow = updatedExisting[0];
               actionType = 'updated';
               break clientLoop;
             }
           }
 
           // 3. Duplicate check for adding new entry
-          const duplicate = existingNormalized.find(
-            (r) => r['site code'] === siteCode && r['التصنيف'] === activity && r['التاريخ المتوقع للانتهاء'] === dateWeek
-          );
-
-          if (duplicate && !forceUpdate && !isEditMode) {
+          if (!forceUpdate && !isEditMode && existingRows && existingRows.length > 0) {
+            const duplicate = existingRows[0];
             return {
               success: false,
               error: 'DUPLICATE_RECORD',
               message: `سجل مكرر: الموقع ${siteCode} بالتصنيف "${activity}" موجود بالفعل`,
-              existingRecord: duplicate,
+              existingRecord: normalizeRecord(duplicate),
             };
           }
 
-          // 4. Insert new record (omit string ID if not numeric or UUID to prevent 22P02 bigint error)
+          // 4. Insert new record
           const insertPayload: Record<string, any> = {
-            ...payload,
-            created_at: fullData._createdAt,
+            ...safePayload,
+            created_at: fullData._createdAt || now,
           };
-          if (targetId && !isNaN(Number(targetId))) {
-            insertPayload.id = Number(targetId);
-          } else if (targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(targetId))) {
+          if (targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(targetId))) {
             insertPayload.id = targetId;
           }
 
@@ -594,25 +571,6 @@ export async function saveRecord(
             savedRow = inserted[0];
             actionType = 'created';
             break clientLoop;
-          } else if (insertErr) {
-            // If insert failed due to column mismatch, retry with minimal payload + JSONB data
-            const minimalPayload: Record<string, any> = {
-              site_code: siteCode,
-              data: fullData,
-              created_at: fullData._createdAt,
-              updated_at: now,
-            };
-            const { data: miniInserted, error: miniErr } = await client
-              .from(table)
-              .insert([minimalPayload])
-              .select();
-
-            if (!miniErr && miniInserted && miniInserted.length > 0) {
-              cloudSaved = true;
-              savedRow = miniInserted[0];
-              actionType = 'created';
-              break clientLoop;
-            }
           }
         } catch (tableEx) {
           // Continue to next candidate table
@@ -620,52 +578,38 @@ export async function saveRecord(
       }
     }
 
-    // Save locally immediately to guarantee persistence on reload
-    const currentStored = loadStoredWeRecords();
-    const cleanCode = (siteCode || '').trim().toUpperCase();
-    const sIdx = currentStored.findIndex((r) => {
-      const c = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
-      return c === cleanCode;
-    });
-    let nextStored: WeRecord[];
-    if (sIdx >= 0) {
-      nextStored = [...currentStored];
-      nextStored[sIdx] = { ...nextStored[sIdx], ...fullData };
-    } else {
-      nextStored = [fullData, ...currentStored];
-    }
-    saveStoredWeRecords(nextStored);
-
     if (cloudSaved && savedRow) {
+      // Save locally immediately to guarantee persistence on reload
+      const currentStored = loadStoredWeRecords();
+      const cleanCode = (siteCode || '').trim().toUpperCase();
+      const sIdx = currentStored.findIndex((r) => {
+        const c = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
+        return c === cleanCode;
+      });
+      let nextStored: WeRecord[];
+      const normalizedRow = normalizeRecord(savedRow);
+      if (sIdx >= 0) {
+        nextStored = [...currentStored];
+        nextStored[sIdx] = { ...nextStored[sIdx], ...normalizedRow };
+      } else {
+        nextStored = [normalizedRow, ...currentStored];
+      }
+      saveStoredWeRecords(nextStored);
+
       return {
         success: true,
         action: actionType,
-        record: normalizeRecord(savedRow),
+        record: normalizedRow,
         message: actionType === 'updated'
-          ? 'تم تحديث بيانات الموقع بنجاح في قاعدة بيانات Supabase السحابية ✅'
+          ? 'تم تحديث بيانات الموقع والتصنيف بنجاح في قاعدة بيانات Supabase السحابية ✅'
           : 'تم إضافة الموقع الجديد بنجاح في قاعدة بيانات Supabase السحابية ✅',
       };
     }
 
-    // 5. Fallback: try local server
-    try {
-      const body = { ...record };
-      if (forceUpdate) (body as any)._forceUpdate = true;
-      const res = await fetch(`${LOCAL_API_BASE}/records`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const localRes = await res.json();
-      if (localRes.success) return localRes;
-    } catch { }
-
-    // 6. Resilient local optimistic success
+    // Return explicit error if cloud save failed (satisfies Requirement 2)
     return {
-      success: true,
-      action: actionType,
-      record: fullData,
-      message: 'تم حفظ وتحديث بيانات الموقع بنجاح ✅',
+      success: false,
+      error: 'فشل حفظ وتحديث السجل في قاعدة بيانات Supabase السحابية. يرجى التحقق من اتصال الإنترنت والمحاولة مجدداً.',
     };
   } catch (err: any) {
     return { success: false, error: err?.message || 'خطأ أثناء حفظ السجل' };
