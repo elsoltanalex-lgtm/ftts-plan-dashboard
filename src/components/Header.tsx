@@ -94,142 +94,269 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Center Optical-Fiber Animation (Sleek, responsive, non-intrusive) */}
-        <div className="hidden lg:flex items-center justify-center px-2 py-1 mx-auto flex-1 max-w-[260px] pointer-events-none select-none opacity-90 hover:opacity-100 transition-opacity">
+        {/* Center Optical-Fiber FTTS / FTTH Illustration (Large, expressive, responsive) */}
+        <div className="hidden md:flex flex-1 items-center justify-center px-1 mx-2 lg:mx-4 h-[86px] sm:h-[90px] max-w-[620px] pointer-events-none select-none opacity-95 hover:opacity-100 transition-opacity">
           <svg
-            viewBox="0 0 240 50"
-            className="w-full h-11 overflow-visible"
+            viewBox="0 0 540 90"
+            className="w-full h-full max-h-[90px] overflow-visible"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
           >
             <defs>
-              <filter id="fiberGlow" x="-20%" y="-20%" width="140%" height="140%">
+              <filter id="superGlow" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="3" result="blur1" />
+                <feGaussianBlur stdDeviation="1.5" result="blur2" />
+                <feMerge>
+                  <feMergeNode in="blur1" />
+                  <feMergeNode in="blur2" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+              <filter id="chassisGlow" x="-20%" y="-20%" width="140%" height="140%">
                 <feGaussianBlur stdDeviation="2" result="blur" />
                 <feMerge>
                   <feMergeNode in="blur" />
                   <feMergeNode in="SourceGraphic" />
                 </feMerge>
               </filter>
-              <linearGradient id="gradCyan" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#0284c7" stopOpacity="0.2" />
-                <stop offset="50%" stopColor="#38bdf8" stopOpacity="0.95" />
-                <stop offset="100%" stopColor="#0284c7" stopOpacity="0.2" />
+              <linearGradient id="gradCyan" x1="100%" y1="0%" x2="0%" y2="0%">
+                <stop offset="0%" stopColor="#0284c7" stopOpacity="0.3" />
+                <stop offset="50%" stopColor="#38bdf8" stopOpacity="1" />
+                <stop offset="100%" stopColor="#67e8f9" stopOpacity="0.4" />
               </linearGradient>
-              <linearGradient id="gradIndigo" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.15" />
-                <stop offset="50%" stopColor="#818cf8" stopOpacity="0.9" />
-                <stop offset="100%" stopColor="#4f46e5" stopOpacity="0.15" />
+              <linearGradient id="gradBlue" x1="100%" y1="0%" x2="0%" y2="0%">
+                <stop offset="0%" stopColor="#1e40af" stopOpacity="0.25" />
+                <stop offset="50%" stopColor="#60a5fa" stopOpacity="1" />
+                <stop offset="100%" stopColor="#93c5fd" stopOpacity="0.35" />
               </linearGradient>
-              <linearGradient id="gradTeal" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#0d9488" stopOpacity="0.15" />
-                <stop offset="50%" stopColor="#2dd4bf" stopOpacity="0.85" />
-                <stop offset="100%" stopColor="#0d9488" stopOpacity="0.15" />
+              <linearGradient id="gradPurple" x1="100%" y1="0%" x2="0%" y2="0%">
+                <stop offset="0%" stopColor="#6b21a8" stopOpacity="0.25" />
+                <stop offset="50%" stopColor="#c084fc" stopOpacity="1" />
+                <stop offset="100%" stopColor="#f472b6" stopOpacity="0.4" />
+              </linearGradient>
+              <linearGradient id="gradTeal" x1="100%" y1="0%" x2="0%" y2="0%">
+                <stop offset="0%" stopColor="#0f766e" stopOpacity="0.2" />
+                <stop offset="50%" stopColor="#2dd4bf" stopOpacity="0.9" />
+                <stop offset="100%" stopColor="#a7f3d0" stopOpacity="0.3" />
+              </linearGradient>
+              <linearGradient id="rackGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#1e293b" />
+                <stop offset="100%" stopColor="#0f172a" />
               </linearGradient>
             </defs>
 
-            {/* Background Core Channel */}
-            <path
-              d="M 5 25 C 65 8, 125 42, 185 16 C 205 7, 220 20, 235 25"
-              stroke="#1e293b"
-              strokeWidth="4"
-              strokeLinecap="round"
-              opacity="0.6"
-            />
+            {/* ══════════ CENTER: FIBER CABLES CONDUITS & GLOWING PATHS ══════════ */}
+            {/* Dark Protective Conduits (Backing) */}
+            <path d="M 455 26 C 360 12, 230 45, 115 28" stroke="#1e293b" strokeWidth="4" strokeLinecap="round" opacity="0.75" />
+            <path d="M 455 40 C 340 58, 220 25, 92 48" stroke="#1e293b" strokeWidth="4" strokeLinecap="round" opacity="0.75" />
+            <path d="M 455 54 C 330 84, 190 48, 54 62" stroke="#1e293b" strokeWidth="4" strokeLinecap="round" opacity="0.75" />
+            <path d="M 455 66 C 320 62, 170 82, 115 28" stroke="#1e293b" strokeWidth="3" strokeLinecap="round" opacity="0.5" />
 
-            {/* Fiber 1 - Cyan / Electric Blue */}
-            <path
-              id="fiberPath1"
-              d="M 5 25 C 65 8, 125 42, 185 16 C 205 7, 220 20, 235 25"
-              stroke="url(#gradCyan)"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              filter="url(#fiberGlow)"
-            />
+            {/* Cable 1: Cyan High-Speed Fiber to FTTS Tower */}
+            <path id="fiberCable1" d="M 455 26 C 360 12, 230 45, 115 28" stroke="url(#gradCyan)" strokeWidth="2" strokeLinecap="round" filter="url(#superGlow)" />
+            {/* Cable 2: Electric Blue Fiber to Business Building */}
+            <path id="fiberCable2" d="M 455 40 C 340 58, 220 25, 92 48" stroke="url(#gradBlue)" strokeWidth="2" strokeLinecap="round" filter="url(#superGlow)" />
+            {/* Cable 3: Purple / Magenta Fiber to FTTH Home */}
+            <path id="fiberCable3" d="M 455 54 C 330 84, 190 48, 54 62" stroke="url(#gradPurple)" strokeWidth="2" strokeLinecap="round" filter="url(#superGlow)" />
+            {/* Cable 4: Teal Secondary Trunk */}
+            <path id="fiberCable4" d="M 455 66 C 320 62, 170 82, 115 28" stroke="url(#gradTeal)" strokeWidth="1.5" strokeLinecap="round" opacity="0.8" />
 
-            {/* Fiber 2 - Indigo / Purple Glow */}
-            <path
-              id="fiberPath2"
-              d="M 5 15 C 60 38, 120 12, 175 36 C 195 44, 215 32, 235 20"
-              stroke="url(#gradIndigo)"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              filter="url(#fiberGlow)"
-            />
+            {/* Continuous Laser Beams Streaming Right-to-Left */}
+            <path d="M 455 26 C 360 12, 230 45, 115 28" stroke="#ffffff" strokeWidth="2.2" strokeDasharray="25 180" strokeLinecap="round" filter="url(#superGlow)">
+              <animate attributeName="stroke-dashoffset" from="0" to="205" dur="1.8s" repeatCount="indefinite" />
+            </path>
+            <path d="M 455 40 C 340 58, 220 25, 92 48" stroke="#93c5fd" strokeWidth="2.2" strokeDasharray="30 200" strokeLinecap="round" filter="url(#superGlow)">
+              <animate attributeName="stroke-dashoffset" from="0" to="230" dur="2.2s" begin="0.4s" repeatCount="indefinite" />
+            </path>
+            <path d="M 455 54 C 330 84, 190 48, 54 62" stroke="#f472b6" strokeWidth="2.2" strokeDasharray="28 210" strokeLinecap="round" filter="url(#superGlow)">
+              <animate attributeName="stroke-dashoffset" from="0" to="238" dur="2.5s" begin="0.8s" repeatCount="indefinite" />
+            </path>
 
-            {/* Fiber 3 - Emerald / Teal Lightwave */}
-            <path
-              id="fiberPath3"
-              d="M 5 35 C 70 18, 130 45, 180 22 C 200 13, 218 26, 235 30"
-              stroke="url(#gradTeal)"
-              strokeWidth="1.4"
-              strokeLinecap="round"
-              filter="url(#fiberGlow)"
-            />
-
-            {/* Traveling Light Pulse 1 */}
-            <circle r="3" fill="#ffffff" filter="url(#fiberGlow)">
-              <animateMotion
-                dur="2.4s"
-                repeatCount="indefinite"
-                path="M 5 25 C 65 8, 125 42, 185 16 C 205 7, 220 20, 235 25"
-              />
-              <animate
-                attributeName="opacity"
-                values="0.2;1;1;0.2"
-                dur="2.4s"
-                repeatCount="indefinite"
-              />
+            {/* Traveling Light Pulses / Data Packets */}
+            {/* Pulse 1 on Cable 1 (To Tower) */}
+            <circle r="3.2" fill="#ffffff" filter="url(#superGlow)">
+              <animateMotion path="M 455 26 C 360 12, 230 45, 115 28" dur="1.8s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.2;1;1;0.4;0.1" dur="1.8s" repeatCount="indefinite" />
+            </circle>
+            <circle r="2.2" fill="#38bdf8" filter="url(#superGlow)">
+              <animateMotion path="M 455 26 C 360 12, 230 45, 115 28" begin="0.25s" dur="1.8s" repeatCount="indefinite" />
             </circle>
 
-            {/* Traveling Light Pulse 2 */}
-            <circle r="2.5" fill="#a5f3fc" filter="url(#fiberGlow)">
-              <animateMotion
-                dur="3.2s"
-                begin="0.8s"
-                repeatCount="indefinite"
-                path="M 5 15 C 60 38, 120 12, 175 36 C 195 44, 215 32, 235 20"
-              />
-              <animate
-                attributeName="opacity"
-                values="0.3;1;1;0.3"
-                dur="3.2s"
-                begin="0.8s"
-                repeatCount="indefinite"
-              />
+            {/* Pulse 2 on Cable 2 (To Business) */}
+            <circle r="3" fill="#60a5fa" filter="url(#superGlow)">
+              <animateMotion path="M 455 40 C 340 58, 220 25, 92 48" begin="0.5s" dur="2.2s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.2;1;1;0.3" dur="2.2s" repeatCount="indefinite" />
+            </circle>
+            <circle r="2" fill="#bfdbfe" filter="url(#superGlow)">
+              <animateMotion path="M 455 40 C 340 58, 220 25, 92 48" begin="1.2s" dur="2.2s" repeatCount="indefinite" />
             </circle>
 
-            {/* Traveling Light Pulse 3 */}
-            <circle r="2.2" fill="#c7d2fe" filter="url(#fiberGlow)">
-              <animateMotion
-                dur="2.8s"
-                begin="1.4s"
-                repeatCount="indefinite"
-                path="M 5 35 C 70 18, 130 45, 180 22 C 200 13, 218 26, 235 30"
-              />
-              <animate
-                attributeName="opacity"
-                values="0.2;0.9;0.9;0.2"
-                dur="2.8s"
-                begin="1.4s"
-                repeatCount="indefinite"
-              />
+            {/* Pulse 3 on Cable 3 (To Home) */}
+            <circle r="3" fill="#c084fc" filter="url(#superGlow)">
+              <animateMotion path="M 455 54 C 330 84, 190 48, 54 62" begin="0.9s" dur="2.5s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.2;1;1;0.3" dur="2.5s" repeatCount="indefinite" />
+            </circle>
+            <circle r="2" fill="#f472b6" filter="url(#superGlow)">
+              <animateMotion path="M 455 54 C 330 84, 190 48, 54 62" begin="1.6s" dur="2.5s" repeatCount="indefinite" />
             </circle>
 
-            {/* Blinking Optical Nodes */}
-            <circle cx="28" cy="18" r="1.8" fill="#38bdf8">
-              <animate attributeName="r" values="1.2;2.4;1.2" dur="1.8s" repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0.4;1;0.4" dur="1.8s" repeatCount="indefinite" />
+            {/* Pulse 4 on Cable 4 */}
+            <circle r="2.2" fill="#2dd4bf" filter="url(#superGlow)">
+              <animateMotion path="M 455 66 C 320 62, 170 82, 115 28" begin="0.2s" dur="2.6s" repeatCount="indefinite" />
             </circle>
 
-            <circle cx="120" cy="27" r="2.2" fill="#818cf8">
-              <animate attributeName="r" values="1.5;3;1.5" dur="2.2s" begin="0.5s" repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0.3;1;0.3" dur="2.2s" begin="0.5s" repeatCount="indefinite" />
-            </circle>
+            {/* Mid-span Splice Enclosures */}
+            <g transform="translate(325, 38)">
+              <circle cx="0" cy="0" r="3" fill="#0f172a" stroke="#38bdf8" strokeWidth="1.2" />
+              <circle cx="0" cy="0" r="1.5" fill="#38bdf8">
+                <animate attributeName="r" values="1;2.2;1" dur="1.6s" repeatCount="indefinite" />
+              </circle>
+            </g>
+            <g transform="translate(215, 36)">
+              <rect x="-3" y="-3" width="6" height="6" rx="1.5" fill="#0f172a" stroke="#818cf8" strokeWidth="1" />
+              <circle cx="0" cy="0" r="1.2" fill="#c084fc">
+                <animate attributeName="opacity" values="0.3;1;0.3" dur="2s" begin="0.5s" repeatCount="indefinite" />
+              </circle>
+            </g>
 
-            <circle cx="180" cy="20" r="2" fill="#2dd4bf">
-              <animate attributeName="r" values="1.4;2.8;1.4" dur="2s" begin="1s" repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0.4;1;0.4" dur="2s" begin="1s" repeatCount="indefinite" />
-            </circle>
+            {/* ══════════ RIGHT SIDE: CORE ROUTER / OLT SERVER HUB ══════════ */}
+            <g id="coreRouterHub">
+              {/* Outer Chassis */}
+              <rect x="455" y="14" width="76" height="62" rx="7" fill="url(#rackGrad)" stroke="#38bdf8" strokeWidth="1.5" filter="url(#chassisGlow)" />
+              <rect x="459" y="18" width="68" height="54" rx="4" fill="#0b1329" stroke="#1e293b" strokeWidth="1" />
+
+              {/* Blade Server Slots */}
+              {/* Slot 1 */}
+              <rect x="463" y="21" width="60" height="13" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+              <line x1="467" y1="27.5" x2="480" y2="27.5" stroke="#475569" strokeWidth="1" strokeDasharray="2 1.5" />
+              <circle cx="515" cy="27.5" r="1.8" fill="#10b981">
+                <animate attributeName="opacity" values="0.3;1;0.3" dur="0.8s" repeatCount="indefinite" />
+              </circle>
+              <circle cx="508" cy="27.5" r="1.6" fill="#38bdf8">
+                <animate attributeName="opacity" values="0.4;1;0.4" dur="1.3s" repeatCount="indefinite" />
+              </circle>
+
+              {/* Slot 2 */}
+              <rect x="463" y="37" width="60" height="13" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+              <line x1="467" y1="43.5" x2="480" y2="43.5" stroke="#475569" strokeWidth="1" strokeDasharray="2 1.5" />
+              <circle cx="515" cy="43.5" r="1.8" fill="#38bdf8">
+                <animate attributeName="opacity" values="1;0.3;1" dur="1.1s" repeatCount="indefinite" />
+              </circle>
+              <circle cx="508" cy="43.5" r="1.6" fill="#818cf8">
+                <animate attributeName="opacity" values="0.2;1;0.2" dur="0.9s" repeatCount="indefinite" />
+              </circle>
+
+              {/* Slot 3 */}
+              <rect x="463" y="53" width="60" height="13" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+              <line x1="467" y1="59.5" x2="480" y2="59.5" stroke="#475569" strokeWidth="1" strokeDasharray="2 1.5" />
+              <circle cx="515" cy="59.5" r="1.8" fill="#10b981">
+                <animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite" />
+              </circle>
+              <circle cx="508" cy="59.5" r="1.6" fill="#f59e0b">
+                <animate attributeName="opacity" values="0.4;1;0.4" dur="1.7s" repeatCount="indefinite" />
+              </circle>
+
+              {/* Label */}
+              <text x="493" y="75" textAnchor="middle" fill="#38bdf8" fontSize="6.5" fontFamily="monospace" fontWeight="bold" letterSpacing="0.6">
+                CORE OLT HUB
+              </text>
+
+              {/* Optical Connector Ports */}
+              <rect x="453" y="24" width="4" height="4" rx="1" fill="#38bdf8" />
+              <rect x="453" y="38" width="4" height="4" rx="1" fill="#60a5fa" />
+              <rect x="453" y="52" width="4" height="4" rx="1" fill="#c084fc" />
+              <rect x="453" y="64" width="4" height="4" rx="1" fill="#2dd4bf" />
+            </g>
+
+            {/* ══════════ LEFT SIDE: TELECOM TOWER, BUILDING & HOUSE ══════════ */}
+            {/* Target 1: Telecom Site Tower (FTTS) */}
+            <g id="telecomTower">
+              {/* Lattice Legs */}
+              <line x1="108" y1="36" x2="115" y2="10" stroke="#94a3b8" strokeWidth="1.2" />
+              <line x1="122" y1="36" x2="115" y2="10" stroke="#94a3b8" strokeWidth="1.2" />
+              {/* Lattice Crosses */}
+              <line x1="110" y1="28" x2="120" y2="20" stroke="#64748b" strokeWidth="0.8" />
+              <line x1="120" y1="28" x2="110" y2="20" stroke="#64748b" strokeWidth="0.8" />
+              <line x1="112" y1="20" x2="118" y2="14" stroke="#64748b" strokeWidth="0.8" />
+              <line x1="118" y1="20" x2="112" y2="14" stroke="#64748b" strokeWidth="0.8" />
+              {/* Antenna Platforms */}
+              <line x1="111" y1="10" x2="119" y2="10" stroke="#e2e8f0" strokeWidth="1.5" />
+              <line x1="115" y1="10" x2="115" y2="4" stroke="#38bdf8" strokeWidth="1.6" />
+              {/* Beacon Top Light */}
+              <circle cx="115" cy="4" r="1.8" fill="#f43f5e">
+                <animate attributeName="opacity" values="0.2;1;0.2" dur="0.9s" repeatCount="indefinite" />
+              </circle>
+              {/* Radio Waves */}
+              <path d="M 121 3 C 124 5, 124 8, 121 10" stroke="#38bdf8" strokeWidth="1" fill="none" opacity="0.8">
+                <animate attributeName="opacity" values="0;1;0" dur="1.6s" repeatCount="indefinite" />
+              </path>
+              <path d="M 124 1 C 129 4, 129 11, 124 14" stroke="#38bdf8" strokeWidth="0.8" strokeDasharray="2 1" fill="none" opacity="0.5">
+                <animate attributeName="opacity" values="0;1;0" begin="0.3s" dur="1.6s" repeatCount="indefinite" />
+              </path>
+              {/* Receiver Node on Tower */}
+              <circle cx="115" cy="28" r="3" fill="#38bdf8" filter="url(#superGlow)">
+                <animate attributeName="r" values="2.2;3.6;2.2" dur="1.8s" repeatCount="indefinite" />
+              </circle>
+              {/* Tower Label */}
+              <text x="115" y="44" textAnchor="middle" fill="#38bdf8" fontSize="6" fontFamily="sans-serif" fontWeight="bold">
+                FTTS TOWER
+              </text>
+            </g>
+
+            {/* Target 2: Enterprise / Commercial Building */}
+            <g id="enterpriseBuilding">
+              {/* Skyscraper Body */}
+              <rect x="70" y="28" width="22" height="42" rx="2" fill="#0b1329" stroke="#60a5fa" strokeWidth="1.2" />
+              <rect x="73" y="25" width="16" height="3" fill="#1e293b" stroke="#60a5fa" strokeWidth="0.8" />
+              <line x1="81" y1="25" x2="81" y2="19" stroke="#60a5fa" strokeWidth="1.2" />
+              <circle cx="81" cy="19" r="1.4" fill="#93c5fd" />
+
+              {/* Glowing Windows Grid */}
+              <rect x="74" y="32" width="4" height="4" rx="0.5" fill="#38bdf8" opacity="0.85" />
+              <rect x="82" y="32" width="4" height="4" rx="0.5" fill="#fde047" opacity="0.9">
+                <animate attributeName="opacity" values="0.4;0.9;0.4" dur="2.4s" repeatCount="indefinite" />
+              </rect>
+              <rect x="74" y="39" width="4" height="4" rx="0.5" fill="#60a5fa" opacity="0.8" />
+              <rect x="82" y="39" width="4" height="4" rx="0.5" fill="#38bdf8" opacity="0.85" />
+              <rect x="74" y="46" width="4" height="4" rx="0.5" fill="#fde047" opacity="0.85" />
+              <rect x="82" y="46" width="4" height="4" rx="0.5" fill="#60a5fa" opacity="0.75" />
+              <rect x="74" y="53" width="4" height="4" rx="0.5" fill="#38bdf8" opacity="0.85" />
+              <rect x="82" y="53" width="4" height="4" rx="0.5" fill="#fde047" opacity="0.8">
+                <animate attributeName="opacity" values="0.8;0.3;0.8" dur="3s" repeatCount="indefinite" />
+              </rect>
+
+              {/* Building Optical Terminal Node */}
+              <circle cx="92" cy="48" r="3" fill="#60a5fa" filter="url(#superGlow)">
+                <animate attributeName="r" values="2.2;3.5;2.2" begin="0.4s" dur="2.2s" repeatCount="indefinite" />
+              </circle>
+              {/* Building Label */}
+              <text x="81" y="78" textAnchor="middle" fill="#60a5fa" fontSize="6" fontFamily="sans-serif" fontWeight="bold">
+                BUSINESS
+              </text>
+            </g>
+
+            {/* Target 3: Smart Home / Villa (FTTH) */}
+            <g id="residentialHome">
+              {/* House Roof */}
+              <polygon points="36,46 18,60 54,60" fill="#1e293b" stroke="#c084fc" strokeWidth="1.2" />
+              {/* House Body */}
+              <rect x="22" y="60" width="28" height="20" rx="1" fill="#0b1329" stroke="#c084fc" strokeWidth="1.2" />
+              {/* Glowing Warm Window */}
+              <rect x="26" y="64" width="7" height="7" rx="1" fill="#fef08a" opacity="0.9">
+                <animate attributeName="opacity" values="0.5;0.95;0.5" dur="2.8s" repeatCount="indefinite" />
+              </rect>
+              {/* Door */}
+              <rect x="37" y="66" width="8" height="14" fill="#1e293b" stroke="#64748b" strokeWidth="0.8" />
+              {/* Drop Terminal Box on House Wall */}
+              <rect x="50" y="60" width="4" height="5" rx="1" fill="#c084fc" />
+              <circle cx="54" cy="62" r="2.8" fill="#f472b6" filter="url(#superGlow)">
+                <animate attributeName="r" values="2;3.4;2" begin="0.8s" dur="2.5s" repeatCount="indefinite" />
+              </circle>
+              {/* Home Label */}
+              <text x="36" y="88" textAnchor="middle" fill="#c084fc" fontSize="6" fontFamily="sans-serif" fontWeight="bold">
+                FTTH HOME
+              </text>
+            </g>
           </svg>
         </div>
 
