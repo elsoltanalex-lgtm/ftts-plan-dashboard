@@ -99,24 +99,31 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Center Optical-Fiber Branching Network (Expanded Space with Generous Proportion & Smooth Blending) */}
-        <div className="hidden md:flex flex-1 items-center justify-center px-1 mx-1 lg:mx-3 h-[84px] sm:h-[92px] max-w-[660px] min-w-[280px] pointer-events-none select-none">
-          <div className="w-full h-full bg-[#020714] border border-cyan-500/35 rounded-2xl shadow-[0_0_30px_rgba(6,182,212,0.22),inset_0_0_20px_rgba(1,4,14,0.95)] flex items-center justify-center overflow-hidden relative backdrop-blur-md px-1">
-            {/* Subtle soft edge gradient blending on left and right */}
-            <div className="absolute inset-y-0 left-0 w-5 bg-gradient-to-r from-[#020714] to-transparent pointer-events-none z-10" />
-            <div className="absolute inset-y-0 right-0 w-5 bg-gradient-to-l from-[#020714] to-transparent pointer-events-none z-10" />
-
+        {/* Center Optical-Fiber Branching Network (Full-Bleed Edge-to-Edge with Zero Side Gaps) */}
+        <div className="hidden md:flex flex-1 items-center justify-center mx-1 lg:mx-3 h-[84px] sm:h-[92px] max-w-[660px] min-w-[260px] pointer-events-none select-none">
+          <div className="w-full h-full bg-[#020714] border border-cyan-500/35 rounded-2xl shadow-[0_0_30px_rgba(6,182,212,0.22),inset_0_0_20px_rgba(1,4,14,0.95)] flex items-center justify-center overflow-hidden relative backdrop-blur-md">
             <svg
-              viewBox="0 0 534 302"
-              className="w-full h-full max-h-[90px] object-contain overflow-visible"
+              viewBox="0 0 720 140"
+              preserveAspectRatio="none"
+              className="w-full h-full overflow-hidden"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
             >
               <defs>
-                {/* Intense Laser Beam Glow */}
-                <filter id="laserBeamGlow" x="-60%" y="-60%" width="220%" height="220%">
-                  <feGaussianBlur stdDeviation="4" result="b1" />
-                  <feGaussianBlur stdDeviation="2" result="b2" />
+                {/* Intense Neon Glow Filters */}
+                <filter id="neonLaserGlow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="3.5" result="blur1" />
+                  <feGaussianBlur stdDeviation="1.5" result="blur2" />
+                  <feMerge>
+                    <feMergeNode in="blur1" />
+                    <feMergeNode in="blur2" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+
+                <filter id="hotFlareGlow" x="-80%" y="-80%" width="260%" height="260%">
+                  <feGaussianBlur stdDeviation="4.5" result="b1" />
+                  <feGaussianBlur stdDeviation="1.8" result="b2" />
                   <feMerge>
                     <feMergeNode in="b1" />
                     <feMergeNode in="b2" />
@@ -124,230 +131,296 @@ export const Header: React.FC<HeaderProps> = ({
                   </feMerge>
                 </filter>
 
-                {/* Hot White-Core Pulse Glow */}
-                <filter id="hotPulseGlow" x="-100%" y="-100%" width="300%" height="300%">
-                  <feGaussianBlur stdDeviation="6" result="blurWide" />
-                  <feGaussianBlur stdDeviation="2.5" result="blurTight" />
-                  <feMerge>
-                    <feMergeNode in="blurWide" />
-                    <feMergeNode in="blurTight" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
+                {/* Ambient Circuit Pattern */}
+                <pattern id="ambientGrid" width="24" height="24" patternUnits="userSpaceOnUse">
+                  <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#081932" strokeWidth="0.5" opacity="0.35" />
+                </pattern>
 
-                {/* Radial Core Glow */}
-                <radialGradient id="coreAura" cx="50%" cy="50%" r="50%">
+                {/* Core Radial Aura */}
+                <radialGradient id="chipAura" cx="50%" cy="50%" r="50%">
                   <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
-                  <stop offset="35%" stopColor="#00f0ff" stopOpacity="0.8" />
-                  <stop offset="70%" stopColor="#0284c7" stopOpacity="0.3" />
+                  <stop offset="35%" stopColor="#00f0ff" stopOpacity="0.75" />
+                  <stop offset="70%" stopColor="#0284c7" stopOpacity="0.25" />
                   <stop offset="100%" stopColor="#000000" stopOpacity="0" />
                 </radialGradient>
               </defs>
 
-              {/* ══════════ 1. EXACT REFERENCE ARTWORK BASE ══════════ */}
-              <image
-                href="/assets/fiber-network-hub.jpg"
-                x="0"
-                y="0"
-                width="534"
-                height="302"
-                preserveAspectRatio="xMidYMid meet"
-              />
+              {/* Ambient Grid Backdrop */}
+              <rect width="720" height="140" fill="url(#ambientGrid)" />
 
-              {/* ══════════ 2. CENTRAL CORE HIGH-SPEED PULSING AURA ══════════ */}
-              <circle cx="107" cy="153" r="16" fill="url(#coreAura)">
-                <animate attributeName="r" values="10;22;10" dur="0.9s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values="0.4;0.95;0.4" dur="0.9s" repeatCount="indefinite" />
-              </circle>
-              <circle cx="107" cy="153" r="4.5" fill="#ffffff" filter="url(#hotPulseGlow)">
-                <animate attributeName="r" values="3.5;6;3.5" dur="0.9s" repeatCount="indefinite" />
-              </circle>
+              {/* ══════════ LEFT EDGE: EXTENDED FIBER CONDUITS (FLUSH WITH LEFT BORDER) ══════════ */}
+              {/* Backing Dark Conduits from x = 0 */}
+              <path d="M 0 50 L 55 50 L 78 62 L 122 62" stroke="#05172e" strokeWidth="4" strokeLinecap="round" />
+              <path d="M 0 64 L 122 64" stroke="#05172e" strokeWidth="4" strokeLinecap="round" />
+              <path d="M 0 74 L 122 74" stroke="#05172e" strokeWidth="4" strokeLinecap="round" />
+              <path d="M 0 84 L 55 84 L 78 74 L 122 74" stroke="#05172e" strokeWidth="4" strokeLinecap="round" />
+              <path d="M 0 98 L 60 98 L 84 84 L 122 84" stroke="#05172e" strokeWidth="4" strokeLinecap="round" />
 
-              {/* Input Bus Rushing Pulses into Chip */}
-              <path d="M 0 142 L 80 142" stroke="#ffffff" strokeWidth="2.5" strokeDasharray="16 28" strokeLinecap="round" filter="url(#laserBeamGlow)">
-                <animate attributeName="stroke-dashoffset" from="0" to="-44" dur="0.5s" repeatCount="indefinite" />
+              {/* Glowing Active Neon Lines from x = 0 */}
+              <path d="M 0 50 L 55 50 L 78 62 L 122 62" stroke="#00f0ff" strokeWidth="1.8" strokeLinecap="round" filter="url(#neonLaserGlow)" />
+              <path d="M 0 64 L 122 64" stroke="#00f0ff" strokeWidth="1.8" strokeLinecap="round" filter="url(#neonLaserGlow)" />
+              <path d="M 0 74 L 122 74" stroke="#00f0ff" strokeWidth="1.8" strokeLinecap="round" filter="url(#neonLaserGlow)" />
+              <path d="M 0 84 L 55 84 L 78 74 L 122 74" stroke="#00f0ff" strokeWidth="1.8" strokeLinecap="round" filter="url(#neonLaserGlow)" />
+              <path d="M 0 98 L 60 98 L 84 84 L 122 84" stroke="#00f0ff" strokeWidth="1.8" strokeLinecap="round" filter="url(#neonLaserGlow)" />
+
+              {/* Rushing Light Pulses along Left Input Lines */}
+              <path d="M 0 64 L 122 64" stroke="#ffffff" strokeWidth="2.4" strokeDasharray="14 20" strokeLinecap="round" filter="url(#neonLaserGlow)">
+                <animate attributeName="stroke-dashoffset" from="0" to="-34" dur="0.6s" repeatCount="indefinite" />
               </path>
-              <path d="M 0 155 L 80 155" stroke="#38bdf8" strokeWidth="2.5" strokeDasharray="16 28" strokeLinecap="round" filter="url(#laserBeamGlow)">
-                <animate attributeName="stroke-dashoffset" from="0" to="-44" dur="0.55s" begin="0.15s" repeatCount="indefinite" />
+              <path d="M 0 74 L 122 74" stroke="#38bdf8" strokeWidth="2.4" strokeDasharray="14 20" strokeLinecap="round" filter="url(#neonLaserGlow)">
+                <animate attributeName="stroke-dashoffset" from="0" to="-34" dur="0.65s" begin="0.15s" repeatCount="indefinite" />
               </path>
 
-              {/* ══════════ 3. MAIN TRUNK RUSHING OUTWARD FROM CHIP ══════════ */}
-              <path d="M 136 136 L 190 136" stroke="#ffffff" strokeWidth="2.6" strokeDasharray="14 18" strokeLinecap="round" filter="url(#laserBeamGlow)">
+              {/* Left Bus Lens Flare */}
+              <g transform="translate(68, 69)" filter="url(#hotFlareGlow)">
+                <circle cx="0" cy="0" r="3" fill="#ffffff" />
+                <path d="M 0 -10 L 1.2 -1.5 L 10 0 L 1.2 1.5 L 0 10 L -1.2 1.5 L -10 0 L -1.2 -1.5 Z" fill="#ffffff" opacity="0.95" />
+              </g>
+
+              {/* ══════════ CENTRAL OPTICAL PROCESSOR CHIP (HUB) ══════════ */}
+              <g id="opticalChipHub">
+                {/* Outer Rounded Chassis */}
+                <rect x="122" y="42" width="56" height="56" rx="8" fill="#020817" stroke="#00f0ff" strokeWidth="2.2" filter="url(#neonLaserGlow)" />
+                <rect x="125" y="45" width="50" height="50" rx="6" fill="#010511" stroke="#0284c7" strokeWidth="0.8" />
+
+                {/* Top Connection Pins */}
+                <line x1="132" y1="38" x2="132" y2="42" stroke="#38bdf8" strokeWidth="1.5" />
+                <line x1="141" y1="38" x2="141" y2="42" stroke="#38bdf8" strokeWidth="1.5" />
+                <line x1="150" y1="38" x2="150" y2="42" stroke="#38bdf8" strokeWidth="1.5" />
+                <line x1="159" y1="38" x2="159" y2="42" stroke="#38bdf8" strokeWidth="1.5" />
+                <line x1="168" y1="38" x2="168" y2="42" stroke="#38bdf8" strokeWidth="1.5" />
+
+                {/* Bottom Connection Pins */}
+                <line x1="132" y1="98" x2="132" y2="102" stroke="#38bdf8" strokeWidth="1.5" />
+                <line x1="141" y1="98" x2="141" y2="102" stroke="#38bdf8" strokeWidth="1.5" />
+                <line x1="150" y1="98" x2="150" y2="102" stroke="#38bdf8" strokeWidth="1.5" />
+                <line x1="159" y1="98" x2="159" y2="102" stroke="#38bdf8" strokeWidth="1.5" />
+                <line x1="168" y1="98" x2="168" y2="102" stroke="#38bdf8" strokeWidth="1.5" />
+
+                {/* Internal Maze Circuit Quadrants (Matching Reference Image) */}
+                <path d="M 130 50 L 143 50 L 143 63" fill="none" stroke="#00f0ff" strokeWidth="1.2" strokeLinecap="round" />
+                <path d="M 135 55 L 139 55 L 139 60" fill="none" stroke="#38bdf8" strokeWidth="1" strokeLinecap="round" />
+
+                <path d="M 170 50 L 157 50 L 157 63" fill="none" stroke="#00f0ff" strokeWidth="1.2" strokeLinecap="round" />
+                <path d="M 165 55 L 161 55 L 161 60" fill="none" stroke="#38bdf8" strokeWidth="1" strokeLinecap="round" />
+
+                <path d="M 130 90 L 143 90 L 143 77" fill="none" stroke="#00f0ff" strokeWidth="1.2" strokeLinecap="round" />
+                <path d="M 135 85 L 139 85 L 139 80" fill="none" stroke="#38bdf8" strokeWidth="1" strokeLinecap="round" />
+
+                <path d="M 170 90 L 157 90 L 157 77" fill="none" stroke="#00f0ff" strokeWidth="1.2" strokeLinecap="round" />
+                <path d="M 165 85 L 161 85 L 161 80" fill="none" stroke="#38bdf8" strokeWidth="1" strokeLinecap="round" />
+
+                {/* Central Diamond Core Pulse */}
+                <rect x="146.5" y="66.5" width="7" height="7" fill="#00f0ff" transform="rotate(45 150 70)" filter="url(#neonLaserGlow)">
+                  <animate attributeName="opacity" values="0.6;1;0.6" dur="0.8s" repeatCount="indefinite" />
+                </rect>
+                <circle cx="150" cy="70" r="14" fill="url(#chipAura)">
+                  <animate attributeName="r" values="8;18;8" dur="0.9s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.3;0.85;0.3" dur="0.9s" repeatCount="indefinite" />
+                </circle>
+              </g>
+
+              {/* Output Bus Flare */}
+              <g transform="translate(186, 70)" filter="url(#hotFlareGlow)">
+                <circle cx="0" cy="0" r="3.5" fill="#ffffff" />
+                <path d="M 0 -12 L 1.5 -1.8 L 12 0 L 1.5 1.8 L 0 12 L -1.5 1.8 L -12 0 L -1.5 -1.8 Z" fill="#ffffff" opacity="0.95" />
+              </g>
+
+              {/* ══════════ MAIN TRUNK (CHIP TO FORK) ══════════ */}
+              <line x1="178" y1="56" x2="245" y2="56" stroke="#00f0ff" strokeWidth="1.8" filter="url(#neonLaserGlow)" />
+              <line x1="178" y1="65" x2="245" y2="65" stroke="#00f0ff" strokeWidth="1.8" filter="url(#neonLaserGlow)" />
+              <line x1="178" y1="75" x2="245" y2="75" stroke="#00f0ff" strokeWidth="1.8" filter="url(#neonLaserGlow)" />
+              <line x1="178" y1="84" x2="245" y2="84" stroke="#00f0ff" strokeWidth="1.8" filter="url(#neonLaserGlow)" />
+
+              {/* Floating Pill Accents */}
+              <rect x="195" y="46" width="16" height="2.5" rx="1.2" fill="#00f0ff" opacity="0.8" />
+              <rect x="195" y="93" width="16" height="2.5" rx="1.2" fill="#00f0ff" opacity="0.8" />
+
+              {/* Main Trunk Fast Stream */}
+              <line x1="178" y1="65" x2="245" y2="65" stroke="#ffffff" strokeWidth="2.5" strokeDasharray="14 18" strokeLinecap="round" filter="url(#neonLaserGlow)">
                 <animate attributeName="stroke-dashoffset" from="0" to="-32" dur="0.4s" repeatCount="indefinite" />
-              </path>
-              <path d="M 136 156 L 190 156" stroke="#00f0ff" strokeWidth="2.8" strokeDasharray="14 18" strokeLinecap="round" filter="url(#laserBeamGlow)">
-                <animate attributeName="stroke-dashoffset" from="0" to="-32" dur="0.4s" begin="0.1s" repeatCount="indefinite" />
-              </path>
-              <path d="M 136 176 L 190 176" stroke="#ffffff" strokeWidth="2.6" strokeDasharray="14 18" strokeLinecap="round" filter="url(#laserBeamGlow)">
-                <animate attributeName="stroke-dashoffset" from="0" to="-32" dur="0.4s" begin="0.2s" repeatCount="indefinite" />
-              </path>
+              </line>
 
-              {/* ══════════ 4. FAST GLOWING PULSES: UPPER BRANCH (HOUSES) ══════════ */}
-              {/* Path H1: Rushing to House 1 */}
-              <path
-                id="pulsePathH1"
-                d="M 188 136 L 246 76 L 334 76 L 344 55 L 354 55"
-                stroke="#ffffff"
-                strokeWidth="2.8"
-                strokeDasharray="22 55"
-                strokeLinecap="round"
-                filter="url(#laserBeamGlow)"
-              >
-                <animate attributeName="stroke-dashoffset" from="0" to="-154" dur="0.8s" repeatCount="indefinite" />
+              {/* ══════════ UPPER BRANCH: TOWARDS HOUSES ══════════ */}
+              {/* Backing Conduits */}
+              <path d="M 245 56 L 285 25 L 460 25 L 472 32 L 485 32" stroke="#05172e" strokeWidth="4" strokeLinecap="round" />
+              <path d="M 245 65 L 292 34 L 545 34 L 558 26 L 570 26" stroke="#05172e" strokeWidth="4" strokeLinecap="round" />
+              <path d="M 245 75 L 300 43 L 720 43" stroke="#05172e" strokeWidth="4" strokeLinecap="round" />
+              <path d="M 380 43 L 415 66 L 555 66" stroke="#05172e" strokeWidth="4" strokeLinecap="round" />
+
+              {/* Active Neon Lines */}
+              <path d="M 245 56 L 285 25 L 460 25 L 472 32 L 485 32" stroke="#00f0ff" strokeWidth="1.8" strokeLinecap="round" filter="url(#neonLaserGlow)" />
+              <path d="M 245 65 L 292 34 L 545 34 L 558 26 L 570 26" stroke="#00f0ff" strokeWidth="1.8" strokeLinecap="round" filter="url(#neonLaserGlow)" />
+              <path d="M 245 75 L 300 43 L 720 43" stroke="#00f0ff" strokeWidth="1.8" strokeLinecap="round" filter="url(#neonLaserGlow)" />
+              <path d="M 380 43 L 415 66 L 555 66" stroke="#00f0ff" strokeWidth="1.8" strokeLinecap="round" filter="url(#neonLaserGlow)" />
+
+              {/* Upper Floating Pills */}
+              <rect x="360" y="16" width="18" height="2.5" rx="1.2" fill="#00f0ff" opacity="0.8" />
+              <circle cx="350" cy="17.2" r="1.3" fill="#ffffff" />
+              <rect x="375" y="52" width="16" height="2.5" rx="1.2" fill="#00f0ff" opacity="0.6" />
+
+              {/* Streaming Data Pulses to Houses */}
+              <path d="M 245 56 L 285 25 L 460 25 L 472 32 L 485 32" stroke="#ffffff" strokeWidth="2.5" strokeDasharray="18 40" strokeLinecap="round" filter="url(#neonLaserGlow)">
+                <animate attributeName="stroke-dashoffset" from="0" to="-116" dur="0.8s" repeatCount="indefinite" />
               </path>
-              <circle r="4" fill="#ffffff" filter="url(#hotPulseGlow)">
-                <animateMotion path="M 188 136 L 246 76 L 334 76 L 344 55 L 354 55" dur="0.8s" repeatCount="indefinite" />
+              <circle r="3.5" fill="#ffffff" filter="url(#hotFlareGlow)">
+                <animateMotion path="M 245 56 L 285 25 L 460 25 L 472 32 L 485 32" dur="0.8s" repeatCount="indefinite" />
               </circle>
 
-              {/* Path H2: Rushing to House 2 */}
-              <path
-                id="pulsePathH2"
-                d="M 188 146 L 254 88 L 382 88 L 396 68 L 408 68"
-                stroke="#38bdf8"
-                strokeWidth="2.8"
-                strokeDasharray="24 60"
-                strokeLinecap="round"
-                filter="url(#laserBeamGlow)"
-              >
-                <animate attributeName="stroke-dashoffset" from="0" to="-168" dur="0.85s" begin="0.15s" repeatCount="indefinite" />
+              <path d="M 245 65 L 292 34 L 545 34 L 558 26 L 570 26" stroke="#38bdf8" strokeWidth="2.5" strokeDasharray="20 45" strokeLinecap="round" filter="url(#neonLaserGlow)">
+                <animate attributeName="stroke-dashoffset" from="0" to="-130" dur="0.85s" begin="0.15s" repeatCount="indefinite" />
               </path>
-              <circle r="4" fill="#ffffff" filter="url(#hotPulseGlow)">
-                <animateMotion path="M 188 146 L 254 88 L 382 88 L 396 68 L 408 68" dur="0.85s" begin="0.15s" repeatCount="indefinite" />
+              <circle r="3.5" fill="#ffffff" filter="url(#hotFlareGlow)">
+                <animateMotion path="M 245 65 L 292 34 L 545 34 L 558 26 L 570 26" dur="0.85s" begin="0.15s" repeatCount="indefinite" />
               </circle>
 
-              {/* Path H3: Rushing to House 3 */}
-              <path
-                id="pulsePathH3"
-                d="M 188 156 L 260 98 L 458 98"
-                stroke="#ffffff"
-                strokeWidth="3"
-                strokeDasharray="26 65"
-                strokeLinecap="round"
-                filter="url(#laserBeamGlow)"
-              >
-                <animate attributeName="stroke-dashoffset" from="0" to="-182" dur="0.9s" begin="0.3s" repeatCount="indefinite" />
+              <path d="M 245 75 L 300 43 L 720 43" stroke="#ffffff" strokeWidth="2.6" strokeDasharray="22 50" strokeLinecap="round" filter="url(#neonLaserGlow)">
+                <animate attributeName="stroke-dashoffset" from="0" to="-144" dur="0.9s" begin="0.3s" repeatCount="indefinite" />
               </path>
-              <circle r="4.5" fill="#ffffff" filter="url(#hotPulseGlow)">
-                <animateMotion path="M 188 156 L 260 98 L 458 98" dur="0.9s" begin="0.3s" repeatCount="indefinite" />
+              <circle r="4" fill="#ffffff" filter="url(#hotFlareGlow)">
+                <animateMotion path="M 245 75 L 300 43 L 720 43" dur="0.9s" begin="0.3s" repeatCount="indefinite" />
               </circle>
 
-              {/* Path H4: Rushing to House 4 */}
-              <path
-                id="pulsePathH4"
-                d="M 270 98 L 312 142 L 406 142"
-                stroke="#00f0ff"
-                strokeWidth="2.8"
-                strokeDasharray="20 50"
-                strokeLinecap="round"
-                filter="url(#laserBeamGlow)"
-              >
-                <animate attributeName="stroke-dashoffset" from="0" to="-140" dur="0.75s" begin="0.45s" repeatCount="indefinite" />
-              </path>
-              <circle r="3.8" fill="#ffffff" filter="url(#hotPulseGlow)">
-                <animateMotion path="M 270 98 L 312 142 L 406 142" dur="0.75s" begin="0.45s" repeatCount="indefinite" />
-              </circle>
-
-              {/* ══════════ 5. FAST GLOWING PULSES: LOWER BRANCH (MOBILE TOWER) ══════════ */}
-              {/* Path T1: Stepped Lower Line 1 */}
-              <path
-                d="M 188 166 L 238 216 L 334 216 L 344 204 L 356 204"
-                stroke="#38bdf8"
-                strokeWidth="2.6"
-                strokeDasharray="20 50"
-                strokeLinecap="round"
-                filter="url(#laserBeamGlow)"
-              >
-                <animate attributeName="stroke-dashoffset" from="0" to="-140" dur="0.8s" begin="0.1s" repeatCount="indefinite" />
+              <path d="M 380 43 L 415 66 L 555 66" stroke="#00f0ff" strokeWidth="2.4" strokeDasharray="16 35" strokeLinecap="round" filter="url(#neonLaserGlow)">
+                <animate attributeName="stroke-dashoffset" from="0" to="-102" dur="0.75s" begin="0.45s" repeatCount="indefinite" />
               </path>
 
-              {/* Path T2: Stepped Lower Line 2 */}
-              <path
-                d="M 188 176 L 246 226 L 390 226"
-                stroke="#ffffff"
-                strokeWidth="2.8"
-                strokeDasharray="22 55"
-                strokeLinecap="round"
-                filter="url(#laserBeamGlow)"
-              >
-                <animate attributeName="stroke-dashoffset" from="0" to="-154" dur="0.82s" begin="0.25s" repeatCount="indefinite" />
+              {/* Upper Bend Flare */}
+              <g transform="translate(290, 32)" filter="url(#hotFlareGlow)">
+                <circle cx="0" cy="0" r="3.5" fill="#ffffff" />
+                <path d="M 0 -12 L 1.5 -1.8 L 12 0 L 1.5 1.8 L 0 12 L -1.5 1.8 L -12 0 L -1.5 -1.8 Z" fill="#ffffff" opacity="0.95" />
+              </g>
+
+              {/* ══════════ LOWER BRANCH: TOWARDS MOBILE TOWER ══════════ */}
+              {/* Backing Conduits */}
+              <path d="M 245 75 L 285 98 L 440 98 L 450 90 L 460 90" stroke="#05172e" strokeWidth="4" strokeLinecap="round" />
+              <path d="M 245 84 L 292 108 L 525 108" stroke="#05172e" strokeWidth="4" strokeLinecap="round" />
+              <path d="M 255 92 L 300 118 L 585 118" stroke="#05172e" strokeWidth="4" strokeLinecap="round" />
+              <path d="M 265 99 L 308 126 L 640 126" stroke="#05172e" strokeWidth="4" strokeLinecap="round" />
+              <path d="M 320 133 L 720 133" stroke="#05172e" strokeWidth="3.5" strokeLinecap="round" />
+
+              {/* Active Neon Lines */}
+              <path d="M 245 75 L 285 98 L 440 98 L 450 90 L 460 90" stroke="#00f0ff" strokeWidth="1.8" strokeLinecap="round" filter="url(#neonLaserGlow)" />
+              <path d="M 245 84 L 292 108 L 525 108" stroke="#00f0ff" strokeWidth="1.8" strokeLinecap="round" filter="url(#neonLaserGlow)" />
+              <path d="M 255 92 L 300 118 L 585 118" stroke="#00f0ff" strokeWidth="1.8" strokeLinecap="round" filter="url(#neonLaserGlow)" />
+              <path d="M 265 99 L 308 126 L 640 126" stroke="#00f0ff" strokeWidth="1.8" strokeLinecap="round" filter="url(#neonLaserGlow)" />
+              <path d="M 320 133 L 720 133" stroke="#00f0ff" strokeWidth="1.6" strokeLinecap="round" filter="url(#neonLaserGlow)" />
+
+              {/* Lower Floating Pills */}
+              <rect x="330" y="132" width="16" height="2.5" rx="1.2" fill="#00f0ff" opacity="0.75" />
+              <circle cx="355" cy="133.2" r="1.3" fill="#ffffff" />
+
+              {/* Streaming Pulses to Tower */}
+              <path d="M 265 99 L 308 126 L 640 126" stroke="#ffffff" strokeWidth="2.8" strokeDasharray="22 50" strokeLinecap="round" filter="url(#neonLaserGlow)">
+                <animate attributeName="stroke-dashoffset" from="0" to="-144" dur="0.88s" begin="0.4s" repeatCount="indefinite" />
               </path>
-              <circle r="3.8" fill="#ffffff" filter="url(#hotPulseGlow)">
-                <animateMotion path="M 188 176 L 246 226 L 390 226" dur="0.82s" begin="0.25s" repeatCount="indefinite" />
+              <circle r="4" fill="#ffffff" filter="url(#hotFlareGlow)">
+                <animateMotion path="M 265 99 L 308 126 L 640 126" dur="0.88s" begin="0.4s" repeatCount="indefinite" />
               </circle>
 
-              {/* Path T3: Stepped Lower Line 3 */}
-              <path
-                d="M 198 184 L 254 238 L 416 238"
-                stroke="#00f0ff"
-                strokeWidth="2.8"
-                strokeDasharray="24 60"
-                strokeLinecap="round"
-                filter="url(#laserBeamGlow)"
-              >
-                <animate attributeName="stroke-dashoffset" from="0" to="-168" dur="0.85s" begin="0.35s" repeatCount="indefinite" />
-              </path>
+              {/* Lower Bend Flare */}
+              <g transform="translate(294, 110)" filter="url(#hotFlareGlow)">
+                <circle cx="0" cy="0" r="3.5" fill="#ffffff" />
+                <path d="M 0 -12 L 1.5 -1.8 L 12 0 L 1.5 1.8 L 0 12 L -1.5 1.8 L -12 0 L -1.5 -1.8 Z" fill="#ffffff" opacity="0.95" />
+              </g>
 
-              {/* Path T4: Direct Highway into Mobile Tower */}
-              <path
-                id="pulsePathTower"
-                d="M 208 192 L 262 248 L 442 248"
-                stroke="#ffffff"
-                strokeWidth="3.2"
-                strokeDasharray="26 65"
-                strokeLinecap="round"
-                filter="url(#laserBeamGlow)"
-              >
-                <animate attributeName="stroke-dashoffset" from="0" to="-182" dur="0.88s" begin="0.4s" repeatCount="indefinite" />
-              </path>
-              <circle r="4.5" fill="#ffffff" filter="url(#hotPulseGlow)">
-                <animateMotion path="M 208 192 L 262 248 L 442 248" dur="0.88s" begin="0.4s" repeatCount="indefinite" />
-              </circle>
+              {/* Stepped Lower Line Glowing Termination Dots */}
+              <circle cx="460" cy="90" r="3" fill="#ffffff" filter="url(#hotFlareGlow)" />
+              <circle cx="525" cy="108" r="3" fill="#ffffff" filter="url(#hotFlareGlow)" />
+              <circle cx="585" cy="118" r="3" fill="#ffffff" filter="url(#hotFlareGlow)" />
 
-              {/* ══════════ 6. TERMINATION ARRIVAL FLASHES & WIRELESS SIGNALS ══════════ */}
-              {/* House 1 Terminal Flash */}
-              <circle cx="354" cy="55" r="5" fill="#ffffff" filter="url(#hotPulseGlow)">
-                <animate attributeName="r" values="3.5;7;3.5" dur="0.8s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values="0.6;1;0.6" dur="0.8s" repeatCount="indefinite" />
-              </circle>
+              {/* ══════════ 4 HOUSES (NEON LINE ART MATCHING REFERENCE) ══════════ */}
+              {/* House 1: Top Left */}
+              <g transform="translate(488, 12)">
+                <path d="M 0 11 L 11 0 L 22 11" fill="none" stroke="#00f0ff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" filter="url(#neonLaserGlow)" />
+                <path d="M 15 4 L 15 1 L 18 1 L 18 7" fill="none" stroke="#00f0ff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                <rect x="2" y="11" width="18" height="12" rx="0.5" fill="#02091c" stroke="#00f0ff" strokeWidth="1.6" />
+                <rect x="5" y="13.5" width="4.5" height="4.5" rx="0.5" fill="none" stroke="#67e8f9" strokeWidth="1.1" />
+                <path d="M 13 23 L 13 16 L 17.5 16 L 17.5 23" fill="none" stroke="#67e8f9" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="-3" cy="20" r="3.2" fill="#ffffff" filter="url(#hotFlareGlow)">
+                  <animate attributeName="r" values="2.6;3.6;2.6" dur="0.8s" repeatCount="indefinite" />
+                </circle>
+              </g>
 
-              {/* House 2 Terminal Flash */}
-              <circle cx="408" cy="68" r="5" fill="#ffffff" filter="url(#hotPulseGlow)">
-                <animate attributeName="r" values="3.5;7;3.5" dur="0.85s" begin="0.15s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values="0.6;1;0.6" dur="0.85s" begin="0.15s" repeatCount="indefinite" />
-              </circle>
+              {/* House 2: Top Middle (Highest) */}
+              <g transform="translate(573, 6)">
+                <path d="M 0 11 L 11 0 L 22 11" fill="none" stroke="#00f0ff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" filter="url(#neonLaserGlow)" />
+                <path d="M 15 4 L 15 1 L 18 1 L 18 7" fill="none" stroke="#00f0ff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                <rect x="2" y="11" width="18" height="12" rx="0.5" fill="#02091c" stroke="#00f0ff" strokeWidth="1.6" />
+                <rect x="5" y="13.5" width="4.5" height="4.5" rx="0.5" fill="none" stroke="#67e8f9" strokeWidth="1.1" />
+                <path d="M 13 23 L 13 16 L 17.5 16 L 17.5 23" fill="none" stroke="#67e8f9" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="-3" cy="20" r="3.2" fill="#ffffff" filter="url(#hotFlareGlow)">
+                  <animate attributeName="r" values="2.6;3.6;2.6" dur="0.85s" begin="0.15s" repeatCount="indefinite" />
+                </circle>
+              </g>
 
-              {/* House 3 Terminal Flash */}
-              <circle cx="458" cy="98" r="5.5" fill="#ffffff" filter="url(#hotPulseGlow)">
-                <animate attributeName="r" values="4;8;4" dur="0.9s" begin="0.3s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values="0.6;1;0.6" dur="0.9s" begin="0.3s" repeatCount="indefinite" />
-              </circle>
+              {/* House 3: Top Right (Furthest) */}
+              <g transform="translate(653, 22)">
+                <path d="M 0 11 L 11 0 L 22 11" fill="none" stroke="#00f0ff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" filter="url(#neonLaserGlow)" />
+                <path d="M 15 4 L 15 1 L 18 1 L 18 7" fill="none" stroke="#00f0ff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                <rect x="2" y="11" width="18" height="12" rx="0.5" fill="#02091c" stroke="#00f0ff" strokeWidth="1.6" />
+                <rect x="5" y="13.5" width="4.5" height="4.5" rx="0.5" fill="none" stroke="#67e8f9" strokeWidth="1.1" />
+                <path d="M 13 23 L 13 16 L 17.5 16 L 17.5 23" fill="none" stroke="#67e8f9" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="-3" cy="21" r="3.2" fill="#ffffff" filter="url(#hotFlareGlow)">
+                  <animate attributeName="r" values="2.6;3.6;2.6" dur="0.9s" begin="0.3s" repeatCount="indefinite" />
+                </circle>
+              </g>
 
-              {/* House 4 Terminal Flash */}
-              <circle cx="406" cy="142" r="5" fill="#ffffff" filter="url(#hotPulseGlow)">
-                <animate attributeName="r" values="3.5;7;3.5" dur="0.75s" begin="0.45s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values="0.6;1;0.6" dur="0.75s" begin="0.45s" repeatCount="indefinite" />
-              </circle>
+              {/* House 4: Lower Cluster House */}
+              <g transform="translate(558, 45)">
+                <path d="M 0 11 L 11 0 L 22 11" fill="none" stroke="#00f0ff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" filter="url(#neonLaserGlow)" />
+                <path d="M 15 4 L 15 1 L 18 1 L 18 7" fill="none" stroke="#00f0ff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                <rect x="2" y="11" width="18" height="12" rx="0.5" fill="#02091c" stroke="#00f0ff" strokeWidth="1.6" />
+                <rect x="5" y="13.5" width="4.5" height="4.5" rx="0.5" fill="none" stroke="#67e8f9" strokeWidth="1.1" />
+                <path d="M 13 23 L 13 16 L 17.5 16 L 17.5 23" fill="none" stroke="#67e8f9" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="-3" cy="21" r="3.2" fill="#ffffff" filter="url(#hotFlareGlow)">
+                  <animate attributeName="r" values="2.6;3.6;2.6" dur="0.75s" begin="0.45s" repeatCount="indefinite" />
+                </circle>
+              </g>
 
-              {/* Mobile Tower Terminal & Wireless Transmission Radiations */}
-              <circle cx="442" cy="248" r="5" fill="#ffffff" filter="url(#hotPulseGlow)">
-                <animate attributeName="r" values="3.5;7.5;3.5" dur="0.88s" begin="0.4s" repeatCount="indefinite" />
-              </circle>
+              {/* ══════════ MOBILE CELL TOWER (BOTTOM RIGHT) ══════════ */}
+              <g transform="translate(675, 96)">
+                {/* Triangular Lattice Mast */}
+                <line x1="-14" y1="36" x2="0" y2="-12" stroke="#00f0ff" strokeWidth="1.6" strokeLinecap="round" filter="url(#neonLaserGlow)" />
+                <line x1="14" y1="36" x2="0" y2="-12" stroke="#00f0ff" strokeWidth="1.6" strokeLinecap="round" filter="url(#neonLaserGlow)" />
 
-              {/* Tower Antenna Beacon Pulse */}
-              <circle cx="488" cy="198" r="4.5" fill="#ffffff" filter="url(#hotPulseGlow)">
-                <animate attributeName="r" values="3;6;3" dur="0.8s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values="0.5;1;0.5" dur="0.8s" repeatCount="indefinite" />
-              </circle>
+                {/* Horizontal Ties */}
+                <line x1="-11" y1="24" x2="11" y2="24" stroke="#00f0ff" strokeWidth="1.2" />
+                <line x1="-7.5" y1="12" x2="7.5" y2="12" stroke="#00f0ff" strokeWidth="1.2" />
+                <line x1="-4" y1="0" x2="4" y2="0" stroke="#00f0ff" strokeWidth="1.2" />
 
-              {/* Animated Glowing Wireless Waves from Tower */}
-              <circle cx="488" cy="198" r="14" fill="none" stroke="#00f0ff" strokeWidth="1.8" filter="url(#laserBeamGlow)">
-                <animate attributeName="r" values="10;28;36" dur="1.2s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values="0.9;0.3;0" dur="1.2s" repeatCount="indefinite" />
-              </circle>
-              <circle cx="488" cy="198" r="14" fill="none" stroke="#ffffff" strokeWidth="1.2" opacity="0.8">
-                <animate attributeName="r" values="8;24;32" dur="1.2s" begin="0.4s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values="0.8;0.2;0" dur="1.2s" begin="0.4s" repeatCount="indefinite" />
-              </circle>
+                {/* Diagonal Cross-Bracing */}
+                <line x1="-11" y1="24" x2="7.5" y2="12" stroke="#38bdf8" strokeWidth="1" />
+                <line x1="11" y1="24" x2="-7.5" y2="12" stroke="#38bdf8" strokeWidth="1" />
+                <line x1="-7.5" y1="12" x2="4" y2="0" stroke="#38bdf8" strokeWidth="1" />
+                <line x1="7.5" y1="12" x2="-4" y2="0" stroke="#38bdf8" strokeWidth="1" />
+
+                {/* Center Antenna Head Circle */}
+                <circle cx="0" cy="-14" r="3.5" fill="#02091c" stroke="#00f0ff" strokeWidth="1.6" filter="url(#neonLaserGlow)" />
+                <circle cx="0" cy="-14" r="1.5" fill="#ffffff" />
+
+                {/* Radiating Wireless Arcs (Left) */}
+                <path d="M -6 -19 C -10 -16, -10 -12, -6 -9" fill="none" stroke="#00f0ff" strokeWidth="1.4" strokeLinecap="round">
+                  <animate attributeName="opacity" values="0.3;1;0.3" dur="1.3s" repeatCount="indefinite" />
+                </path>
+                <path d="M -10 -23 C -16 -18, -16 -10, -10 -5" fill="none" stroke="#38bdf8" strokeWidth="1.3" strokeLinecap="round">
+                  <animate attributeName="opacity" values="0.2;1;0.2" dur="1.3s" begin="0.25s" repeatCount="indefinite" />
+                </path>
+                <path d="M -14 -27 C -22 -20, -22 -8, -14 -1" fill="none" stroke="#00f0ff" strokeWidth="1.1" strokeLinecap="round" opacity="0.85">
+                  <animate attributeName="opacity" values="0.1;0.9;0.1" dur="1.3s" begin="0.5s" repeatCount="indefinite" />
+                </path>
+
+                {/* Radiating Wireless Arcs (Right) */}
+                <path d="M 6 -19 C 10 -16, 10 -12, 6 -9" fill="none" stroke="#00f0ff" strokeWidth="1.4" strokeLinecap="round">
+                  <animate attributeName="opacity" values="0.3;1;0.3" dur="1.3s" repeatCount="indefinite" />
+                </path>
+                <path d="M 10 -23 C 16 -18, 16 -10, 10 -5" fill="none" stroke="#38bdf8" strokeWidth="1.3" strokeLinecap="round">
+                  <animate attributeName="opacity" values="0.2;1;0.2" dur="1.3s" begin="0.25s" repeatCount="indefinite" />
+                </path>
+                <path d="M 14 -27 C 22 -20, 22 -8, 14 -1" fill="none" stroke="#00f0ff" strokeWidth="1.1" strokeLinecap="round" opacity="0.85">
+                  <animate attributeName="opacity" values="0.1;0.9;0.1" dur="1.3s" begin="0.5s" repeatCount="indefinite" />
+                </path>
+              </g>
             </svg>
           </div>
         </div>
