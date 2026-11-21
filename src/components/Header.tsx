@@ -94,212 +94,251 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Center Optical-Fiber Branching Network (Neon Line-Art Animation on Dark Navy) */}
-        <div className="hidden md:flex flex-1 items-center justify-center px-1 mx-2 lg:mx-3 h-[74px] sm:h-[78px] max-w-[580px] pointer-events-none select-none">
-          <div className="w-full h-full bg-[#050b18]/90 border border-cyan-500/25 rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.14),inset_0_0_15px_rgba(3,7,18,0.8)] flex items-center justify-center px-2 py-0.5 overflow-hidden relative backdrop-blur-sm">
+        {/* Center Optical-Fiber Branching Network (Exact Image Base with Fast Animated Glowing Pulses) */}
+        <div className="hidden md:flex flex-1 items-center justify-center px-1 mx-2 lg:mx-3 h-[78px] sm:h-[86px] max-w-[540px] pointer-events-none select-none">
+          <div className="w-full h-full bg-[#020714] border border-cyan-500/30 rounded-xl shadow-[0_0_25px_rgba(6,182,212,0.2),inset_0_0_15px_rgba(1,4,14,0.9)] flex items-center justify-center overflow-hidden relative backdrop-blur-md">
             <svg
-              viewBox="0 0 520 80"
-              className="w-full h-full overflow-visible"
+              viewBox="0 0 534 302"
+              className="w-full h-full max-h-[84px] object-contain overflow-visible"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
             >
               <defs>
-                {/* Neon Glow Filters */}
-                <filter id="neonCyanGlow" x="-30%" y="-30%" width="160%" height="160%">
-                  <feGaussianBlur stdDeviation="2" result="blur1" />
-                  <feGaussianBlur stdDeviation="1" result="blur2" />
+                {/* Intense Laser Beam Glow */}
+                <filter id="laserBeamGlow" x="-60%" y="-60%" width="220%" height="220%">
+                  <feGaussianBlur stdDeviation="4" result="b1" />
+                  <feGaussianBlur stdDeviation="2" result="b2" />
                   <feMerge>
-                    <feMergeNode in="blur1" />
-                    <feMergeNode in="blur2" />
+                    <feMergeNode in="b1" />
+                    <feMergeNode in="b2" />
                     <feMergeNode in="SourceGraphic" />
                   </feMerge>
                 </filter>
-                <filter id="neonPurpleGlow" x="-30%" y="-30%" width="160%" height="160%">
-                  <feGaussianBlur stdDeviation="2" result="blur" />
+
+                {/* Hot White-Core Pulse Glow */}
+                <filter id="hotPulseGlow" x="-100%" y="-100%" width="300%" height="300%">
+                  <feGaussianBlur stdDeviation="6" result="blurWide" />
+                  <feGaussianBlur stdDeviation="2.5" result="blurTight" />
                   <feMerge>
-                    <feMergeNode in="blur" />
+                    <feMergeNode in="blurWide" />
+                    <feMergeNode in="blurTight" />
                     <feMergeNode in="SourceGraphic" />
                   </feMerge>
                 </filter>
-                <filter id="neonGreenGlow" x="-30%" y="-30%" width="160%" height="160%">
-                  <feGaussianBlur stdDeviation="2" result="blur" />
-                  <feMerge>
-                    <feMergeNode in="blur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
-                <pattern id="techGrid" width="16" height="16" patternUnits="userSpaceOnUse">
-                  <path d="M 16 0 L 0 0 0 16" fill="none" stroke="#0d1f35" strokeWidth="0.5" opacity="0.3" />
-                </pattern>
+
+                {/* Radial Core Glow */}
+                <radialGradient id="coreAura" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
+                  <stop offset="35%" stopColor="#00f0ff" stopOpacity="0.8" />
+                  <stop offset="70%" stopColor="#0284c7" stopOpacity="0.3" />
+                  <stop offset="100%" stopColor="#000000" stopOpacity="0" />
+                </radialGradient>
               </defs>
 
-              {/* Subtle Tech Grid Background */}
-              <rect width="520" height="80" fill="url(#techGrid)" />
+              {/* ══════════ 1. EXACT REFERENCE ARTWORK BASE ══════════ */}
+              <image
+                href="/assets/fiber-network-hub.jpg"
+                x="0"
+                y="0"
+                width="534"
+                height="302"
+                preserveAspectRatio="xMidYMid meet"
+              />
 
-              {/* ══════════ FIBER CONDUITS & GLOWING BRANCHING LINES ══════════ */}
-              {/* Main Trunk Backing Conduits */}
-              <line x1="446" y1="40" x2="348" y2="40" stroke="#0b223d" strokeWidth="3.5" strokeLinecap="round" />
-              {/* Branch Backing Conduits */}
-              <path d="M 341 40 C 255 40, 180 17, 96 17" stroke="#072238" strokeWidth="3" strokeLinecap="round" />
-              <path d="M 341 40 C 255 40, 180 40, 96 40" stroke="#250d36" strokeWidth="3" strokeLinecap="round" />
-              <path d="M 341 40 C 255 40, 180 63, 96 63" stroke="#052920" strokeWidth="3" strokeLinecap="round" />
+              {/* ══════════ 2. CENTRAL CORE HIGH-SPEED PULSING AURA ══════════ */}
+              <circle cx="107" cy="153" r="16" fill="url(#coreAura)">
+                <animate attributeName="r" values="10;22;10" dur="0.9s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.4;0.95;0.4" dur="0.9s" repeatCount="indefinite" />
+              </circle>
+              <circle cx="107" cy="153" r="4.5" fill="#ffffff" filter="url(#hotPulseGlow)">
+                <animate attributeName="r" values="3.5;6;3.5" dur="0.9s" repeatCount="indefinite" />
+              </circle>
 
-              {/* Glowing Active Fiber Tracks */}
-              {/* Main Trunk Line */}
-              <line x1="446" y1="40" x2="348" y2="40" stroke="#00f0ff" strokeWidth="1.8" strokeLinecap="round" filter="url(#neonCyanGlow)" />
-              {/* Branch 1 -> FTTS Mobile Tower */}
-              <path d="M 341 40 C 255 40, 180 17, 96 17" stroke="#00f0ff" strokeWidth="1.6" strokeLinecap="round" filter="url(#neonCyanGlow)" />
-              {/* Branch 2 -> FTTH House 1 */}
-              <path d="M 341 40 C 255 40, 180 40, 96 40" stroke="#c084fc" strokeWidth="1.6" strokeLinecap="round" filter="url(#neonPurpleGlow)" />
-              {/* Branch 3 -> FTTH House 2 */}
-              <path d="M 341 40 C 255 40, 180 63, 96 63" stroke="#34d399" strokeWidth="1.6" strokeLinecap="round" filter="url(#neonGreenGlow)" />
-
-              {/* ══════════ CONTINUOUS TRAVELING LIGHT DASHES & PULSES ══════════ */}
-              {/* Main Trunk Fast Laser Stream */}
-              <line x1="446" y1="40" x2="348" y2="40" stroke="#ffffff" strokeWidth="2.2" strokeDasharray="10 14" strokeLinecap="round" filter="url(#neonCyanGlow)">
-                <animate attributeName="stroke-dashoffset" from="0" to="24" dur="0.6s" repeatCount="indefinite" />
-              </line>
-
-              {/* Branch 1 Traveling Light Dashes */}
-              <path d="M 341 40 C 255 40, 180 17, 96 17" stroke="#ffffff" strokeWidth="2" strokeDasharray="12 24" strokeLinecap="round" filter="url(#neonCyanGlow)">
-                <animate attributeName="stroke-dashoffset" from="0" to="72" dur="1.3s" repeatCount="indefinite" />
+              {/* Input Bus Rushing Pulses into Chip */}
+              <path d="M 0 142 L 80 142" stroke="#ffffff" strokeWidth="2.5" strokeDasharray="16 28" strokeLinecap="round" filter="url(#laserBeamGlow)">
+                <animate attributeName="stroke-dashoffset" from="0" to="-44" dur="0.5s" repeatCount="indefinite" />
               </path>
-              {/* Branch 1 Photon Pulse Dot */}
-              <circle r="2.6" fill="#ffffff" filter="url(#neonCyanGlow)">
-                <animateMotion path="M 341 40 C 255 40, 180 17, 96 17" dur="1.3s" repeatCount="indefinite" />
-              </circle>
-              <circle r="1.8" fill="#38bdf8" filter="url(#neonCyanGlow)">
-                <animateMotion path="M 341 40 C 255 40, 180 17, 96 17" dur="1.3s" begin="0.65s" repeatCount="indefinite" />
-              </circle>
-
-              {/* Branch 2 Traveling Light Dashes */}
-              <path d="M 341 40 C 255 40, 180 40, 96 40" stroke="#f5d0fe" strokeWidth="2" strokeDasharray="12 24" strokeLinecap="round" filter="url(#neonPurpleGlow)">
-                <animate attributeName="stroke-dashoffset" from="0" to="72" dur="1.5s" begin="0.3s" repeatCount="indefinite" />
+              <path d="M 0 155 L 80 155" stroke="#38bdf8" strokeWidth="2.5" strokeDasharray="16 28" strokeLinecap="round" filter="url(#laserBeamGlow)">
+                <animate attributeName="stroke-dashoffset" from="0" to="-44" dur="0.55s" begin="0.15s" repeatCount="indefinite" />
               </path>
-              {/* Branch 2 Photon Pulse Dot */}
-              <circle r="2.6" fill="#f5d0fe" filter="url(#neonPurpleGlow)">
-                <animateMotion path="M 341 40 C 255 40, 180 40, 96 40" dur="1.5s" begin="0.3s" repeatCount="indefinite" />
-              </circle>
-              <circle r="1.8" fill="#e879f9" filter="url(#neonPurpleGlow)">
-                <animateMotion path="M 341 40 C 255 40, 180 40, 96 40" dur="1.5s" begin="1.05s" repeatCount="indefinite" />
-              </circle>
 
-              {/* Branch 3 Traveling Light Dashes */}
-              <path d="M 341 40 C 255 40, 180 63, 96 63" stroke="#a7f3d0" strokeWidth="2" strokeDasharray="12 24" strokeLinecap="round" filter="url(#neonGreenGlow)">
-                <animate attributeName="stroke-dashoffset" from="0" to="72" dur="1.7s" begin="0.6s" repeatCount="indefinite" />
+              {/* ══════════ 3. MAIN TRUNK RUSHING OUTWARD FROM CHIP ══════════ */}
+              <path d="M 136 136 L 190 136" stroke="#ffffff" strokeWidth="2.6" strokeDasharray="14 18" strokeLinecap="round" filter="url(#laserBeamGlow)">
+                <animate attributeName="stroke-dashoffset" from="0" to="-32" dur="0.4s" repeatCount="indefinite" />
               </path>
-              {/* Branch 3 Photon Pulse Dot */}
-              <circle r="2.6" fill="#a7f3d0" filter="url(#neonGreenGlow)">
-                <animateMotion path="M 341 40 C 255 40, 180 63, 96 63" dur="1.7s" begin="0.6s" repeatCount="indefinite" />
+              <path d="M 136 156 L 190 156" stroke="#00f0ff" strokeWidth="2.8" strokeDasharray="14 18" strokeLinecap="round" filter="url(#laserBeamGlow)">
+                <animate attributeName="stroke-dashoffset" from="0" to="-32" dur="0.4s" begin="0.1s" repeatCount="indefinite" />
+              </path>
+              <path d="M 136 176 L 190 176" stroke="#ffffff" strokeWidth="2.6" strokeDasharray="14 18" strokeLinecap="round" filter="url(#laserBeamGlow)">
+                <animate attributeName="stroke-dashoffset" from="0" to="-32" dur="0.4s" begin="0.2s" repeatCount="indefinite" />
+              </path>
+
+              {/* ══════════ 4. FAST GLOWING PULSES: UPPER BRANCH (HOUSES) ══════════ */}
+              {/* Path H1: Rushing to House 1 */}
+              <path
+                id="pulsePathH1"
+                d="M 188 136 L 246 76 L 334 76 L 344 55 L 354 55"
+                stroke="#ffffff"
+                strokeWidth="2.8"
+                strokeDasharray="22 55"
+                strokeLinecap="round"
+                filter="url(#laserBeamGlow)"
+              >
+                <animate attributeName="stroke-dashoffset" from="0" to="-154" dur="0.8s" repeatCount="indefinite" />
+              </path>
+              <circle r="4" fill="#ffffff" filter="url(#hotPulseGlow)">
+                <animateMotion path="M 188 136 L 246 76 L 334 76 L 344 55 L 354 55" dur="0.8s" repeatCount="indefinite" />
               </circle>
-              <circle r="1.8" fill="#6ee7b7" filter="url(#neonGreenGlow)">
-                <animateMotion path="M 341 40 C 255 40, 180 63, 96 63" dur="1.7s" begin="1.45s" repeatCount="indefinite" />
+
+              {/* Path H2: Rushing to House 2 */}
+              <path
+                id="pulsePathH2"
+                d="M 188 146 L 254 88 L 382 88 L 396 68 L 408 68"
+                stroke="#38bdf8"
+                strokeWidth="2.8"
+                strokeDasharray="24 60"
+                strokeLinecap="round"
+                filter="url(#laserBeamGlow)"
+              >
+                <animate attributeName="stroke-dashoffset" from="0" to="-168" dur="0.85s" begin="0.15s" repeatCount="indefinite" />
+              </path>
+              <circle r="4" fill="#ffffff" filter="url(#hotPulseGlow)">
+                <animateMotion path="M 188 146 L 254 88 L 382 88 L 396 68 L 408 68" dur="0.85s" begin="0.15s" repeatCount="indefinite" />
               </circle>
 
-              {/* ══════════ OPTICAL SPLITTER UNIT ══════════ */}
-              <g id="opticalSplitter">
-                <polygon points="348,32 355,40 348,48 341,40" fill="#071228" stroke="#00f0ff" strokeWidth="1.5" filter="url(#neonCyanGlow)" />
-                <circle cx="348" cy="40" r="2.2" fill="#ffffff" />
-                <text x="348" y="56" textAnchor="middle" fill="#67e8f9" fontSize="5" fontFamily="monospace">SPLITTER</text>
-              </g>
+              {/* Path H3: Rushing to House 3 */}
+              <path
+                id="pulsePathH3"
+                d="M 188 156 L 260 98 L 458 98"
+                stroke="#ffffff"
+                strokeWidth="3"
+                strokeDasharray="26 65"
+                strokeLinecap="round"
+                filter="url(#laserBeamGlow)"
+              >
+                <animate attributeName="stroke-dashoffset" from="0" to="-182" dur="0.9s" begin="0.3s" repeatCount="indefinite" />
+              </path>
+              <circle r="4.5" fill="#ffffff" filter="url(#hotPulseGlow)">
+                <animateMotion path="M 188 156 L 260 98 L 458 98" dur="0.9s" begin="0.3s" repeatCount="indefinite" />
+              </circle>
 
-              {/* ══════════ RIGHT: CENTRAL HUB (NEON LINE-ART) ══════════ */}
-              <g id="centralHub">
-                {/* Rotating Outer Tech Ring */}
-                <circle cx="465" cy="40" r="19" fill="none" stroke="#00f0ff" strokeWidth="1.2" strokeDasharray="6 4" opacity="0.75">
-                  <animateTransform attributeName="transform" type="rotate" from="0 465 40" to="360 465 40" dur="24s" repeatCount="indefinite" />
-                </circle>
-                {/* Inner Solid Hub Ring */}
-                <circle cx="465" cy="40" r="13" fill="#040c1a" stroke="#38bdf8" strokeWidth="1.5" filter="url(#neonCyanGlow)" />
-                {/* Expanding Pulse Wave */}
-                <circle cx="465" cy="40" r="5" fill="none" stroke="#00f0ff" strokeWidth="1.2" opacity="0.9">
-                  <animate attributeName="r" values="5;22;25" dur="2.2s" repeatCount="indefinite" />
-                  <animate attributeName="opacity" values="0.9;0.3;0" dur="2.2s" repeatCount="indefinite" />
-                </circle>
-                {/* Core Emitting Node */}
-                <circle cx="465" cy="40" r="4.5" fill="#00f0ff" filter="url(#neonCyanGlow)">
-                  <animate attributeName="r" values="3.8;5.2;3.8" dur="1.5s" repeatCount="indefinite" />
-                </circle>
-                <circle cx="465" cy="40" r="2" fill="#ffffff" />
-                {/* Hub Label */}
-                <text x="465" y="68" textAnchor="middle" fill="#38bdf8" fontSize="5.5" fontFamily="monospace" fontWeight="bold" letterSpacing="0.6">
-                  CENTRAL HUB
-                </text>
-              </g>
+              {/* Path H4: Rushing to House 4 */}
+              <path
+                id="pulsePathH4"
+                d="M 270 98 L 312 142 L 406 142"
+                stroke="#00f0ff"
+                strokeWidth="2.8"
+                strokeDasharray="20 50"
+                strokeLinecap="round"
+                filter="url(#laserBeamGlow)"
+              >
+                <animate attributeName="stroke-dashoffset" from="0" to="-140" dur="0.75s" begin="0.45s" repeatCount="indefinite" />
+              </path>
+              <circle r="3.8" fill="#ffffff" filter="url(#hotPulseGlow)">
+                <animateMotion path="M 270 98 L 312 142 L 406 142" dur="0.75s" begin="0.45s" repeatCount="indefinite" />
+              </circle>
 
-              {/* ══════════ LEFT: DESTINATIONS LINE-ART ICONS ══════════ */}
-              {/* 1. FTTS Mobile Tower Line Icon */}
-              <g id="fttsTower">
-                {/* Line Label */}
-                <text x="56" y="20" textAnchor="end" fill="#38bdf8" fontSize="6.5" fontFamily="monospace" fontWeight="bold">FTTS</text>
-                {/* Tower Legs */}
-                <line x1="66" y1="26" x2="74" y2="8" stroke="#38bdf8" strokeWidth="1.4" strokeLinecap="round" />
-                <line x1="82" y1="26" x2="74" y2="8" stroke="#38bdf8" strokeWidth="1.4" strokeLinecap="round" />
-                {/* Horizontal Lattice Crossbeams */}
-                <line x1="68.5" y1="21" x2="79.5" y2="21" stroke="#0284c7" strokeWidth="0.9" />
-                <line x1="71" y1="15" x2="77" y2="15" stroke="#0284c7" strokeWidth="0.9" />
-                {/* Cross Braces */}
-                <line x1="68.5" y1="21" x2="77" y2="15" stroke="#0284c7" strokeWidth="0.7" />
-                <line x1="79.5" y1="21" x2="71" y2="15" stroke="#0284c7" strokeWidth="0.7" />
-                {/* Mast Platform */}
-                <line x1="70" y1="8" x2="78" y2="8" stroke="#e0f2fe" strokeWidth="1.5" strokeLinecap="round" />
-                <line x1="74" y1="8" x2="74" y2="3.5" stroke="#38bdf8" strokeWidth="1.5" strokeLinecap="round" />
-                {/* Beacon Blinking Dot */}
-                <circle cx="74" cy="3.5" r="1.6" fill="#f43f5e">
-                  <animate attributeName="opacity" values="0.3;1;0.3" dur="0.9s" repeatCount="indefinite" />
-                </circle>
-                {/* Radiating Wireless Signals */}
-                <path d="M 78 4 C 81 6, 81 9, 78 11" fill="none" stroke="#00f0ff" strokeWidth="1.2" strokeLinecap="round">
-                  <animate attributeName="opacity" values="0.2;1;0.2" dur="1.3s" repeatCount="indefinite" />
-                </path>
-                <path d="M 81 2 C 85 5, 85 11, 81 14" fill="none" stroke="#38bdf8" strokeWidth="1" strokeDasharray="2 1.5" strokeLinecap="round">
-                  <animate attributeName="opacity" values="0;0.9;0" dur="1.3s" begin="0.3s" repeatCount="indefinite" />
-                </path>
-                {/* Optical Receiver Terminal Node */}
-                <circle cx="96" cy="17" r="2.8" fill="#00f0ff" filter="url(#neonCyanGlow)">
-                  <animate attributeName="r" values="2.2;3.4;2.2" dur="1.3s" repeatCount="indefinite" />
-                </circle>
-              </g>
+              {/* ══════════ 5. FAST GLOWING PULSES: LOWER BRANCH (MOBILE TOWER) ══════════ */}
+              {/* Path T1: Stepped Lower Line 1 */}
+              <path
+                d="M 188 166 L 238 216 L 334 216 L 344 204 L 356 204"
+                stroke="#38bdf8"
+                strokeWidth="2.6"
+                strokeDasharray="20 50"
+                strokeLinecap="round"
+                filter="url(#laserBeamGlow)"
+              >
+                <animate attributeName="stroke-dashoffset" from="0" to="-140" dur="0.8s" begin="0.1s" repeatCount="indefinite" />
+              </path>
 
-              {/* 2. FTTH House 1 (Single-Family Gable Home Line Art) */}
-              <g id="ftthHouse1">
-                {/* Line Label */}
-                <text x="56" y="43" textAnchor="end" fill="#c084fc" fontSize="6.5" fontFamily="monospace" fontWeight="bold">FTTH</text>
-                {/* Roof */}
-                <polyline points="64,39 74,30 84,39" fill="none" stroke="#c084fc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" filter="url(#neonPurpleGlow)" />
-                {/* Walls */}
-                <rect x="67" y="39" width="14" height="10" rx="1" fill="none" stroke="#c084fc" strokeWidth="1.4" />
-                {/* Window */}
-                <rect x="69.5" y="41.5" width="3.5" height="3.5" rx="0.5" fill="none" stroke="#f5d0fe" strokeWidth="0.9" />
-                {/* Door */}
-                <line x1="77.5" y1="49" x2="77.5" y2="44" stroke="#c084fc" strokeWidth="1.3" strokeLinecap="round" />
-                {/* Chimney */}
-                <polyline points="80,33 80,30 82,30 82,35" fill="none" stroke="#c084fc" strokeWidth="1" />
-                {/* Optical Drop Terminal Node */}
-                <circle cx="96" cy="40" r="2.8" fill="#c084fc" filter="url(#neonPurpleGlow)">
-                  <animate attributeName="r" values="2.2;3.4;2.2" dur="1.5s" begin="0.3s" repeatCount="indefinite" />
-                </circle>
-              </g>
+              {/* Path T2: Stepped Lower Line 2 */}
+              <path
+                d="M 188 176 L 246 226 L 390 226"
+                stroke="#ffffff"
+                strokeWidth="2.8"
+                strokeDasharray="22 55"
+                strokeLinecap="round"
+                filter="url(#laserBeamGlow)"
+              >
+                <animate attributeName="stroke-dashoffset" from="0" to="-154" dur="0.82s" begin="0.25s" repeatCount="indefinite" />
+              </path>
+              <circle r="3.8" fill="#ffffff" filter="url(#hotPulseGlow)">
+                <animateMotion path="M 188 176 L 246 226 L 390 226" dur="0.82s" begin="0.25s" repeatCount="indefinite" />
+              </circle>
 
-              {/* 3. FTTH House 2 (Modern Split-Level / Villa Line Art) */}
-              <g id="ftthHouse2">
-                {/* Line Label */}
-                <text x="56" y="66" textAnchor="end" fill="#34d399" fontSize="6.5" fontFamily="monospace" fontWeight="bold">FTTH</text>
-                {/* Modern Line Architecture Roof */}
-                <polyline points="63,62 72,54 81,62" fill="none" stroke="#34d399" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" filter="url(#neonGreenGlow)" />
-                <polyline points="72,54 79,48 85,55 85,62" fill="none" stroke="#34d399" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                {/* Walls */}
-                <rect x="66" y="62" width="18" height="10" rx="1" fill="none" stroke="#34d399" strokeWidth="1.4" />
-                {/* Windows */}
-                <rect x="68.5" y="64" width="3.5" height="3" fill="none" stroke="#a7f3d0" strokeWidth="0.9" />
-                <rect x="78" y="64" width="3.5" height="3" fill="none" stroke="#a7f3d0" strokeWidth="0.9" />
-                {/* Door */}
-                <line x1="75" y1="72" x2="75" y2="67" stroke="#34d399" strokeWidth="1.3" strokeLinecap="round" />
-                {/* Optical Drop Terminal Node */}
-                <circle cx="96" cy="63" r="2.8" fill="#34d399" filter="url(#neonGreenGlow)">
-                  <animate attributeName="r" values="2.2;3.4;2.2" dur="1.7s" begin="0.6s" repeatCount="indefinite" />
-                </circle>
-              </g>
+              {/* Path T3: Stepped Lower Line 3 */}
+              <path
+                d="M 198 184 L 254 238 L 416 238"
+                stroke="#00f0ff"
+                strokeWidth="2.8"
+                strokeDasharray="24 60"
+                strokeLinecap="round"
+                filter="url(#laserBeamGlow)"
+              >
+                <animate attributeName="stroke-dashoffset" from="0" to="-168" dur="0.85s" begin="0.35s" repeatCount="indefinite" />
+              </path>
+
+              {/* Path T4: Direct Highway into Mobile Tower */}
+              <path
+                id="pulsePathTower"
+                d="M 208 192 L 262 248 L 442 248"
+                stroke="#ffffff"
+                strokeWidth="3.2"
+                strokeDasharray="26 65"
+                strokeLinecap="round"
+                filter="url(#laserBeamGlow)"
+              >
+                <animate attributeName="stroke-dashoffset" from="0" to="-182" dur="0.88s" begin="0.4s" repeatCount="indefinite" />
+              </path>
+              <circle r="4.5" fill="#ffffff" filter="url(#hotPulseGlow)">
+                <animateMotion path="M 208 192 L 262 248 L 442 248" dur="0.88s" begin="0.4s" repeatCount="indefinite" />
+              </circle>
+
+              {/* ══════════ 6. TERMINATION ARRIVAL FLASHES & WIRELESS SIGNALS ══════════ */}
+              {/* House 1 Terminal Flash */}
+              <circle cx="354" cy="55" r="5" fill="#ffffff" filter="url(#hotPulseGlow)">
+                <animate attributeName="r" values="3.5;7;3.5" dur="0.8s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.6;1;0.6" dur="0.8s" repeatCount="indefinite" />
+              </circle>
+
+              {/* House 2 Terminal Flash */}
+              <circle cx="408" cy="68" r="5" fill="#ffffff" filter="url(#hotPulseGlow)">
+                <animate attributeName="r" values="3.5;7;3.5" dur="0.85s" begin="0.15s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.6;1;0.6" dur="0.85s" begin="0.15s" repeatCount="indefinite" />
+              </circle>
+
+              {/* House 3 Terminal Flash */}
+              <circle cx="458" cy="98" r="5.5" fill="#ffffff" filter="url(#hotPulseGlow)">
+                <animate attributeName="r" values="4;8;4" dur="0.9s" begin="0.3s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.6;1;0.6" dur="0.9s" begin="0.3s" repeatCount="indefinite" />
+              </circle>
+
+              {/* House 4 Terminal Flash */}
+              <circle cx="406" cy="142" r="5" fill="#ffffff" filter="url(#hotPulseGlow)">
+                <animate attributeName="r" values="3.5;7;3.5" dur="0.75s" begin="0.45s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.6;1;0.6" dur="0.75s" begin="0.45s" repeatCount="indefinite" />
+              </circle>
+
+              {/* Mobile Tower Terminal & Wireless Transmission Radiations */}
+              <circle cx="442" cy="248" r="5" fill="#ffffff" filter="url(#hotPulseGlow)">
+                <animate attributeName="r" values="3.5;7.5;3.5" dur="0.88s" begin="0.4s" repeatCount="indefinite" />
+              </circle>
+
+              {/* Tower Antenna Beacon Pulse */}
+              <circle cx="488" cy="198" r="4.5" fill="#ffffff" filter="url(#hotPulseGlow)">
+                <animate attributeName="r" values="3;6;3" dur="0.8s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.5;1;0.5" dur="0.8s" repeatCount="indefinite" />
+              </circle>
+
+              {/* Animated Glowing Wireless Waves from Tower */}
+              <circle cx="488" cy="198" r="14" fill="none" stroke="#00f0ff" strokeWidth="1.8" filter="url(#laserBeamGlow)">
+                <animate attributeName="r" values="10;28;36" dur="1.2s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.9;0.3;0" dur="1.2s" repeatCount="indefinite" />
+              </circle>
+              <circle cx="488" cy="198" r="14" fill="none" stroke="#ffffff" strokeWidth="1.2" opacity="0.8">
+                <animate attributeName="r" values="8;24;32" dur="1.2s" begin="0.4s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.8;0.2;0" dur="1.2s" begin="0.4s" repeatCount="indefinite" />
+              </circle>
             </svg>
           </div>
         </div>
