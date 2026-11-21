@@ -16,17 +16,11 @@ export default async function handler(req, res) {
   try {
     const body = req.body || {};
     const recipient = req.query.email || body.email || TARGET_EMAIL;
-    const gmailAppPassword = body.gmailAppPassword || body.smtpPass || process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS;
-    const gmailUser = body.gmailUser || body.smtpUser || process.env.GMAIL_USER || process.env.SMTP_USER;
-    const resendApiKey = body.resendApiKey || process.env.RESEND_API_KEY;
 
     console.log(`[Send Backup Now API] Running on-demand backup for: ${recipient}...`);
 
     const result = await runDailyBackup({
       recipient,
-      gmailUser,
-      gmailAppPassword,
-      resendApiKey,
       triggerType: 'MANUAL_ON_DEMAND',
     });
 

@@ -5,7 +5,6 @@
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import nodemailer from 'nodemailer';
-import { Resend } from 'resend';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -188,10 +187,9 @@ export async function runDailyBackup(optionsOrRecipient = null) {
   const grandTotal = masterFtts.length + formattedEtaha.length;
   console.log(`[Backup] Excel generated: ${grandTotal} records, ${excelBuffer.length} bytes.`);
 
-  // ── Determine Email Service Credentials ──
-  const resendApiKey = options.resendApiKey || process.env.RESEND_API_KEY;
-  const gmailUser = options.gmailUser || options.smtpUser || process.env.GMAIL_USER || process.env.SMTP_USER || 'Elsoltanalex@gmail.com';
-  const gmailPass = options.gmailAppPassword || options.smtpPass || process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS;
+  // ── Determine Email Service Credentials strictly from process.env ──
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
 
   const isManual = options.triggerType === 'MANUAL_ON_DEMAND';
   const mailSubject = isManual
@@ -259,99 +257,70 @@ export async function runDailyBackup(optionsOrRecipient = null) {
     </div>
   `;
 
-  // ── 1. Try Resend if configured (Most reliable on Vercel) ──
-  if (resendApiKey) {
-    try {
-      console.log(`[Backup] Sending email via Resend API to ${recipient}...`);
-      const resend = new Resend(resendApiKey);
-      const resendResult = await resend.emails.send({
-        from: 'FTTS System <onboarding@resend.dev>',
-        to: recipient,
-        subject: mailSubject,
-        html: htmlContent,
-        attachments: [
-          {
-            filename: fileName,
-            content: excelBuffer.toString('base64'),
-          },
-        ],
-      });
-
-      console.log('[Backup] ✅ Successfully sent via Resend API!', resendResult);
-      return {
-        success: true,
-        emailSent: true,
-        provider: 'Resend',
-        messageId: resendResult?.data?.id || 'resend-ok',
-        fileName,
-        totalRecords: grandTotal,
-        message: `تم إرسال النسخة الاحتياطية بنجاح عبر Resend إلى ${recipient}`,
-      };
-    } catch (resendErr) {
-      console.error('[Backup] Resend error:', resendErr);
-      // Fall through to Nodemailer
-    }
+  // ── Validate SMTP credentials strictly from process.env ──
+  if (!smtpUser || !smtpPass) {
+    console.error('[Backup Error] Missing SMTP_USER or SMTP_PASS in process.env!');
+    return {
+      success: false,
+      emailSent: false,
+      requiresConfig: true,
+      error: 'MISSING_SMTP_CREDENTIALS',
+      message: 'يتطلب إرسال الإيميل تزويد SMTP_USER و SMTP_PASS حصرياً في متغيرات البيئة (process.env).',
+      fileName,
+      totalRecords: grandTotal,
+    };
   }
 
-  // ── 2. Try Nodemailer / Gmail SMTP ──
-  if (gmailPass) {
-    try {
-      console.log(`[Backup] Sending email via Gmail SMTP as ${gmailUser} to ${recipient}...`);
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: gmailUser,
-          pass: gmailPass.replace(/\s+/g, ''), // clean any spaces in Google 16-char app password
+  // ── Send via Gmail SMTP connected to smtp.gmail.com ──
+  try {
+    const smtpHost = 'smtp.gmail.com';
+    const smtpPort = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465;
+    console.log(`[Backup] Connecting to ${smtpHost}:${smtpPort} via SMTP as ${smtpUser} to ${recipient}...`);
+
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465, // SSL for 465, STARTTLS for 587
+      auth: {
+        user: smtpUser,
+        pass: smtpPass.replace(/\s+/g, ''), // clean any spaces in Google app password
+      },
+    });
+
+    const info = await transporter.sendMail({
+      from: `"FTTS Backup System" <${smtpUser}>`,
+      to: recipient,
+      subject: mailSubject,
+      html: htmlContent,
+      attachments: [
+        {
+          filename: fileName,
+          content: excelBuffer,
+          contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         },
-      });
+      ],
+    });
 
-      const info = await transporter.sendMail({
-        from: `"FTTS Backup System" <${gmailUser}>`,
-        to: recipient,
-        subject: mailSubject,
-        html: htmlContent,
-        attachments: [
-          {
-            filename: fileName,
-            content: excelBuffer,
-            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          },
-        ],
-      });
-
-      console.log(`[Backup] ✅ Successfully sent via Gmail SMTP! MessageId: ${info.messageId}`);
-      return {
-        success: true,
-        emailSent: true,
-        provider: 'Gmail SMTP',
-        messageId: info.messageId,
-        fileName,
-        totalRecords: grandTotal,
-        message: `تم إرسال النسخة الاحتياطية بنجاح عبر Gmail إلى ${recipient}`,
-      };
-    } catch (smtpErr) {
-      console.error('[Backup] Gmail SMTP error:', smtpErr);
-      return {
-        success: false,
-        emailSent: false,
-        error: `خطأ في اتصال خادم البريد (Gmail SMTP): ${smtpErr.message}`,
-        fileName,
-        totalRecords: grandTotal,
-      };
-    }
+    console.log(`[Backup] ✅ Successfully sent via Gmail SMTP (smtp.gmail.com)! MessageId: ${info.messageId}`);
+    return {
+      success: true,
+      emailSent: true,
+      provider: 'Gmail SMTP (smtp.gmail.com)',
+      messageId: info.messageId,
+      fileName,
+      totalRecords: grandTotal,
+      message: `تم إرسال النسخة الاحتياطية بنجاح عبر Gmail SMTP إلى ${recipient}`,
+    };
+  } catch (smtpErr) {
+    console.error('[Backup] Gmail SMTP error (smtp.gmail.com):', smtpErr);
+    return {
+      success: false,
+      emailSent: false,
+      error: `خطأ في اتصال خادم البريد (smtp.gmail.com): ${smtpErr.message}`,
+      fileName,
+      totalRecords: grandTotal,
+    };
   }
-
-  // ── 3. Neither Resend nor Gmail password is set ──
-  console.log(`[Backup Notice] No email provider configured yet!`);
-  return {
-    success: false,
-    emailSent: false,
-    requiresConfig: true,
-    error: 'MISSING_EMAIL_CREDENTIALS',
-    message: 'يتطلب إرسال الإيميل تزويد مفتاح Resend API أو كلمة مرور تطبيقات Gmail (App Password). يمكنك إدخالها مباشرة في النافذة التالية أو إضافتها في إعدادات Vercel.',
-    fileName,
-    totalRecords: grandTotal,
-  };
 }
 
 // Run if called directly as script
