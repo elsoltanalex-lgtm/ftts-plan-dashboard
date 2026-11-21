@@ -30,6 +30,7 @@ export interface VodafoneRecord {
   'الملاحظات'?: string;
   'اسباب التعّذر'?: string;
   'اسباب التعذر'?: string;
+  'اسباب المعوق'?: string;
   'الجهة المطلوب الدعم منها'?: string;
   'التاريخ المتوقع للانتهاء'?: string;
   _id?: string;

@@ -2,12 +2,11 @@
 // Data-entry and modification modal for Vodafone FTTS sites
 // Matches Vodafone schema with full Supabase integration & Admin access
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { VodafoneRecord } from '../types/vodafone';
 import type { SiteRecord } from '../types/dashboard';
-import { normalizeVodafoneClassification } from '../types/vodafone';
+import { VODAFONE_RAW_RECORDS } from '../data/vodafoneSites';
 import { useAuth } from '../context/AuthContext';
-import { isDocumentRequired } from '../config/fieldConfig';
 import { uploadAttachment } from '../lib/supabase';
 import {
   X,
@@ -21,7 +20,6 @@ import {
   CheckCircle2,
   Sliders,
   ShieldCheck,
-  MapPin,
   Activity,
   Layers,
   UploadCloud,
@@ -31,7 +29,7 @@ import {
 export interface VodafoneAddDataModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (record: VodafoneRecord) => Promise<{ success: boolean; error?: string }>;
+  onSave: (record: VodafoneRecord) => Promise<{ success: boolean; error?: string; message?: string }>;
   allSiteCodes: string[];
   initialSiteCode?: string;
   initialRecord?: VodafoneRecord | null;
@@ -40,28 +38,16 @@ export interface VodafoneAddDataModalProps {
   onSwitchToBulk?: () => void;
 }
 
-const APPROVED_CLASSIFICATIONS = [
-  'تم الانتهاء',
-  'تم التشغيل فايبر',
+export const VODAFONE_OFFICIAL_CLASSIFICATIONS = [
+  'تم التسليم',
+  'تم الانتهاء كهربي',
+  'تم الانتهاء كهربي ولم يتم التسليم للمنطقة',
   'جاري تصاريح',
   'جاري العمل مدني',
+  'جاري العمل كهربي',
   'جاري المعاينة',
-  'جاري كهربي',
-  'تم التسليم',
+  'متعذرات',
   'معوقات',
-  'متعذر',
-];
-
-const APPROVED_SECTORS = [
-  'قطاع مناطق القاهرة الكبرى',
-  'قطاع إسكندرية والساحل',
-  'قطاع شرق الدلتا',
-  'قطاع مناطق وسط الدلتا',
-  'قطاع مناطق غرب الدلتا',
-  'قطاع مناطق السويس',
-  'قطاع مناطق الإسماعيلية',
-  'قطاع مناطق الجيزة وأكتوبر',
-  'قطاع مناطق الصعيد',
 ];
 
 export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
@@ -86,18 +72,17 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
   const [formData, setFormData] = useState<VodafoneRecord>({
     'Site code': '',
     'سنترال الربط': '',
-    'رئاسة قطاعات التنفيذ': 'قطاع مناطق القاهرة الكبرى',
-    'الادارة العامة لتنفيذ الشبكات': '',
-    'ادارة التنفيذ الفرعية': '',
+    'المحافظه': '',
     'قطاع التنفيذ': '',
     'قطاع المناطق': '',
-    'المحافظه': '',
+    'الادارة العامة للمنطقة': '',
+    'الادارة العامة لتنفيذ الشبكات': '',
+    'ادارة التنفيذ الفرعية': '',
+    'رئاسة قطاعات التنفيذ': '',
     'مسئولية التنفيذ': 'التنفيذ',
     'التصنيف': 'جاري العمل مدني',
-    'تاكيد التسليم للمنطقه': 'لم يتم',
-    'التصنيف (كهربي)': '',
-    'المرحله الكهربيه': '',
     'اسباب التعذر': '',
+    'اسباب المعوق': '',
     'الجهة المطلوب الدعم منها': '',
     'التاريخ المتوقع للانتهاء': '',
     'الملاحظات': '',
@@ -108,10 +93,161 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
   const [successMessage, setSuccessMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Strict conditional document requirement: only for "جاري تصاريح" | "تم الانتهاء" | "تم التشغيل فايبر"
+  // Master records list for Vodafone (official dataset + any live loaded records)
+  const vodafoneMasterList = useMemo<VodafoneRecord[]>(() => {
+    const list: VodafoneRecord[] = [...VODAFONE_RAW_RECORDS];
+    if (sitesData && sitesData.length > 0) {
+      sitesData.forEach((s) => {
+        if (s.rawRecord && s.company === 'Vodafone') {
+          list.push(s.rawRecord as VodafoneRecord);
+        }
+      });
+    }
+    return list;
+  }, [sitesData]);
+
+  // 1. قطاع التنفيذ Options
+  const executionSectorOptions = useMemo(() => {
+    const set = new Set<string>();
+    vodafoneMasterList.forEach((r) => {
+      const v = (r['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim();
+      if (v) set.add(v);
+    });
+    const cur = (formData['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim();
+    if (cur) set.add(cur);
+    return Array.from(set).sort();
+  }, [vodafoneMasterList, formData['قطاع التنفيذ']]);
+
+  // 2. قطاع المناطق Options (cascading from قطاع التنفيذ)
+  const regionalSectorOptions = useMemo(() => {
+    const set = new Set<string>();
+    const selectedExecSector = (formData['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim();
+
+    const pool = selectedExecSector
+      ? vodafoneMasterList.filter((r) => (r['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim() === selectedExecSector)
+      : vodafoneMasterList;
+
+    pool.forEach((r) => {
+      const v = (r['قطاع المناطق'] || '').replace(/\s+/g, ' ').trim();
+      if (v) set.add(v);
+    });
+
+    const cur = (formData['قطاع المناطق'] || '').replace(/\s+/g, ' ').trim();
+    if (cur) set.add(cur);
+    return Array.from(set).sort();
+  }, [vodafoneMasterList, formData['قطاع التنفيذ'], formData['قطاع المناطق']]);
+
+  // 3. الإدارة العامة للمنطقة Options (cascading from قطاع المناطق or قطاع التنفيذ)
+  const generalAreaAdminOptions = useMemo(() => {
+    const set = new Set<string>();
+    const selectedRegSector = (formData['قطاع المناطق'] || '').replace(/\s+/g, ' ').trim();
+    const selectedExecSector = (formData['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim();
+
+    let pool = vodafoneMasterList;
+    if (selectedRegSector) {
+      pool = pool.filter((r) => (r['قطاع المناطق'] || '').replace(/\s+/g, ' ').trim() === selectedRegSector);
+    } else if (selectedExecSector) {
+      pool = pool.filter((r) => (r['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim() === selectedExecSector);
+    }
+
+    pool.forEach((r) => {
+      const v = (r['الادارة العامة للمنطقة'] || '').replace(/\s+/g, ' ').trim();
+      if (v) set.add(v);
+    });
+
+    const cur = (formData['الادارة العامة للمنطقة'] || '').replace(/\s+/g, ' ').trim();
+    if (cur) set.add(cur);
+    return Array.from(set).sort();
+  }, [vodafoneMasterList, formData['قطاع المناطق'], formData['قطاع التنفيذ'], formData['الادارة العامة للمنطقة']]);
+
+  // 4. الإدارة العامة لتنفيذ الشبكات Options (cascading from قطاع التنفيذ)
+  const generalNetworkAdminOptions = useMemo(() => {
+    const set = new Set<string>();
+    const selectedExecSector = (formData['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim();
+
+    const pool = selectedExecSector
+      ? vodafoneMasterList.filter((r) => (r['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim() === selectedExecSector)
+      : vodafoneMasterList;
+
+    pool.forEach((r) => {
+      const v = (r['الادارة العامة لتنفيذ الشبكات'] || '').replace(/\s+/g, ' ').trim();
+      if (v) set.add(v);
+    });
+
+    const cur = (formData['الادارة العامة لتنفيذ الشبكات'] || '').replace(/\s+/g, ' ').trim();
+    if (cur) set.add(cur);
+    return Array.from(set).sort();
+  }, [vodafoneMasterList, formData['قطاع التنفيذ'], formData['الادارة العامة لتنفيذ الشبكات']]);
+
+  // 5. إدارة التنفيذ الفرعية Options (cascading from الادارة العامة لتنفيذ الشبكات or قطاع التنفيذ)
+  const subExecutionAdminOptions = useMemo(() => {
+    const set = new Set<string>();
+    const selectedNetAdmin = (formData['الادارة العامة لتنفيذ الشبكات'] || '').replace(/\s+/g, ' ').trim();
+    const selectedExecSector = (formData['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim();
+
+    let pool = vodafoneMasterList;
+    if (selectedNetAdmin) {
+      pool = pool.filter((r) => (r['الادارة العامة لتنفيذ الشبكات'] || '').replace(/\s+/g, ' ').trim() === selectedNetAdmin);
+    } else if (selectedExecSector) {
+      pool = pool.filter((r) => (r['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim() === selectedExecSector);
+    }
+
+    pool.forEach((r) => {
+      const v = (r['ادارة التنفيذ الفرعية'] || '').replace(/\s+/g, ' ').trim();
+      if (v) set.add(v);
+    });
+
+    const cur = (formData['ادارة التنفيذ الفرعية'] || '').replace(/\s+/g, ' ').trim();
+    if (cur) set.add(cur);
+    return Array.from(set).sort();
+  }, [vodafoneMasterList, formData['الادارة العامة لتنفيذ الشبكات'], formData['قطاع التنفيذ'], formData['ادارة التنفيذ الفرعية']]);
+
+  // 6. التصنيف Options (strictly matching Vodafone Excel dataset)
+  const classificationOptions = useMemo(() => {
+    const set = new Set<string>();
+    VODAFONE_OFFICIAL_CLASSIFICATIONS.forEach((c) => set.add(c));
+    const cur = (formData['التصنيف'] || masterRecord?.['التصنيف'] || '').replace(/\s+/g, ' ').trim();
+    if (cur) set.add(cur);
+    return Array.from(set);
+  }, [formData['التصنيف'], masterRecord]);
+
+  // Normalized Classification & Conditional States
+  const normClassification = useMemo(() => {
+    return String(formData['التصنيف'] || '').replace(/\s+/g, ' ').trim();
+  }, [formData['التصنيف']]);
+
+  const isStalled = useMemo(() => {
+    return (
+      normClassification.includes('متعذر') ||
+      normClassification.includes('متعثر') ||
+      normClassification === 'متعذرات'
+    );
+  }, [normClassification]);
+
+  const isObstacle = useMemo(() => {
+    return normClassification.includes('معوق');
+  }, [normClassification]);
+
+  const isFinishedOrStalled = useMemo(() => {
+    return (
+      isStalled ||
+      normClassification.includes('انتهاء') ||
+      normClassification.includes('تسليم') ||
+      normClassification.includes('تشغيل فايبر')
+    );
+  }, [isStalled, normClassification]);
+
+  const showExpectedDate = !isFinishedOrStalled;
+
   const isDocRequired = useMemo(() => {
-    return isDocumentRequired(formData['التصنيف']);
-  }, [formData]);
+    return (
+      normClassification === 'جاري تصاريح' ||
+      normClassification.includes('تصاريح') ||
+      normClassification.includes('انتهاء') ||
+      normClassification.includes('تسليم') ||
+      normClassification.includes('تشغيل فايبر')
+    );
+  }, [normClassification]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -119,7 +255,6 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
     const fileName = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
     handleInputChange('المستند', fileName);
     handleInputChange('موقف المرفقات', 'تم الارفاق');
-    // Background upload to Supabase Storage
     uploadAttachment(file, 'documents')
       .then((res) => {
         if (res.success && res.url) {
@@ -146,18 +281,17 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
       setFormData({
         'Site code': '',
         'سنترال الربط': '',
-        'رئاسة قطاعات التنفيذ': 'قطاع مناطق القاهرة الكبرى',
-        'الادارة العامة لتنفيذ الشبكات': '',
-        'ادارة التنفيذ الفرعية': '',
+        'المحافظه': '',
         'قطاع التنفيذ': '',
         'قطاع المناطق': '',
-        'المحافظه': '',
+        'الادارة العامة للمنطقة': '',
+        'الادارة العامة لتنفيذ الشبكات': '',
+        'ادارة التنفيذ الفرعية': '',
+        'رئاسة قطاعات التنفيذ': '',
         'مسئولية التنفيذ': 'التنفيذ',
         'التصنيف': 'جاري العمل مدني',
-        'تاكيد التسليم للمنطقه': 'لم يتم',
-        'التصنيف (كهربي)': '',
-        'المرحله الكهربيه': '',
         'اسباب التعذر': '',
+        'اسباب المعوق': '',
         'الجهة المطلوب الدعم منها': '',
         'التاريخ المتوقع للانتهاء': '',
         'الملاحظات': '',
@@ -165,7 +299,11 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
     } else {
       if (initialRecord) {
         setMasterRecord(initialRecord);
-        setFormData({ ...initialRecord });
+        const obstacleVal = initialRecord['اسباب المعوق'] || (initialRecord['التصنيف']?.includes('معوق') ? (initialRecord['اسباب التعذر'] || initialRecord['اسباب التعّذر'] || '') : '');
+        setFormData({
+          ...initialRecord,
+          'اسباب المعوق': obstacleVal,
+        });
         setStep('fill-form');
       } else if (initialSiteCode) {
         handleSelectSiteCode(initialSiteCode);
@@ -192,38 +330,106 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
     const raw = (site?.rawRecord as VodafoneRecord) || null;
     if (raw) {
       setMasterRecord(raw);
-      setFormData({ ...raw });
+      const obstacleVal = raw['اسباب المعوق'] || (raw['التصنيف']?.includes('معوق') ? (raw['اسباب التعذر'] || raw['اسباب التعّذر'] || '') : '');
+      setFormData({
+        ...raw,
+        'اسباب المعوق': obstacleVal,
+      });
     } else {
       setFormData((prev) => ({
         ...prev,
         'Site code': code,
         'سنترال الربط': site?.central || '',
-        'رئاسة قطاعات التنفيذ': site?.sector || 'قطاع مناطق القاهرة الكبرى',
+        'المحافظه': site?.governorate || '',
+        'قطاع التنفيذ': (site as any)?.executionSector || '',
+        'قطاع المناطق': (site as any)?.subSector || '',
         'الادارة العامة لتنفيذ الشبكات': site?.generalAdmin || '',
         'ادارة التنفيذ الفرعية': site?.competentAdmin || '',
-        'المحافظه': site?.governorate || '',
         'التصنيف': site?.classification || 'جاري العمل مدني',
+        'اسباب التعذر': site?.obstacleReason || '',
+        'اسباب المعوق': site?.classification?.includes('معوق') ? (site?.obstacleReason || '') : '',
         'الملاحظات': site?.notes || '',
       }));
     }
     setStep('fill-form');
   };
 
-  const handleInputChange = (field: keyof VodafoneRecord, value: any) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-    if (field === 'التصنيف') {
-      if (!isDocumentRequired(value)) {
-        setErrors((prev) => {
-          if (!prev['المستند']) return prev;
-          const next = { ...prev };
-          delete next['المستند'];
-          return next;
-        });
+  const handleClassificationChange = (newClassification: string) => {
+    const norm = (newClassification || '').replace(/\s+/g, ' ').trim();
+
+    const willBeStalled = norm.includes('متعذر') || norm.includes('متعثر') || norm === 'متعذرات';
+    const willBeObstacle = norm.includes('معوق');
+    const willBeFinishedOrStalled =
+      willBeStalled ||
+      norm.includes('انتهاء') ||
+      norm.includes('تسليم') ||
+      norm.includes('تشغيل فايبر');
+
+    const willRequireDoc =
+      norm === 'جاري تصاريح' ||
+      norm.includes('تصاريح') ||
+      norm.includes('انتهاء') ||
+      norm.includes('تسليم') ||
+      norm.includes('تشغيل فايبر');
+
+    setFormData((prev) => {
+      const updated: VodafoneRecord = {
+        ...prev,
+        'التصنيف': newClassification,
+      };
+
+      // Reset conditional fields that do NOT match the new classification
+      if (!willBeStalled) {
+        updated['اسباب التعذر'] = '';
+        updated['اسباب التعّذر'] = '';
       }
+      if (!willBeObstacle) {
+        updated['اسباب المعوق'] = '';
+      }
+      if (willBeFinishedOrStalled) {
+        updated['التاريخ المتوقع للانتهاء'] = '';
+      }
+
+      return updated;
+    });
+
+    // Reset validation errors for hidden / non-matching fields
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next['التصنيف'];
+      if (!willBeStalled) delete next['اسباب التعذر'];
+      if (!willBeObstacle) delete next['اسباب المعوق'];
+      if (willBeFinishedOrStalled) delete next['التاريخ المتوقع للانتهاء'];
+      if (!willRequireDoc) delete next['المستند'];
+      return next;
+    });
+  };
+
+  const handleInputChange = (field: keyof VodafoneRecord, value: any) => {
+    if (field === 'التصنيف') {
+      handleClassificationChange(value);
+      return;
     }
+
+    setFormData((prev) => {
+      const updated: VodafoneRecord = {
+        ...prev,
+        [field]: value,
+      };
+
+      // If execution sector changes, optionally keep رئاسة قطاعات التنفيذ in sync
+      if (field === 'قطاع التنفيذ') {
+        const matching = vodafoneMasterList.find(
+          (r) => (r['قطاع التنفيذ'] || '').trim() === String(value).trim()
+        );
+        if (matching && matching['رئاسة قطاعات التنفيذ']) {
+          updated['رئاسة قطاعات التنفيذ'] = matching['رئاسة قطاعات التنفيذ'];
+        }
+      }
+
+      return updated;
+    });
+
     if (errors[field as string]) {
       setErrors((prev) => {
         const next = { ...prev };
@@ -242,14 +448,31 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
     if (!String(formData['التصنيف'] || '').trim()) {
       newErrors['التصنيف'] = 'التصنيف الميداني مطلوب';
     }
-    // Strict conditional document upload requirement:
-    // Only required if classification is: "جاري تصاريح" or "تم الانتهاء" or "تم التشغيل فايبر"
+
+    // Conditional: أسباب التعذر
+    if (isStalled) {
+      const reason = String(formData['اسباب التعذر'] || formData['اسباب التعّذر'] || '').trim();
+      if (!reason) {
+        newErrors['اسباب التعذر'] = 'أسباب التعذر مطلوبة لحالة متعذر (* مطلوب)';
+      }
+    }
+
+    // Conditional: أسباب المعوق
+    if (isObstacle) {
+      const obstacleReason = String(formData['اسباب المعوق'] || formData['اسباب التعذر'] || '').trim();
+      if (!obstacleReason) {
+        newErrors['اسباب المعوق'] = 'أسباب المعوق مطلوبة لحالة معوقات (* مطلوب)';
+      }
+    }
+
+    // Conditional: مستند إثبات وتوثيق الموقف
     if (isDocRequired) {
       const doc = String(formData['المستند'] || '').trim();
       if (!doc) {
         newErrors['المستند'] = 'إرفاق مستند إثبات وتوثيق الموقف الحالي إلزامي لهذه الحالة (* مطلوب)';
       }
     }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -263,10 +486,19 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
     try {
       const rawCode = formData['Site code'] || formData['site code'] || formData.site_code;
       const code = String(rawCode).trim().toUpperCase();
+
+      const finalObstacleReason = isObstacle
+        ? (formData['اسباب المعوق'] || formData['اسباب التعذر'] || '')
+        : (isStalled ? (formData['اسباب التعذر'] || formData['اسباب التعّذر'] || '') : '');
+
       const payload: VodafoneRecord = {
         ...formData,
         'Site code': code,
         'site code': code,
+        'مسئولية التنفيذ': masterRecord?.['مسئولية التنفيذ'] || 'التنفيذ',
+        'اسباب التعذر': finalObstacleReason,
+        'اسباب التعّذر': finalObstacleReason,
+        'اسباب المعوق': formData['اسباب المعوق'] || '',
         _id: `VDF-${code}`,
         _updatedAt: new Date().toISOString(),
         _createdBy: user?.displayName || 'Vodafone Form UI',
@@ -486,7 +718,7 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
                   <Building2 className="w-4 h-4 text-rose-600" />
                   <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    بيانات الموقع والسنترال
+                    1. بيانات الموقع والسنترال
                   </h4>
                 </div>
 
@@ -541,100 +773,99 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
                 </div>
               </div>
 
-              {/* 2. Administrative Structure */}
+              {/* 2. Administrative Structure with Cascading Dropdowns */}
               <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-2xs space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
                   <Layers className="w-4 h-4 text-rose-600" />
                   <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    الهيكل الإداري والتنفيذي لـ Vodafone
+                    2. الهيكل الإداري والتنفيذي (قوائم منسدلة مطابقة للإكسيل)
                   </h4>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
-                  {/* رئاسة قطاعات التنفيذ */}
+                  {/* 1. قطاع التنفيذ */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      رئاسة قطاعات التنفيذ (القطاع)
+                      قطاع التنفيذ
                     </label>
                     <select
-                      value={formData['رئاسة قطاعات التنفيذ'] || ''}
-                      onChange={(e) => handleInputChange('رئاسة قطاعات التنفيذ', e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                      value={formData['قطاع التنفيذ'] || ''}
+                      onChange={(e) => handleInputChange('قطاع التنفيذ', e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 cursor-pointer"
                     >
-                      {APPROVED_SECTORS.map((s) => (
+                      <option value="">-- اختر قطاع التنفيذ --</option>
+                      {executionSectorOptions.map((s) => (
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
                   </div>
 
-                  {/* الادارة العامة لتنفيذ الشبكات */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      الادارة العامة لتنفيذ الشبكات
-                    </label>
-                    <input
-                      type="text"
-                      value={formData['الادارة العامة لتنفيذ الشبكات'] || ''}
-                      onChange={(e) => handleInputChange('الادارة العامة لتنفيذ الشبكات', e.target.value)}
-                      placeholder="الإدارة العامة"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-                    />
-                  </div>
-
-                  {/* ادارة التنفيذ الفرعية */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      ادارة التنفيذ الفرعية
-                    </label>
-                    <input
-                      type="text"
-                      value={formData['ادارة التنفيذ الفرعية'] || ''}
-                      onChange={(e) => handleInputChange('ادارة التنفيذ الفرعية', e.target.value)}
-                      placeholder="إدارة التنفيذ"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-                    />
-                  </div>
-
-                  {/* قطاع التنفيذ */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      قطاع التنفيذ
-                    </label>
-                    <input
-                      type="text"
-                      value={formData['قطاع التنفيذ'] || ''}
-                      onChange={(e) => handleInputChange('قطاع التنفيذ', e.target.value)}
-                      placeholder="قطاع التنفيذ الميداني"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-                    />
-                  </div>
-
-                  {/* قطاع المناطق */}
+                  {/* 2. قطاع المناطق */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       قطاع المناطق
                     </label>
-                    <input
-                      type="text"
+                    <select
                       value={formData['قطاع المناطق'] || ''}
                       onChange={(e) => handleInputChange('قطاع المناطق', e.target.value)}
-                      placeholder="قطاع المناطق"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-                    />
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 cursor-pointer"
+                    >
+                      <option value="">-- اختر قطاع المناطق --</option>
+                      {regionalSectorOptions.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
                   </div>
 
-                  {/* مسئولية التنفيذ */}
+                  {/* 3. الإدارة العامة للمنطقة */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      مسئولية التنفيذ
+                      الإدارة العامة للمنطقة
                     </label>
-                    <input
-                      type="text"
-                      value={formData['مسئولية التنفيذ'] || ''}
-                      onChange={(e) => handleInputChange('مسئولية التنفيذ', e.target.value)}
-                      placeholder="مسئولية التنفيذ (المقاول / التنفيذ)"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-                    />
+                    <select
+                      value={formData['الادارة العامة للمنطقة'] || ''}
+                      onChange={(e) => handleInputChange('الادارة العامة للمنطقة', e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 cursor-pointer"
+                    >
+                      <option value="">-- اختر الإدارة العامة للمنطقة --</option>
+                      {generalAreaAdminOptions.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 4. الإدارة العامة لتنفيذ الشبكات */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      الإدارة العامة لتنفيذ الشبكات
+                    </label>
+                    <select
+                      value={formData['الادارة العامة لتنفيذ الشبكات'] || ''}
+                      onChange={(e) => handleInputChange('الادارة العامة لتنفيذ الشبكات', e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 cursor-pointer"
+                    >
+                      <option value="">-- اختر الإدارة العامة لتنفيذ الشبكات --</option>
+                      {generalNetworkAdminOptions.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 5. إدارة التنفيذ الفرعية */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      إدارة التنفيذ الفرعية
+                    </label>
+                    <select
+                      value={formData['ادارة التنفيذ الفرعية'] || ''}
+                      onChange={(e) => handleInputChange('ادارة التنفيذ الفرعية', e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 cursor-pointer"
+                    >
+                      <option value="">-- اختر إدارة التنفيذ الفرعية --</option>
+                      {subExecutionAdminOptions.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>
@@ -644,7 +875,7 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
                   <Activity className="w-4 h-4 text-rose-600" />
                   <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    الموقف التنفيذي والتصنيف الميداني
+                    3. الموقف التنفيذي والتصنيف الميداني
                   </h4>
                 </div>
 
@@ -656,57 +887,30 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
                     </label>
                     <select
                       value={formData['التصنيف'] || ''}
-                      onChange={(e) => handleInputChange('التصنيف', e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                      onChange={(e) => handleClassificationChange(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 cursor-pointer"
                     >
-                      {APPROVED_CLASSIFICATIONS.map((c) => (
+                      <option value="">-- اختر التصنيف --</option>
+                      {classificationOptions.map((c) => (
                         <option key={c} value={c}>{c}</option>
                       ))}
                     </select>
                   </div>
 
-                  {/* تاكيد التسليم للمنطقه */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      تاكيد التسليم للمنطقه
-                    </label>
-                    <select
-                      value={formData['تاكيد التسليم للمنطقه'] || 'لم يتم'}
-                      onChange={(e) => handleInputChange('تاكيد التسليم للمنطقه', e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-                    >
-                      <option value="تم التسليم">تم التسليم</option>
-                      <option value="لم يتم">لم يتم</option>
-                      <option value="جاري التسليم">جاري التسليم</option>
-                    </select>
-                  </div>
-
-                  {/* التاريخ المتوقع للانتهاء */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      التاريخ المتوقع للانتهاء
-                    </label>
-                    <input
-                      type="date"
-                      value={formData['التاريخ المتوقع للانتهاء'] || ''}
-                      onChange={(e) => handleInputChange('التاريخ المتوقع للانتهاء', e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-                    />
-                  </div>
-
-                  {/* اسباب التعذر */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      اسباب التعذر أو المعوق
-                    </label>
-                    <input
-                      type="text"
-                      value={formData['اسباب التعذر'] || formData['اسباب التعّذر'] || ''}
-                      onChange={(e) => handleInputChange('اسباب التعذر', e.target.value)}
-                      placeholder="توضيح سبب المعوق أو التعذر الميداني إن وجد"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-                    />
-                  </div>
+                  {/* التاريخ المتوقع للانتهاء (يُخفى في حالات: متعذر، تم الانتهاء، تم التشغيل فايبر، تم التسليم) */}
+                  {showExpectedDate && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        التاريخ المتوقع للانتهاء
+                      </label>
+                      <input
+                        type="date"
+                        value={formData['التاريخ المتوقع للانتهاء'] || ''}
+                        onChange={(e) => handleInputChange('التاريخ المتوقع للانتهاء', e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                      />
+                    </div>
+                  )}
 
                   {/* الجهة المطلوب الدعم منها */}
                   <div>
@@ -721,6 +925,51 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20"
                     />
                   </div>
+
+                  {/* أسباب التعذر (شرطي: فقط إذا كان التصنيف متعذر) */}
+                  {isStalled && (
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        أسباب التعذر <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData['اسباب التعذر'] || formData['اسباب التعّذر'] || ''}
+                        onChange={(e) => handleInputChange('اسباب التعذر', e.target.value)}
+                        placeholder="توضيح تفاصيل وأسباب التعذر الميداني..."
+                        className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 ${
+                          errors['اسباب التعذر'] ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
+                        }`}
+                      />
+                      {errors['اسباب التعذر'] && (
+                        <p className="text-[10px] text-rose-500 mt-1 font-bold">{errors['اسباب التعذر']}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* أسباب المعوق (شرطي: فقط إذا كان التصنيف معوق أو معوقات) */}
+                  {isObstacle && (
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        أسباب المعوق <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData['اسباب المعوق'] || formData['اسباب التعذر'] || ''}
+                        onChange={(e) => {
+                          handleInputChange('اسباب المعوق', e.target.value);
+                          handleInputChange('اسباب التعذر', e.target.value);
+                        }}
+                        placeholder="توضيح تفاصيل وأسباب المعوقات الميدانية..."
+                        className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 ${
+                          errors['اسباب المعوق'] ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
+                        }`}
+                      />
+                      {errors['اسباب المعوق'] && (
+                        <p className="text-[10px] text-rose-500 mt-1 font-bold">{errors['اسباب المعوق']}</p>
+                      )}
+                    </div>
+                  )}
 
                   {/* الملاحظات */}
                   <div className="sm:col-span-3">
@@ -741,12 +990,13 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
               {/* CONDITIONAL DOCUMENT UPLOAD */}
               {isDocRequired && (
                 <div
-                  className={`border-2 rounded-2xl p-4 sm:p-5 transition ${errors['المستند']
+                  className={`border-2 rounded-2xl p-4 sm:p-5 transition ${
+                    errors['المستند']
                       ? 'bg-rose-50/70 border-rose-400 ring-2 ring-rose-200'
                       : formData['المستند']
                         ? 'bg-emerald-50/60 border-emerald-300'
                         : 'bg-slate-50 border-slate-300'
-                    }`}
+                  }`}
                 >
                   <div className="flex items-center justify-between pb-2 mb-3 border-b border-rose-200/60">
                     <div className="flex items-center gap-2">
