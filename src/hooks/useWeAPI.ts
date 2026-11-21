@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { WeRecord } from '../config/fieldConfig';
 import { supabase, supabaseFallback, supabaseClients } from '../lib/supabase';
 import { WE_EXCEL_SITES } from '../data/preloadedProjects';
+import { WE_MASTER_RECORDS } from '../data/weSites';
 
 export const API_BASE = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
   ? '/api'
@@ -394,27 +395,45 @@ export async function fetchDropdownValues(
   filters?: Record<string, string>
 ): Promise<string[]> {
   try {
-    for (const table of WE_TABLE_CANDIDATES) {
-      const { data, error } = await supabase.from(table).select('*');
-      if (!error && data && data.length > 0) {
-        let filtered = data.map(normalizeRecord);
-        if (filters) {
-          for (const [k, v] of Object.entries(filters)) {
-            if (v && k !== column) {
-              filtered = filtered.filter((r: any) => (r as any)[k] === v);
+    for (const client of supabaseClients) {
+      for (const table of WE_TABLE_CANDIDATES) {
+        const { data, error } = await client.from(table).select('*').limit(2000);
+        if (!error && data && data.length > 0) {
+          let filtered = data.map(normalizeRecord);
+          if (filters) {
+            for (const [k, v] of Object.entries(filters)) {
+              if (v && k !== column) {
+                filtered = filtered.filter((r: any) => (r as any)[k] === v);
+              }
             }
           }
+          const rawVals = filtered
+            .map((r: any) => (r as any)[column] || (column === 'Site Status' ? (r as any)['حالة الموقع'] : undefined))
+            .filter(Boolean)
+            .map((v: any) => String(v).replace(/\s+/g, ' ').trim())
+            .filter((v: string) => v && v !== '0' && v.toLowerCase() !== column.toLowerCase());
+
+          const uniqueVals = [...new Set(rawVals)].sort();
+          if (uniqueVals.length > 0) return uniqueVals;
         }
-        const values = [...new Set(filtered.map((r: any) => (r as any)[column]).filter(Boolean))].sort();
-        if (values.length > 0) return values as string[];
       }
+    }
+
+    // Fallback to official WE Excel master records
+    if (column === 'Site Status' || column === 'حالة الموقع') {
+      const excelVals = [...new Set(
+        WE_MASTER_RECORDS
+          .map((r) => (r['Site Status'] || r['حالة الموقع'] || '').replace(/\s+/g, ' ').trim())
+          .filter((v) => v && v !== '0' && v.toLowerCase() !== 'site status')
+      )].sort();
+      if (excelVals.length > 0) return excelVals;
     }
 
     // Fallback to local server
     const params = new URLSearchParams(filters || {});
     const res = await fetch(`${LOCAL_API_BASE}/dropdown-values/${encodeURIComponent(column)}?${params}`);
     const localData = await res.json();
-    if (localData.success) return localData.values;
+    if (localData.success && Array.isArray(localData.values)) return localData.values;
     return [];
   } catch {
     return [];

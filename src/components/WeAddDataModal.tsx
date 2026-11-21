@@ -70,26 +70,20 @@ export interface WeAddDataModalProps {
 type FormMode = 'edit' | 'add';
 type FormStep = 'select-site' | 'fill-form';
 
-// Fallback options for key dropdowns if Supabase has not yet accumulated distinct values
+// Fallback options for key dropdowns strictly matching official WE Excel Master Sheet
+export const WE_OFFICIAL_SITE_STATUSES = [
+  'ON AIR',
+  'Ongoing',
+  'RDT',
+  'CWF',
+  'Problematic',
+  'Installed not Integrated',
+  'CGA',
+  'Integrated',
+];
+
 const DEFAULT_FALLBACK_DROPDOWNS: Record<string, string[]> = {
-  'Site Status': [
-    'On Air',
-    'CGA',
-    'ON AIR',
-    'تم التشغيل',
-    'تم الانتهاء',
-    'تم التسليم',
-    'جاري العمل مدني',
-    'جاري العمل كهربي',
-    'جاري العمل',
-    'جاري المعاينة',
-    'جاري تصاريح',
-    'متعذر',
-    'معوقات',
-    'PROBLEM',
-    'CWF',
-    'RDT',
-  ],
+  'Site Status': WE_OFFICIAL_SITE_STATUSES,
   'التصنيف': [
     'تم الانتهاء',
     'تم التشغيل فايبر',
@@ -317,7 +311,42 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
   }, [isAdmin, isOpen]);
 
   // Computed values
-  const currentStatus = formData['Site Status'] || masterRecord?.['Site Status'] || 'On Air';
+  const currentStatus = formData['Site Status'] || masterRecord?.['Site Status'] || 'ON AIR';
+
+  // Distinct Site Status options matching WE Excel sheet and Supabase records, preserving current site status
+  const availableSiteStatuses = useMemo(() => {
+    const rawList = dropdownValues['Site Status'] || WE_OFFICIAL_SITE_STATUSES;
+    const set = new Set<string>();
+
+    for (const item of rawList) {
+      const trimmed = (item || '').replace(/\s+/g, ' ').trim();
+      if (trimmed && trimmed !== '0' && trimmed.toLowerCase() !== 'site status') {
+        set.add(trimmed);
+      }
+    }
+
+    // Always ensure all official Excel statuses are present
+    for (const opt of WE_OFFICIAL_SITE_STATUSES) {
+      set.add(opt);
+    }
+
+    // Always preserve current record status if set, so existing site status is never lost during edit
+    const cur = (formData['Site Status'] || masterRecord?.['Site Status'] || '').replace(/\s+/g, ' ').trim();
+    if (cur && cur !== '0' && cur.toLowerCase() !== 'site status') {
+      set.add(cur);
+    }
+
+    // Case-insensitive deduplication, keeping preferred uppercase for acronyms
+    const seenMap = new Map<string, string>();
+    for (const val of set) {
+      const key = val.toUpperCase();
+      if (!seenMap.has(key)) {
+        seenMap.set(key, val);
+      }
+    }
+
+    return Array.from(seenMap.values());
+  }, [dropdownValues, formData['Site Status'], masterRecord]);
   const rawClassification =
     formData['التصنيف'] ||
     masterRecord?.['التصنيف'] ||
@@ -424,12 +453,23 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       try {
         const vals = await fetchDropdownValues(field.csvColumn);
         if (vals && vals.length > 0) {
-          const merged = [...new Set([...vals, ...(DEFAULT_FALLBACK_DROPDOWNS[field.csvColumn] || [])])].filter(Boolean);
-          values[field.csvColumn] = merged;
+          if (field.csvColumn === 'Site Status') {
+            const cleanVals = vals
+              .map((v) => (v || '').replace(/\s+/g, ' ').trim())
+              .filter((v) => v && v !== '0' && v.toLowerCase() !== 'site status');
+            const merged = [...new Set([...cleanVals, ...WE_OFFICIAL_SITE_STATUSES])];
+            values['Site Status'] = merged;
+          } else {
+            const merged = [...new Set([...vals, ...(DEFAULT_FALLBACK_DROPDOWNS[field.csvColumn] || [])])].filter(Boolean);
+            values[field.csvColumn] = merged;
+          }
         }
       } catch {
         // Keep fallback
       }
+    }
+    if (!values['Site Status'] || values['Site Status'].length === 0) {
+      values['Site Status'] = [...WE_OFFICIAL_SITE_STATUSES];
     }
     setDropdownValues(values);
   }, [greenFields]);
@@ -454,7 +494,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       'إدارة التنفيذ المختصة': 'إدارة التنفيذ المختصة',
       'Type': 'New',
       'المسئولية': 'المصرية للاتصالات',
-      'Site Status': 'On Air',
+      'Site Status': 'ON AIR',
       'التصنيف': 'جاري مدني',
       'اسباب التعذر': 'لا يوجد تعذر',
       'خطة': new Date().getFullYear().toString(),
@@ -1348,7 +1388,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                             onChange={(e) => handleFieldChange('Site Status', e.target.value)}
                             className="w-full bg-white border-2 border-purple-300 rounded-xl px-4 py-2.5 text-sm sm:text-base font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-300 cursor-pointer"
                           >
-                            {(dropdownValues['Site Status'] || DEFAULT_FALLBACK_DROPDOWNS['Site Status'] || []).map((st) => (
+                            {availableSiteStatuses.map((st) => (
                               <option key={st} value={st}>
                                 {st}
                               </option>
@@ -2171,7 +2211,9 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                     <div className="border rounded-xl p-4 bg-emerald-50/50 border-emerald-200">
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {greenFields.map((field) => {
-                          const options = dropdownValues[field.csvColumn] || DEFAULT_FALLBACK_DROPDOWNS[field.csvColumn] || [];
+                          const options = field.csvColumn === 'Site Status'
+                            ? availableSiteStatuses
+                            : (dropdownValues[field.csvColumn] || DEFAULT_FALLBACK_DROPDOWNS[field.csvColumn] || []);
                           const currentValue = formData[field.csvColumn] || '';
 
                           return (

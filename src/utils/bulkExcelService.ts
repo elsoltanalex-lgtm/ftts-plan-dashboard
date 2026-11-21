@@ -67,15 +67,14 @@ export const OFFICIAL_CLASSIFICATIONS = [
 ];
 
 export const OFFICIAL_SITE_STATUSES = [
-  'تم التشغيل',
   'ON AIR',
-  'تم الانتهاء',
-  'جاري العمل مدني',
-  'جاري العمل كهربى',
-  'جاري المعاينة',
-  'جاري تصاريح',
-  'متعذر',
-  'معوقات',
+  'Ongoing',
+  'RDT',
+  'CWF',
+  'Problematic',
+  'Installed not Integrated',
+  'CGA',
+  'Integrated',
 ];
 
 export const OFFICIAL_OBSTACLE_REASONS = [
