@@ -1363,15 +1363,14 @@ export const Dashboard: React.FC = () => {
               />
             </div>
 
-            {/* 6. Main Action Buttons Row (مجموعة أزرار التحكم - مرتبة مباشرة بعد فلاتر التصفية) */}
+            {/* 6. Main Action Buttons Row (مجموعة أزرار التحكم - تحليل وعمليات المواقع فقط) */}
             {activeScope === 'FTTS' && (
-              <div className="mb-6 p-3.5 bg-white border border-slate-200/90 rounded-2xl shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  {/* Primary Core Control Buttons Group (أزرار التحكم مرتبة بدقة) */}
+              <div className="mb-6 p-3 bg-white border border-slate-200/90 rounded-2xl shadow-xs">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {/* Primary Core Control Buttons Group (تحليل وعمليات المواقع فقط) */}
                   {filters.company === 'Orange' ? (
                     /* Orange Buttons Group */
-                    <div className="flex flex-wrap items-center gap-2">
-                      {/* 1. زر تحليل Orange */}
+                    <>
                       <button
                         className="px-4 py-2 bg-gradient-to-r from-orange-600 via-orange-500 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
                         onClick={() => setIsOrangeAnalysisOpen(true)}
@@ -1381,7 +1380,6 @@ export const Dashboard: React.FC = () => {
                         <span>تحليل Orange (Orange Analysis)</span>
                       </button>
 
-                      {/* 2. زر موحد لإدارة وعمليات المواقع (إضافة / تعديل / حذف) */}
                       <SiteActionDropdown
                         variant="orange"
                         label="إدارة وعمليات المواقع"
@@ -1403,79 +1401,33 @@ export const Dashboard: React.FC = () => {
                           setIsQuickDeleteModalOpen(true);
                         }}
                       />
-
-                      {/* 3. زر الرفع الجماعي عبر شيت الإكسيل */}
-                      <button
-                        className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-700 hover:from-teal-700 hover:to-emerald-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                        onClick={() => setIsOrangeBulkImportOpen(true)}
-                        title="تحميل النموذج الاسترشادي والرفع الجماعي لملفات الإكسيل لشبكة Orange مع حماية الثوابت"
-                      >
-                        <span>📤</span>
-                        <span>الرفع الجماعي عبر إكسيل (Bulk Import)</span>
-                      </button>
-
-                      {/* 4. زر تحميل النسخة الاحتياطية */}
-                      <button
-                        className="px-3.5 py-2 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-700 hover:to-indigo-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-60"
-                        onClick={handleExportBackup}
-                        disabled={isExportingBackup}
-                        title="تحميل نسخة احتياطية شاملة لكافة الجداول والبيانات من Supabase (Excel)"
-                      >
-                        {isExportingBackup ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
-                        <span>تحميل النسخة الاحتياطية (Export Backup)</span>
-                      </button>
-                    </div>
+                    </>
                   ) : filters.company === 'Vodafone' ? (
                     /* Vodafone Buttons Group */
-                    <div className="flex flex-wrap items-center gap-2">
-                      {/* 1. زر الرفع الجماعي عبر شيت الإكسيل لفودافون */}
-                      <button
-                        className="px-4 py-2 bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 hover:from-rose-700 hover:to-red-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                        onClick={() => setIsVodafoneBulkImportOpen(true)}
-                        title="تحميل النموذج الاسترشادي والرفع الجماعي لملفات إكسيل خطة Vodafone FTTS"
-                      >
-                        <span>📤</span>
-                        <span>الرفع الجماعي عبر إكسيل (Bulk Import)</span>
-                      </button>
-
-                      {/* 2. زر موحد لإدارة وعمليات المواقع (إضافة / تعديل / حذف) */}
-                      <SiteActionDropdown
-                        variant="vodafone"
-                        label="إدارة وعمليات المواقع"
-                        hasOperatorSubmenus={false}
-                        onAdd={() => {
-                          setVodafoneEditingSiteCode(undefined);
-                          setVodafoneEditingRecord(null);
-                          setVodafoneModalMode('add');
-                          setIsVodafoneAddDataOpen(true);
-                        }}
-                        onEdit={() => {
-                          setVodafoneEditingSiteCode(undefined);
-                          setVodafoneEditingRecord(null);
-                          setVodafoneModalMode('edit');
-                          setIsVodafoneAddDataOpen(true);
-                        }}
-                        onDelete={() => {
-                          setQuickDeleteTargetCompany('Vodafone');
-                          setIsQuickDeleteModalOpen(true);
-                        }}
-                      />
-
-                      {/* 3. زر تحميل النسخة الاحتياطية */}
-                      <button
-                        className="px-3.5 py-2 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-700 hover:to-indigo-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-60"
-                        onClick={handleExportBackup}
-                        disabled={isExportingBackup}
-                        title="تحميل نسخة احتياطية شاملة لكافة الجداول والبيانات من Supabase (Excel)"
-                      >
-                        {isExportingBackup ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
-                        <span>تحميل النسخة الاحتياطية (Export Backup)</span>
-                      </button>
-                    </div>
+                    <SiteActionDropdown
+                      variant="vodafone"
+                      label="إدارة وعمليات المواقع"
+                      hasOperatorSubmenus={false}
+                      onAdd={() => {
+                        setVodafoneEditingSiteCode(undefined);
+                        setVodafoneEditingRecord(null);
+                        setVodafoneModalMode('add');
+                        setIsVodafoneAddDataOpen(true);
+                      }}
+                      onEdit={() => {
+                        setVodafoneEditingSiteCode(undefined);
+                        setVodafoneEditingRecord(null);
+                        setVodafoneModalMode('edit');
+                        setIsVodafoneAddDataOpen(true);
+                      }}
+                      onDelete={() => {
+                        setQuickDeleteTargetCompany('Vodafone');
+                        setIsQuickDeleteModalOpen(true);
+                      }}
+                    />
                   ) : (
-                    /* WE & Default Buttons Group */
-                    <div className="flex flex-wrap items-center gap-2">
-                      {/* 1. زر تحليل WE في أقصى بداية السطر وقبل زر إضافة موقع جديد */}
+                    /* WE & Default Buttons Group: يقتصر حصرياً على تحليل WE وعمليات المواقع */
+                    <>
                       <button
                         className="px-4 py-2 bg-gradient-to-r from-blue-700 to-indigo-800 hover:from-blue-800 hover:to-indigo-900 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
                         onClick={() => setIsWeAnalysisOpen(true)}
@@ -1485,7 +1437,6 @@ export const Dashboard: React.FC = () => {
                         <span>تحليل WE (WE Analysis)</span>
                       </button>
 
-                      {/* 2. زر موحد لإدارة وعمليات المواقع (إضافة / تعديل / حذف) مع دعم القوائم الفرعية عند All Operators */}
                       <SiteActionDropdown
                         variant={filters.company === 'WE' ? 'we' : 'default'}
                         label="إدارة وعمليات المواقع"
@@ -1510,66 +1461,8 @@ export const Dashboard: React.FC = () => {
                         onEditByOperator={handleEditByOperator}
                         onDeleteByOperator={handleDeleteByOperator}
                       />
-
-                      {/* 3. زر الرفع الجماعي عبر شيت الإكسيل */}
-                      <button
-                        className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-700 hover:from-teal-700 hover:to-emerald-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                        onClick={() => setIsBulkImportOpen(true)}
-                        title="تحميل النموذج الاسترشادي والرفع الجماعي لملفات الإكسيل مع حماية الثوابت"
-                      >
-                        <span>📤</span>
-                        <span>رفع جماعي عبر إكسيل (Bulk Excel)</span>
-                      </button>
-
-                      {/* 4. زر تصدير CSV */}
-                      <button
-                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                        onClick={() => exportToCSV()}
-                        title="تصدير قاعدة البيانات المركزية كاملة إلى CSV"
-                      >
-                        <span>📥</span>
-                        <span>تصدير CSV</span>
-                      </button>
-
-                      {/* 5. إدارة وحذف متقدم */}
-                      <button
-                        className="px-3.5 py-2 bg-purple-700 hover:bg-purple-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                        onClick={() => setIsWeManagerOpen(true)}
-                        title="إدارة وتعديل السجلات وحذف البيانات غير المهمة أو تصدير CSV نظيف"
-                      >
-                        <span>🧹</span>
-                        <span>إدارة وحذف متقدم (CSV)</span>
-                      </button>
-
-                      {/* 6. زر تحميل النسخة الاحتياطية */}
-                      <button
-                        className="px-3.5 py-2 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-700 hover:to-indigo-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-60"
-                        onClick={handleExportBackup}
-                        disabled={isExportingBackup}
-                        title="تحميل نسخة احتياطية شاملة لكافة الجداول والبيانات من Supabase (Excel)"
-                      >
-                        {isExportingBackup ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
-                        <span>تحميل النسخة الاحتياطية (Export Backup)</span>
-                      </button>
-                    </div>
+                    </>
                   )}
-
-                  {/* Status and Cloud Sync Bar */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium text-xs flex items-center gap-1.5 transition border border-slate-200 cursor-pointer"
-                      onClick={() => {
-                        refetchWeRecords();
-                        refetchWeCodes();
-                      }}
-                      title="تحديث البيانات من السحابة"
-                    >
-                      🔄 {weRecordsLoading ? 'جارِ المزامنة...' : 'تحديث مباشر'}
-                    </button>
-                    <span className="px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold font-mono">
-                      ⚡ سحابي: {user && user.role !== 'admin' && user.sector !== 'ALL' ? liveWeSites.filter(s => isRecordInSector(user.sector, s)).length : liveWeSites.length} موقع
-                    </span>
-                  </div>
                 </div>
               </div>
             )}
