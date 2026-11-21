@@ -1,8 +1,9 @@
 // src/utils/backupExportService.ts
-// Service to collect and export a full organized backup from Supabase & application state to Excel (.xlsx)
+// Service to collect and export a full organized backup from Supabase & application state to Excel (.xlsx) & ZIP package with documents
 
 import * as XLSX from 'xlsx';
-import { supabase } from '../lib/supabase';
+import JSZip from 'jszip';
+import { supabase, supabaseFallback } from '../lib/supabase';
 import type { SiteRecord } from '../types/dashboard';
 import { WE_EXCEL_SITES, TAHAWOL_EXCEL_SITES } from '../data/preloadedProjects';
 import { VODAFONE_RAW_RECORDS } from '../data/vodafoneSites';
@@ -19,34 +20,177 @@ export interface ExportBackupOptions {
   userSector?: string;
 }
 
-/**
- * Safely queries a Supabase table with fallback to empty array on failure
- */
-async function fetchSupabaseTableData(tableName: string): Promise<any[] | null> {
-  try {
-    const { data, error } = await supabase
-      .from(tableName)
-      .select('*')
-      .limit(10000);
-
-    if (error || !data || data.length === 0) {
-      return null;
-    }
-    return data;
-  } catch {
-    return null;
-  }
+interface DownloadedDocument {
+  name: string;
+  blob: Blob;
+  size: number;
 }
 
 /**
- * Collects all current data from Supabase tables (with live frontend state fallback)
- * and downloads a comprehensive, multi-sheet Excel (.xlsx) backup file.
+ * Triggers a client-side file download for a given Blob
+ */
+function triggerBlobDownload(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/**
+ * Safely queries a Supabase table with fallback across available Supabase clients
+ */
+async function fetchSupabaseTableData(tableName: string): Promise<any[] | null> {
+  const clients = [supabase, supabaseFallback];
+  for (const client of clients) {
+    try {
+      const { data, error } = await client
+        .from(tableName)
+        .select('*')
+        .limit(10000);
+
+      if (!error && data && data.length > 0) {
+        return data;
+      }
+    } catch {
+      // try next client
+    }
+  }
+  return null;
+}
+
+/**
+ * Fetches all uploaded PDF files and documents from Supabase Storage and records.
+ * Gracefully returns an empty array if no files or buckets exist.
+ */
+async function fetchAllUploadedDocuments(records: any[] = []): Promise<DownloadedDocument[]> {
+  const documents: DownloadedDocument[] = [];
+  const seenNames = new Set<string>();
+
+  const clients = [supabase, supabaseFallback];
+  const candidateBuckets = ['site-attachments', 'excel-uploads', 'documents', 'attachments'];
+  const candidateFolders = ['', 'documents', 'attachments', 'sites', 'uploads'];
+
+  // 1. Fetch files from Supabase Storage buckets
+  for (const client of clients) {
+    for (const bucket of candidateBuckets) {
+      for (const folder of candidateFolders) {
+        try {
+          const { data, error } = await client.storage.from(bucket).list(folder, {
+            limit: 500,
+            sortBy: { column: 'created_at', order: 'desc' },
+          });
+
+          if (!error && Array.isArray(data)) {
+            for (const item of data) {
+              if (item && item.name && !seenNames.has(item.name)) {
+                // If it looks like a folder (no id / metadata), skip or recurse shallowly
+                const isFolder = !item.id && !item.metadata;
+                if (isFolder) continue;
+
+                const fullPath = folder ? `${folder}/${item.name}` : item.name;
+                const cleanName = item.name.replace(/[\/\\?%*:|"<>]/g, '_');
+
+                try {
+                  const { data: fileBlob, error: dlErr } = await client.storage.from(bucket).download(fullPath);
+                  if (!dlErr && fileBlob && fileBlob.size > 0) {
+                    seenNames.add(item.name);
+                    documents.push({
+                      name: cleanName,
+                      blob: fileBlob,
+                      size: fileBlob.size,
+                    });
+                    continue;
+                  }
+                } catch {
+                  // Fallback: try public URL
+                }
+
+                try {
+                  const { data: pubData } = client.storage.from(bucket).getPublicUrl(fullPath);
+                  if (pubData?.publicUrl) {
+                    const res = await fetch(pubData.publicUrl);
+                    if (res.ok) {
+                      const blob = await res.blob();
+                      seenNames.add(item.name);
+                      documents.push({
+                        name: cleanName,
+                        blob,
+                        size: blob.size,
+                      });
+                    }
+                  }
+                } catch {
+                  // Ignore individual file fetch errors
+                }
+              }
+            }
+          }
+        } catch {
+          // Skip bucket/folder safely
+        }
+      }
+    }
+  }
+
+  // 2. Also inspect site records for any direct HTTP/HTTPS document URLs
+  for (const rec of records) {
+    if (!rec) continue;
+    const raw = rec?.rawRecord || rec?.data || rec || {};
+    const urlCandidates = [
+      raw.documentUrl,
+      raw.document_url,
+      raw.attachmentUrl,
+      raw.attachment_url,
+      raw.fileUrl,
+      raw.file_url,
+      raw.المستند,
+      raw['المستند'],
+    ];
+
+    for (const val of urlCandidates) {
+      if (typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://'))) {
+        try {
+          const urlObj = new URL(val);
+          const rawName = urlObj.pathname.split('/').pop() || `document_${Date.now()}`;
+          const cleanName = decodeURIComponent(rawName).replace(/[\/\\?%*:|"<>]/g, '_');
+
+          if (!seenNames.has(cleanName)) {
+            const res = await fetch(val);
+            if (res.ok) {
+              const blob = await res.blob();
+              seenNames.add(cleanName);
+              documents.push({
+                name: cleanName,
+                blob,
+                size: blob.size,
+              });
+            }
+          }
+        } catch {
+          // Ignore URL fetch errors safely
+        }
+      }
+    }
+  }
+
+  return documents;
+}
+
+/**
+ * Collects all current data from Supabase tables (with live frontend state fallback),
+ * fetches all uploaded PDF documents from Supabase Storage, and downloads a unified
+ * comprehensive backup ZIP package containing the multi-sheet Excel file and documents folder.
  */
 export async function exportFullDatabaseBackup(options: ExportBackupOptions = {}): Promise<{
   success: boolean;
   fileName: string;
   totalSites: number;
   counts: Record<string, number>;
+  documentsCount: number;
 }> {
   const {
     liveWeSites = [],
@@ -73,10 +217,12 @@ export async function exportFullDatabaseBackup(options: ExportBackupOptions = {}
     return deletedSiteCodes.has(c) || deletedSiteCodes.has(i);
   };
 
-  // 2. Prepare WE Data
+  // 2. Prepare WE Data (unwrapping nested JSON data payload if stored by sync)
   let weList: any[] = [];
   if (supabaseWe && supabaseWe.length > 0) {
-    weList = supabaseWe.filter((r) => !isDeleted(r['site code'] || r[' Site code'] || r.site_code, r.id));
+    weList = supabaseWe
+      .map((r) => (r && r.data ? { ...r, ...r.data } : r))
+      .filter((r) => !isDeleted(r['site code'] || r[' Site code'] || r.site_code, r.id));
   } else if (liveWeSites && liveWeSites.length > 0) {
     weList = liveWeSites.filter((s) => !isDeleted(s.siteCode, s.id));
   } else {
@@ -86,7 +232,9 @@ export async function exportFullDatabaseBackup(options: ExportBackupOptions = {}
   // 3. Prepare Vodafone Data
   let vodafoneList: any[] = [];
   if (supabaseVodafone && supabaseVodafone.length > 0) {
-    vodafoneList = supabaseVodafone.filter((r) => !isDeleted(r['site code'] || r[' Site code'] || r.site_code, r.id));
+    vodafoneList = supabaseVodafone
+      .map((r) => (r && r.data ? { ...r, ...r.data } : r))
+      .filter((r) => !isDeleted(r['site code'] || r[' Site code'] || r.site_code, r.id));
   } else if (vodafoneSites && vodafoneSites.length > 0) {
     vodafoneList = vodafoneSites.filter((s) => !isDeleted(s.siteCode, s.id));
   } else {
@@ -96,7 +244,9 @@ export async function exportFullDatabaseBackup(options: ExportBackupOptions = {}
   // 4. Prepare Orange Data
   let orangeList: any[] = [];
   if (supabaseOrange && supabaseOrange.length > 0) {
-    orangeList = supabaseOrange.filter((r) => !isDeleted(r['site code'] || r[' Site code'] || r.site_code, r.id));
+    orangeList = supabaseOrange
+      .map((r) => (r && r.data ? { ...r, ...r.data } : r))
+      .filter((r) => !isDeleted(r['site code'] || r[' Site code'] || r.site_code, r.id));
   } else if (orangeSites && orangeSites.length > 0) {
     orangeList = orangeSites.filter((s) => !isDeleted(s.siteCode, s.id));
   } else {
@@ -106,7 +256,9 @@ export async function exportFullDatabaseBackup(options: ExportBackupOptions = {}
   // 5. Prepare Availability (Etaha) Data
   let etahaList: any[] = [];
   if (supabaseEtaha && supabaseEtaha.length > 0) {
-    etahaList = supabaseEtaha.filter((r) => !isDeleted(r.Code || r.code, r.id));
+    etahaList = supabaseEtaha
+      .map((r) => (r && r.data ? { ...r, ...r.data } : r))
+      .filter((r) => !isDeleted(r.Code || r.code, r.id));
   } else if (etahaSites && etahaSites.length > 0) {
     etahaList = etahaSites.filter((s) => !isDeleted(s.siteCode, s.id));
   } else {
@@ -306,14 +458,13 @@ export async function exportFullDatabaseBackup(options: ExportBackupOptions = {}
   addStyledSheet(tahawolSheetRows, 'Digital_Transformation');
   addStyledSheet(summarySheetRows, 'معلومات النسخة الاحتياطية');
 
-  // Generate file name with ISO date
+  // Generate date and time stamps
   const dateStr = now.toISOString().slice(0, 10);
-  const timeStr = `${now.getHours()}-${now.getMinutes()}`;
-  const fileName = `FTTS_Supabase_Full_Backup_${dateStr}_${timeStr}.xlsx`;
+  const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+  const excelFileName = `FTTS_Supabase_Full_Backup_${dateStr}_${timeStr}.xlsx`;
+  const zipFileName = `FTTS_Full_Backup_Package_${dateStr}_${timeStr}.zip`;
 
-  // Write and trigger download
-  XLSX.writeFile(wb, fileName);
-
+  // Total calculated counts
   const totalSites = masterFttsRows.length + etahaSheetRows.length + tahawolSheetRows.length;
   const counts = {
     totalFTTS: masterFttsRows.length,
@@ -325,10 +476,99 @@ export async function exportFullDatabaseBackup(options: ExportBackupOptions = {}
     grandTotal: totalSites,
   };
 
-  return {
-    success: true,
-    fileName,
-    totalSites,
-    counts,
-  };
+  // 8. Fetch all uploaded PDF files and documents from Supabase Storage
+  const allRecords = [...weList, ...vodafoneList, ...orangeList, ...etahaList];
+  let uploadedDocs: DownloadedDocument[] = [];
+  try {
+    uploadedDocs = await fetchAllUploadedDocuments(allRecords);
+  } catch (err) {
+    console.warn('Notice: Could not query Supabase storage for documents, proceeding with data tables:', err);
+    uploadedDocs = [];
+  }
+
+  // 9. Generate Excel binary buffer
+  const excelArrayBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+
+  // 10. Package into ZIP with documents folder
+  try {
+    const zip = new JSZip();
+
+    // Add main Excel backup spreadsheet at root
+    zip.file(excelFileName, excelArrayBuffer);
+
+    // Create documents folder
+    const docsFolder = zip.folder('documents');
+    if (uploadedDocs.length > 0) {
+      for (const doc of uploadedDocs) {
+        docsFolder?.file(doc.name, doc.blob);
+      }
+    } else {
+      // Friendly note if storage bucket is empty
+      docsFolder?.file(
+        'README_المستندات.txt',
+        'مجلد المستندات والمرفقات (Supabase Storage):\n' +
+        'لا توجد مستندات أو مرفقات PDF مرفوعة حالياً في مخزن Supabase Storage للمواقع.\n' +
+        'عند إرفاق أو رفع أي مستندات أو تقارير في نماذج المواقع، سيتم تضمينها تلقائياً داخل هذا المجلد في التنزيلات القادمة.\n'
+      );
+    }
+
+    // Add informative manifest readme
+    const manifestContent = [
+      '=================================================================',
+      'حزمة النسخة الاحتياطية الشاملة - منظومة مشروعات FTTS والإتاحة',
+      '=================================================================',
+      `تاريخ وتوقيت التصدير: ${now.toLocaleString('ar-EG', { dateStyle: 'full', timeStyle: 'medium' })}`,
+      `المستخدم: ${userName}`,
+      `نطاق الصلاحيات: ${userSector}`,
+      '',
+      'محتويات هذه الحزمة:',
+      `1. جداول البيانات الرئيسية: [ ${excelFileName} ]`,
+      `   - إجمالي السجلات: ${totalSites.toLocaleString()}`,
+      `   - المصرية للاتصالات (WE): ${weSheetRows.length.toLocaleString()} موقع`,
+      `   - فودافون (Vodafone): ${vodafoneSheetRows.length.toLocaleString()} موقع`,
+      `   - أورانج (Orange): ${orangeSheetRows.length.toLocaleString()} موقع`,
+      `   - مشروعات الإتاحة: ${etahaSheetRows.length.toLocaleString()} موقع`,
+      `   - التحول الرقمي: ${tahawolSheetRows.length.toLocaleString()} موقع`,
+      '',
+      `2. مجلد المستندات والمرفقات (documents/):`,
+      `   - عدد المستندات المضمنة: ${uploadedDocs.length} ملف`,
+      ...(uploadedDocs.length > 0
+        ? uploadedDocs.map((d, i) => `     [${i + 1}] ${d.name} (${(d.size / 1024).toFixed(1)} KB)`)
+        : ['     (لا توجد مرفقات حالياً في Supabase Storage)']),
+      '',
+      'تم إنشاء هذه الحزمة تلقائياً ومطابقتها مباشرة مع قاعدة بيانات Supabase PostgreSQL ومخزن Storage.',
+    ].join('\n');
+
+    zip.file('README_النسخة_الاحتياطية.txt', manifestContent);
+
+    // Generate ZIP blob and trigger browser download
+    const zipBlob = await zip.generateAsync({
+      type: 'blob',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 },
+    });
+
+    triggerBlobDownload(zipBlob, zipFileName);
+
+    return {
+      success: true,
+      fileName: zipFileName,
+      totalSites,
+      counts,
+      documentsCount: uploadedDocs.length,
+    };
+  } catch (zipError) {
+    console.warn('ZIP packaging fallback triggered, downloading Excel directly:', zipError);
+    // Absolute fallback: deliver Excel file directly if ZIP fails
+    XLSX.writeFile(wb, excelFileName);
+
+    return {
+      success: true,
+      fileName: excelFileName,
+      totalSites,
+      counts,
+      documentsCount: 0,
+    };
+  }
 }
+

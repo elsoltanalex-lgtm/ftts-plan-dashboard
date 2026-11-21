@@ -12,6 +12,7 @@ import {
   normalizeOrangeClassification,
 } from '../types/orange';
 import { isDocumentRequired } from '../config/fieldConfig';
+import { uploadAttachment } from '../lib/supabase';
 import {
   Lock,
   CheckCircle2,
@@ -118,6 +119,14 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
       delete next['المستند'];
       return next;
     });
+    // Background upload to Supabase Storage
+    uploadAttachment(file, 'documents')
+      .then((res) => {
+        if (res.success && res.url) {
+          setFormData((prev) => ({ ...prev, documentUrl: res.url }));
+        }
+      })
+      .catch((err) => console.warn('Supabase attachment upload:', err));
   };
 
   const handleRemoveDocument = () => {

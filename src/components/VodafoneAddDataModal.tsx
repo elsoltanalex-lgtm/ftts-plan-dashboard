@@ -8,6 +8,7 @@ import type { SiteRecord } from '../types/dashboard';
 import { normalizeVodafoneClassification } from '../types/vodafone';
 import { useAuth } from '../context/AuthContext';
 import { isDocumentRequired } from '../config/fieldConfig';
+import { uploadAttachment } from '../lib/supabase';
 import {
   X,
   PlusCircle,
@@ -118,6 +119,14 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
     const fileName = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
     handleInputChange('المستند', fileName);
     handleInputChange('موقف المرفقات', 'تم الارفاق');
+    // Background upload to Supabase Storage
+    uploadAttachment(file, 'documents')
+      .then((res) => {
+        if (res.success && res.url) {
+          handleInputChange('documentUrl', res.url);
+        }
+      })
+      .catch((err) => console.warn('Supabase attachment upload:', err));
   };
 
   const handleRemoveDocument = () => {

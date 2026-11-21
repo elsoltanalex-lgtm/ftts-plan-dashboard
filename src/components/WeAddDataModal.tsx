@@ -23,6 +23,7 @@ import type { SiteRecord } from '../types/dashboard';
 import { fetchSiteRecord, fetchDropdownValues, saveRecord } from '../hooks/useWeAPI';
 import { useAuth } from '../context/AuthContext';
 import { isRecordInSector } from '../utils/sectorPermissions';
+import { uploadAttachment } from '../lib/supabase';
 import {
   Lock,
   ShieldCheck,
@@ -356,6 +357,14 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     if (!file) return;
     const fileName = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
     handleFieldChange('المستند', fileName);
+    // Background upload to Supabase Storage
+    uploadAttachment(file, 'documents')
+      .then((res) => {
+        if (res.success && res.url) {
+          handleFieldChange('documentUrl', res.url);
+        }
+      })
+      .catch((err) => console.warn('Supabase attachment upload:', err));
   };
 
   const handleRemoveDocument = () => {

@@ -1026,7 +1026,7 @@ export const Dashboard: React.FC = () => {
 
   const handleExportBackup = useCallback(async () => {
     setIsExportingBackup(true);
-    setToastMessage('جارِ تجميع كافة البيانات الحالية من قاعدة البيانات السحابية Supabase...');
+    setToastMessage('جارِ تجميع كافة البيانات والمستندات المرفوعة من Supabase وتجهيز حزمة النسخة الاحتياطية...');
     try {
       const res = await exportFullDatabaseBackup({
         liveWeSites,
@@ -1037,7 +1037,8 @@ export const Dashboard: React.FC = () => {
         userName: user?.displayName || 'مدير النظام',
         userSector: user?.sector || (user?.role === 'admin' ? 'كافة القطاعات' : 'قطاع عام'),
       });
-      setToastMessage(`✅ تم تحميل النسخة الاحتياطية بنجاح (${res.totalSites.toLocaleString()} موقعاً ومفرزة بكل الجداول)`);
+      const docNote = res.documentsCount > 0 ? ` + ${res.documentsCount} مستند ومرفق PDF` : '';
+      setToastMessage(`✅ تم تحميل حزمة النسخة الاحتياطية بنجاح (${res.totalSites.toLocaleString()} موقعاً${docNote}) 📦`);
     } catch (err: any) {
       console.error('Failed to export backup:', err);
       setToastMessage(`❌ حدث خطأ أثناء تصدير النسخة الاحتياطية: ${err?.message || 'فشل التصدير'}`);

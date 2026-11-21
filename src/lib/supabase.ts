@@ -30,30 +30,31 @@ export async function uploadAttachment(
   folder = 'documents',
   bucket: string = STORAGE_BUCKETS.ATTACHMENTS
 ): Promise<{ success: boolean; url?: string; path?: string; error?: string }> {
-  try {
-    const timestamp = Date.now();
-    const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const filePath = `${folder}/${timestamp}_${sanitizedName}`;
+  const timestamp = Date.now();
+  const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const filePath = `${folder}/${timestamp}_${sanitizedName}`;
 
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: true,
-      });
+  for (const client of [supabase, supabaseFallback]) {
+    try {
+      const { data, error } = await client.storage
+        .from(bucket)
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true,
+        });
 
-    if (error) {
-      console.warn('Supabase storage upload error:', error.message);
-      return { success: false, error: error.message };
+      if (!error && data) {
+        const { data: publicData } = client.storage.from(bucket).getPublicUrl(data.path);
+        return {
+          success: true,
+          url: publicData?.publicUrl || '',
+          path: data.path,
+        };
+      }
+    } catch {
+      // try fallback client
     }
-
-    const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(data.path);
-    return {
-      success: true,
-      url: publicData.publicUrl,
-      path: data.path,
-    };
-  } catch (err: any) {
-    return { success: false, error: err?.message || 'Failed to upload attachment' };
   }
+
+  return { success: false, error: 'Failed to upload attachment to storage' };
 }
