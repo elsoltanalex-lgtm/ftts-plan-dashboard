@@ -8,7 +8,7 @@
 //    - Branching Dynamic Conditional Fields bound to the chosen Classification
 // All sector permissions and locked baseline fields are strictly preserved.
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   getBlueFields,
   getGreenFields,

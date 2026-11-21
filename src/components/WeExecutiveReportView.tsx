@@ -7,7 +7,7 @@
 // 4. Exact card row design with prominent achievement % on the right, multi-segment color bar in the center with inscribed numbers, and the 6 metric boxes on the left
 // 5. Grand Total bottom summary row and export/print features
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { SiteRecord } from '../types/dashboard';
 import { getSiteClassification } from '../data/dashboardData';
 import {
