@@ -36,6 +36,7 @@ import { useVodafoneAPI } from '../hooks/useVodafoneAPI';
 import type { VodafoneRecord } from '../types/vodafone';
 import { VodafoneAddDataModal } from '../components/VodafoneAddDataModal';
 import { VodafoneBulkImportModal } from '../components/VodafoneBulkImportModal';
+import { VodafoneDataAnalysisModal } from '../components/VodafoneDataAnalysisModal';
 import { useEtahaAPI } from '../hooks/useEtahaAPI';
 import type { EtahaRecord } from '../data/etahaSites';
 import { EtahaBulkImportModal } from '../components/EtahaBulkImportModal';
@@ -235,6 +236,7 @@ export const Dashboard: React.FC = () => {
   } = useVodafoneAPI();
   const [isVodafoneBulkImportOpen, setIsVodafoneBulkImportOpen] = useState(false);
   const [isVodafoneAddDataOpen, setIsVodafoneAddDataOpen] = useState(false);
+  const [isVodafoneAnalysisOpen, setIsVodafoneAnalysisOpen] = useState(false);
   const [vodafoneEditingSiteCode, setVodafoneEditingSiteCode] = useState<string | undefined>(undefined);
   const [vodafoneEditingRecord, setVodafoneEditingRecord] = useState<VodafoneRecord | null>(null);
   const [vodafoneModalMode, setVodafoneModalMode] = useState<'add' | 'edit'>('edit');
@@ -1406,27 +1408,38 @@ export const Dashboard: React.FC = () => {
                     </>
                   ) : filters.company === 'Vodafone' ? (
                     /* Vodafone Buttons Group */
-                    <SiteActionDropdown
-                      variant="vodafone"
-                      label="إدارة وعمليات المواقع"
-                      hasOperatorSubmenus={false}
-                      onAdd={() => {
-                        setVodafoneEditingSiteCode(undefined);
-                        setVodafoneEditingRecord(null);
-                        setVodafoneModalMode('add');
-                        setIsVodafoneAddDataOpen(true);
-                      }}
-                      onEdit={() => {
-                        setVodafoneEditingSiteCode(undefined);
-                        setVodafoneEditingRecord(null);
-                        setVodafoneModalMode('edit');
-                        setIsVodafoneAddDataOpen(true);
-                      }}
-                      onDelete={() => {
-                        setQuickDeleteTargetCompany('Vodafone');
-                        setIsQuickDeleteModalOpen(true);
-                      }}
-                    />
+                    <>
+                      <button
+                        className="px-4 py-2 bg-gradient-to-r from-red-600 via-rose-600 to-red-700 hover:from-red-700 hover:to-rose-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                        onClick={() => setIsVodafoneAnalysisOpen(true)}
+                        title="عرض التحليل الإحصائي المتقدم لمواقع Vodafone"
+                      >
+                        <span>📊</span>
+                        <span>تحليل Vodafone (Vodafone Analysis)</span>
+                      </button>
+
+                      <SiteActionDropdown
+                        variant="vodafone"
+                        label="إدارة وعمليات المواقع"
+                        hasOperatorSubmenus={false}
+                        onAdd={() => {
+                          setVodafoneEditingSiteCode(undefined);
+                          setVodafoneEditingRecord(null);
+                          setVodafoneModalMode('add');
+                          setIsVodafoneAddDataOpen(true);
+                        }}
+                        onEdit={() => {
+                          setVodafoneEditingSiteCode(undefined);
+                          setVodafoneEditingRecord(null);
+                          setVodafoneModalMode('edit');
+                          setIsVodafoneAddDataOpen(true);
+                        }}
+                        onDelete={() => {
+                          setQuickDeleteTargetCompany('Vodafone');
+                          setIsQuickDeleteModalOpen(true);
+                        }}
+                      />
+                    </>
                   ) : (
                     /* WE & Default Buttons Group: يقتصر حصرياً على تحليل WE وعمليات المواقع */
                     <>
@@ -2114,6 +2127,24 @@ export const Dashboard: React.FC = () => {
         onSwitchToManual={() => {
           setIsVodafoneBulkImportOpen(false);
           setVodafoneEditingSiteCode(undefined);
+          setVodafoneEditingRecord(null);
+          setVodafoneModalMode('edit');
+          setIsVodafoneAddDataOpen(true);
+        }}
+      />
+
+      {/* ── Vodafone Analysis Modal ── */}
+      <VodafoneDataAnalysisModal
+        isOpen={isVodafoneAnalysisOpen}
+        onClose={() => setIsVodafoneAnalysisOpen(false)}
+        vodafoneSites={
+          user && user.role !== 'admin' && user.sector !== 'ALL'
+            ? vodafoneSites.filter((s) => isRecordInSector(user.sector, s))
+            : vodafoneSites
+        }
+        activeFilters={filters}
+        onEditSite={(code) => {
+          setVodafoneEditingSiteCode(code);
           setVodafoneEditingRecord(null);
           setVodafoneModalMode('edit');
           setIsVodafoneAddDataOpen(true);
