@@ -53,7 +53,7 @@ function loadJsonFallback(filename) {
       if (Array.isArray(parsed)) return parsed;
       if (parsed && Array.isArray(parsed.records)) return parsed.records;
     }
-  } catch {}
+  } catch { }
   return [];
 }
 
@@ -182,7 +182,7 @@ export async function runDailyBackup(optionsOrRecipient = null) {
     const tmpPath = join(tmpDir, fileName);
     writeFileSync(tmpPath, excelBuffer);
     console.log(`[Backup] Copy written to temporary storage: ${tmpPath}`);
-  } catch {}
+  } catch { }
 
   const grandTotal = masterFtts.length + formattedEtaha.length;
   console.log(`[Backup] Excel generated: ${grandTotal} records, ${excelBuffer.length} bytes.`);

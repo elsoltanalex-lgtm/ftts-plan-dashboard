@@ -652,26 +652,26 @@ export const Dashboard: React.FC = () => {
       // 4. Sector Multi-Select Filter
       if (activeSectors.length > 0) {
         const matchSector = activeSectors.some(
-          (sec) => isRecordInSector(sec, site) || String(site.sector || '').trim() === sec
+          (sec) => isRecordInSector(sec, site) || String(site.sector || site.rawRecord?.['رئاسة قطاعات التنفيذ'] || site.rawRecord?.['قطاع التنفيذ'] || site.rawRecord?.['القطاع'] || site.rawRecord?.['رئاسة القطاعات'] || '').trim() === sec
         );
         if (!matchSector) return false;
       }
 
       // 5. General Admin Multi-Select Filter
       if (activeGeneralAdmins.length > 0) {
-        const ga = String(site.generalAdmin || '').trim();
+        const ga = String(site.generalAdmin || site.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || site.rawRecord?.['الادارة العامة للتنفيذ'] || site.rawRecord?.['الادارة العامة للمنطقة'] || site.rawRecord?.['الإدارة العامة'] || site.rawRecord?.['الإدارة العامة للتنفيذ'] || '').trim();
         if (!activeGeneralAdmins.includes(ga)) return false;
       }
 
       // 5.5 SubSector / الإدارة المختصة Filter (Orange Multi-Select)
       if (activeSubSectors.length > 0) {
-        const sub = String(site.subSector || '').trim();
+        const sub = String(site.subSector || site.rawRecord?.['الإدارة المختصة'] || '').trim();
         if (!activeSubSectors.includes(sub)) return false;
       }
 
       // 6. Competent Admin Multi-Select Filter
       if (activeCompetentAdmins.length > 0) {
-        const ca = String(site.competentAdmin || '').trim();
+        const ca = String(site.competentAdmin || site.rawRecord?.['ادارة التنفيذ الفرعية'] || site.rawRecord?.['إدارة التنفيذ المختصة'] || site.rawRecord?.['المنطقة'] || site.rawRecord?.['إدارة المنطقة'] || '').trim();
         if (!activeCompetentAdmins.includes(ca)) return false;
       }
 
@@ -683,14 +683,14 @@ export const Dashboard: React.FC = () => {
       // 8. Classification Multi-Select Filter
       if (activeClassifications.length > 0) {
         const siteCat = getSiteClassification(site);
-        const rawCls = String(site.classification || '').trim();
+        const rawCls = String(site.classification || site.rawRecord?.['التصنيف'] || site.rawRecord?.['التصنيف (مدني)'] || '').trim();
         const matchCls = activeClassifications.some((fc) => siteCat === fc || rawCls === fc);
         if (!matchCls) return false;
       }
 
       // 9. Obstacle Reason Multi-Select Filter
       if (activeObstacles.length > 0) {
-        const obs = String(site.obstacleReason || '').trim();
+        const obs = String(site.obstacleReason || site.rawRecord?.['اسباب التعّذر'] || site.rawRecord?.['اسباب التعذر'] || site.rawRecord?.['نوع المعوق المدني'] || site.rawRecord?.['الملاحظات'] || '').trim();
         if (!activeObstacles.includes(obs)) return false;
       }
 
@@ -786,23 +786,23 @@ export const Dashboard: React.FC = () => {
       // 3. Sector Multi-Select Filter
       if (activeSectors.length > 0) {
         const matchSector = activeSectors.some(
-          (sec) => isRecordInSector(sec, site) || String(site.sector || '').trim() === sec
+          (sec) => isRecordInSector(sec, site) || String(site.sector || site.rawRecord?.['رئاسة قطاعات التنفيذ'] || site.rawRecord?.['قطاع التنفيذ'] || site.rawRecord?.['القطاع'] || site.rawRecord?.['رئاسة القطاعات'] || '').trim() === sec
         );
         if (!matchSector) return false;
       }
       // 4. General Admin Multi-Select Filter
       if (activeGeneralAdmins.length > 0) {
-        const ga = String(site.generalAdmin || '').trim();
+        const ga = String(site.generalAdmin || site.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || site.rawRecord?.['الادارة العامة للتنفيذ'] || site.rawRecord?.['الادارة العامة للمنطقة'] || site.rawRecord?.['الإدارة العامة'] || site.rawRecord?.['الإدارة العامة للتنفيذ'] || '').trim();
         if (!activeGeneralAdmins.includes(ga)) return false;
       }
       // 5. SubSector Multi-Select Filter
       if (activeSubSectors.length > 0) {
-        const sub = String(site.subSector || '').trim();
+        const sub = String(site.subSector || site.rawRecord?.['الإدارة المختصة'] || '').trim();
         if (!activeSubSectors.includes(sub)) return false;
       }
       // 6. Competent Admin Multi-Select Filter
       if (activeCompetentAdmins.length > 0) {
-        const ca = String(site.competentAdmin || '').trim();
+        const ca = String(site.competentAdmin || site.rawRecord?.['ادارة التنفيذ الفرعية'] || site.rawRecord?.['إدارة التنفيذ المختصة'] || site.rawRecord?.['المنطقة'] || site.rawRecord?.['إدارة المنطقة'] || '').trim();
         if (!activeCompetentAdmins.includes(ca)) return false;
       }
       // 7. Central Filter
@@ -811,7 +811,7 @@ export const Dashboard: React.FC = () => {
       }
       // 8. Obstacle Reason Filter
       if (activeObstacles.length > 0) {
-        const obs = String(site.obstacleReason || '').trim();
+        const obs = String(site.obstacleReason || site.rawRecord?.['اسباب التعّذر'] || site.rawRecord?.['اسباب التعذر'] || site.rawRecord?.['نوع المعوق المدني'] || site.rawRecord?.['الملاحظات'] || '').trim();
         if (!activeObstacles.includes(obs)) return false;
       }
       // 9. Quick Search Query

@@ -86,35 +86,47 @@ const MultiFilterDropdown: React.FC<MultiFilterDropdownProps> = ({
     );
   }, [options, searchTerm]);
 
-  // Count items for each option in current context
-  const getOptionCount = (optVal: string) => {
+  // Count items for each option strictly in the current scoped dataset
+  const getOptionCount = useCallback((optVal: string) => {
     if (!optVal) return sitesData.length;
-    if (filterKey === 'sector') {
-      return sitesData.filter((s) => isRecordInSector(optVal, s) || String(s.sector || '').trim() === String(optVal).trim()).length;
-    }
-    if (filterKey === 'classification') {
-      const targetTrimmed = String(optVal).trim();
-      return sitesData.filter((s) => getSiteClassification(s) === targetTrimmed || String(s.classification || '').trim() === targetTrimmed).length;
-    }
-    if (filterKey === 'externalPath') {
-      const targetTrimmed = String(optVal).trim();
-      return sitesData.filter((s) => String(s.externalPath || s.rawRecord?.['المسار الخارجي'] || '').trim() === targetTrimmed).length;
-    }
-    if (filterKey === 'internalPath') {
-      const targetTrimmed = String(optVal).trim();
-      return sitesData.filter((s) => String(s.internalPath || s.rawRecord?.['المسار الداخلى'] || s.rawRecord?.['المسار الداخلي'] || s.rawRecord?.['موقف اللحامات'] || s.rawRecord?.['موقف_اللحامات'] || '').trim() === targetTrimmed).length;
-    }
-    if (filterKey === 'excelStatus') {
-      const targetTrimmed = String(optVal).trim();
-      return sitesData.filter((s) => String(s.excelStatus || s.classification || s.rawRecord?.['التصنيف'] || '').trim() === targetTrimmed).length;
-    }
-    if (filterKey === 'deliveryStatus') {
-      const targetTrimmed = String(optVal).trim();
-      return sitesData.filter((s) => String(s.deliveryStatus || s.deliveryArea || s.rawRecord?.['موقف التسليم'] || '').trim() === targetTrimmed).length;
-    }
-    const targetTrimmed = String(optVal).trim();
-    return sitesData.filter((s) => String(s[filterKey] || '').trim() === targetTrimmed).length;
-  };
+    const target = String(optVal).trim();
+    return sitesData.filter((s) => {
+      if (filterKey === 'sector') {
+        const val = String(s.sector || s.rawRecord?.['رئاسة قطاعات التنفيذ'] || s.rawRecord?.['قطاع التنفيذ'] || s.rawRecord?.['القطاع'] || s.rawRecord?.['رئاسة القطاعات'] || '').trim();
+        return val === target || isRecordInSector(target, s);
+      }
+      if (filterKey === 'generalAdmin') {
+        const val = String(s.generalAdmin || s.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || s.rawRecord?.['الادارة العامة للتنفيذ'] || s.rawRecord?.['الادارة العامة للمنطقة'] || s.rawRecord?.['الإدارة العامة'] || s.rawRecord?.['الإدارة العامة للتنفيذ'] || '').trim();
+        return val === target;
+      }
+      if (filterKey === 'competentAdmin') {
+        const val = String(s.competentAdmin || s.rawRecord?.['ادارة التنفيذ الفرعية'] || s.rawRecord?.['إدارة التنفيذ المختصة'] || s.rawRecord?.['المنطقة'] || s.rawRecord?.['إدارة المنطقة'] || '').trim();
+        return val === target;
+      }
+      if (filterKey === 'classification') {
+        const val = String(s.classification || s.rawRecord?.['التصنيف'] || s.rawRecord?.['التصنيف (مدني)'] || '').trim();
+        return val === target || getSiteClassification(s) === target;
+      }
+      if (filterKey === 'obstacleReason') {
+        const val = String(s.obstacleReason || s.rawRecord?.['اسباب التعّذر'] || s.rawRecord?.['اسباب التعذر'] || s.rawRecord?.['نوع المعوق المدني'] || s.rawRecord?.['الملاحظات'] || '').trim();
+        return val === target;
+      }
+      if (filterKey === 'externalPath') {
+        const val = String(s.externalPath || s.rawRecord?.['المسار الخارجي'] || '').trim();
+        return val === target;
+      }
+      if (filterKey === 'internalPath') {
+        const val = String(s.internalPath || s.rawRecord?.['المسار الداخلى'] || s.rawRecord?.['المسار الداخلي'] || s.rawRecord?.['موقف اللحامات'] || s.rawRecord?.['موقف_اللحامات'] || '').trim();
+        return val === target;
+      }
+      if (filterKey === 'deliveryStatus') {
+        const val = String(s.deliveryStatus || s.deliveryArea || s.rawRecord?.['موقف التسليم'] || '').trim();
+        return val === target;
+      }
+      const val = String(s[filterKey] || '').trim();
+      return val === target;
+    }).length;
+  }, [sitesData, filterKey]);
 
   const isSelected = selectedList.length > 0;
 
@@ -136,13 +148,21 @@ const MultiFilterDropdown: React.FC<MultiFilterDropdownProps> = ({
     onChange([]);
   };
 
-  // Button title and display summary
+  // Button title and display summary showing live matching record/site count
   const displayLabel = useMemo(() => {
     if (selectedList.length === 0) return 'الكل (عرض الجميع)';
-    if (selectedList.length === 1) return selectedList[0];
-    if (selectedList.length === 2) return `${selectedList[0]} + ${selectedList[1]}`;
-    return `${selectedList.length} محددة (${selectedList[0]} +${selectedList.length - 1})`;
-  }, [selectedList]);
+    if (selectedList.length === 1) {
+      const cnt = getOptionCount(selectedList[0]);
+      return `${selectedList[0]} (${cnt})`;
+    }
+    if (selectedList.length === 2) {
+      const cnt1 = getOptionCount(selectedList[0]);
+      const cnt2 = getOptionCount(selectedList[1]);
+      return `${selectedList[0]} (${cnt1}) + ${selectedList[1]} (${cnt2})`;
+    }
+    const totalSelectedCount = selectedList.reduce((sum, item) => sum + getOptionCount(item), 0);
+    return `${selectedList.length} محددة (${totalSelectedCount})`;
+  }, [selectedList, getOptionCount]);
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -211,11 +231,10 @@ const MultiFilterDropdown: React.FC<MultiFilterDropdownProps> = ({
 
       {/* Dropdown Menu Modal */}
       {isOpen && !disabled && (
-        <div className={`absolute z-50 mt-1 w-full sm:w-72 max-w-[92vw] bg-white border border-slate-200 rounded-xl shadow-2xl p-2.5 animate-in fade-in zoom-in-95 duration-150 ${
-          id === 'filter-obstacle-reason' || id === 'filter-etaha-delivery-status' || id === 'filter-orange-area'
+        <div className={`absolute z-50 mt-1 w-full sm:w-72 max-w-[92vw] bg-white border border-slate-200 rounded-xl shadow-2xl p-2.5 animate-in fade-in zoom-in-95 duration-150 ${id === 'filter-obstacle-reason' || id === 'filter-etaha-delivery-status' || id === 'filter-orange-area'
             ? 'right-0 lg:right-auto lg:left-0'
             : 'right-0'
-        }`}>
+          }`}>
           {/* Search box inside dropdown */}
           <div className="relative mb-2">
             <Search className="w-3.5 h-3.5 absolute inset-y-0 right-2.5 my-auto text-slate-400 pointer-events-none" />
@@ -277,12 +296,14 @@ const MultiFilterDropdown: React.FC<MultiFilterDropdownProps> = ({
                     >
                       {isOptionActive && <Check className="w-3 h-3 stroke-[3]" />}
                     </div>
-                    <span className="truncate">{clean}</span>
+                    <span className="truncate font-medium">
+                      {clean} <span className="font-mono text-[11px] font-bold text-slate-400">({count})</span>
+                    </span>
                   </div>
                   <span
-                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded flex-shrink-0 ${isOptionActive
-                      ? 'bg-sky-200/70 text-sky-900 font-black'
-                      : 'bg-slate-100 text-slate-500'
+                    className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${isOptionActive
+                      ? 'bg-sky-200/80 text-sky-900 font-black'
+                      : 'bg-slate-100 text-slate-600'
                       }`}
                   >
                     {count}
@@ -328,7 +349,6 @@ export const Filters: React.FC<FiltersProps> = ({
   const { user } = useAuth();
   const isSectorLocked = Boolean(user && user.role !== 'admin' && user.sector !== 'ALL');
   const isEtaha = activeScope === 'ETAHA' || activeScope === 'AVAILABILITY';
-  const isOrange = !isEtaha && (selectedCompany || filters.company) === 'Orange';
 
   // Base dataset: when specific operator is selected, strictly scope to those sites
   const baseSites = useMemo(() => {
@@ -349,83 +369,62 @@ export const Filters: React.FC<FiltersProps> = ({
       if (toFilterArray(filters.generalAdmin).length > 0) count += toFilterArray(filters.generalAdmin).length;
       if (toFilterArray(filters.competentAdmin).length > 0) count += toFilterArray(filters.competentAdmin).length;
       if (toFilterArray(filters.externalPath).length > 0) count += toFilterArray(filters.externalPath).length;
-      if (toFilterArray(filters.excelStatus).length > 0) count += toFilterArray(filters.excelStatus).length;
+      if (toFilterArray(filters.internalPath).length > 0) count += toFilterArray(filters.internalPath).length;
       if (toFilterArray(filters.deliveryStatus).length > 0) count += toFilterArray(filters.deliveryStatus).length;
       if (filters.searchQuery) count += 1;
       return count;
     }
     if (!isSectorLocked && toFilterArray(filters.sector).length > 0) count += toFilterArray(filters.sector).length;
     if (toFilterArray(filters.generalAdmin).length > 0) count += toFilterArray(filters.generalAdmin).length;
-    if (isOrange && toFilterArray(filters.subSector).length > 0) count += toFilterArray(filters.subSector).length;
     if (toFilterArray(filters.competentAdmin).length > 0) count += toFilterArray(filters.competentAdmin).length;
     if (toFilterArray(filters.classification).length > 0) count += toFilterArray(filters.classification).length;
     if (toFilterArray(filters.obstacleReason).length > 0) count += toFilterArray(filters.obstacleReason).length;
     if (toFilterArray(filters.status).length > 0) count += toFilterArray(filters.status).length;
     if (filters.searchQuery) count += 1;
     return count;
-  }, [filters, isSectorLocked, isOrange, isEtaha]);
+  }, [filters, isSectorLocked, isEtaha]);
 
-  // Level 1: Sector / Presidency Filter
+  // Level 1: Dynamic Sectors strictly from baseSites (no hardcoding)
   const dynamicSectors = useMemo(() => {
     if (isSectorLocked && user?.sector) {
       return [toCanonicalSector(user.sector)];
     }
-    if (isEtaha) {
-      const etahaSecs = Array.from(
-        new Set(baseSites.map((s) => (s.sector || '').trim()).filter(Boolean))
-      );
-      return etahaSecs.sort((a, b) => a.localeCompare(b, 'ar'));
-    }
-    if (isOrange) {
-      const orangeSecs = Array.from(
-        new Set(baseSites.map((s) => (s.sector || '').trim()).filter(Boolean))
-      );
-      return orangeSecs.length > 0
-        ? orangeSecs
-        : ['المنطقة الجنوبية', 'المنطقة الغربية', 'المنطقة الشرقية', 'القاهرة الكبرى', 'الجيزة و أكتوبر', 'اسكندرية و الساحل'];
-    }
-    const directSecs = Array.from(
-      new Set(baseSites.map((s) => (s.sector || '').trim()).filter(Boolean))
-    );
-    if (directSecs.length > 0) {
-      return directSecs;
-    }
-    const presentCanonical = new Set(
-      baseSites.map((s) => toCanonicalSector(s.sector)).filter(Boolean)
-    );
-    const ordered = SECTORS.filter((sec) => presentCanonical.has(sec));
-    return ordered.length > 0 ? ordered : SECTORS;
-  }, [baseSites, user, isSectorLocked, isOrange]);
+    return Array.from(
+      new Set(
+        baseSites
+          .map((s) => String(s.sector || s.rawRecord?.['رئاسة قطاعات التنفيذ'] || s.rawRecord?.['قطاع التنفيذ'] || '').trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [baseSites, user, isSectorLocked]);
 
   // Level 2: Scoped by chosen Sector(s) -> Feeds General Admin
   const sectorScopedSites = useMemo(() => {
-    const activeSectors = toFilterArray(filters.sector);
+    const activeSectors = toFilterArray(filters.sector).map((s) => String(s).trim());
     if (activeSectors.length > 0) {
-      return baseSites.filter((s) =>
-        activeSectors.some(
-          (sec) => isRecordInSector(sec, s) || String(s.sector || '').trim() === sec
-        )
-      );
+      return baseSites.filter((s) => {
+        const sec = String(s.sector || s.rawRecord?.['رئاسة قطاعات التنفيذ'] || s.rawRecord?.['قطاع التنفيذ'] || '').trim();
+        return activeSectors.includes(sec) || activeSectors.some((as) => isRecordInSector(as, s));
+      });
     }
     return baseSites;
   }, [baseSites, filters.sector]);
 
   // Dynamic General Admins belonging strictly to chosen Sector(s)
   const dynamicGeneralAdmins = useMemo(() => {
-    const list = Array.from(
+    return Array.from(
       new Set(
         sectorScopedSites
-          .map((s) => String(s.generalAdmin || '').trim())
+          .map((s) => String(s.generalAdmin || s.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || s.rawRecord?.['الادارة العامة للتنفيذ'] || s.rawRecord?.['الادارة العامة للمنطقة'] || '').trim())
           .filter(Boolean)
       )
     ).sort((a, b) => a.localeCompare(b, 'ar'));
-    return list;
   }, [sectorScopedSites]);
 
   // Auto-reset General Admin if chosen sector changes and current general admin is not present in it
   useEffect(() => {
     const current = toFilterArray(filters.generalAdmin);
-    if (current.length > 0 && dynamicGeneralAdmins.length > 0) {
+    if (current.length > 0) {
       const valid = current.filter((g) => dynamicGeneralAdmins.includes(g));
       if (valid.length !== current.length) {
         onChangeFilter('generalAdmin', valid.length === 1 ? valid[0] : valid);
@@ -433,90 +432,33 @@ export const Filters: React.FC<FiltersProps> = ({
     }
   }, [dynamicGeneralAdmins, filters.generalAdmin, onChangeFilter]);
 
-  // Level 2.5: Scoped by Sector AND Department -> Feeds Competent Admin / SubSector
+  // Level 3: Scoped by Sector AND Department -> Feeds Competent Executing Admin
   const deptScopedSites = useMemo(() => {
-    const activeGAs = toFilterArray(filters.generalAdmin);
+    const activeGAs = toFilterArray(filters.generalAdmin).map((g) => String(g).trim());
     if (activeGAs.length > 0) {
-      return sectorScopedSites.filter((s) =>
-        activeGAs.includes(String(s.generalAdmin || '').trim())
-      );
+      return sectorScopedSites.filter((s) => {
+        const ga = String(s.generalAdmin || s.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || s.rawRecord?.['الادارة العامة للتنفيذ'] || s.rawRecord?.['الادارة العامة للمنطقة'] || '').trim();
+        return activeGAs.includes(ga);
+      });
     }
     return sectorScopedSites;
   }, [sectorScopedSites, filters.generalAdmin]);
 
-  // ── Orange Hierarchy Specific: Level 3 (الإدارة المختصة - القطاع) ──
-  const dynamicSubSectors = useMemo(() => {
-    if (!isOrange) return [];
-    const list = Array.from(
+  // Dynamic Competent Executing Admins (strictly from table, no hardcoded arrays)
+  const dynamicCompetentAdmins = useMemo(() => {
+    return Array.from(
       new Set(
         deptScopedSites
-          .map((s) => String(s.subSector || '').trim())
+          .map((s) => String(s.competentAdmin || s.rawRecord?.['ادارة التنفيذ الفرعية'] || s.rawRecord?.['إدارة التنفيذ المختصة'] || s.rawRecord?.['المنطقة'] || '').trim())
           .filter(Boolean)
       )
     ).sort((a, b) => a.localeCompare(b, 'ar'));
-    return list;
-  }, [deptScopedSites, isOrange]);
-
-  // Auto-reset Orange SubSector if no longer valid
-  useEffect(() => {
-    if (isOrange) {
-      const current = toFilterArray(filters.subSector);
-      if (current.length > 0 && dynamicSubSectors.length > 0) {
-        const valid = current.filter((s) => dynamicSubSectors.includes(s));
-        if (valid.length !== current.length) {
-          onChangeFilter('subSector', valid.length === 1 ? valid[0] : valid);
-        }
-      }
-    }
-  }, [isOrange, dynamicSubSectors, filters.subSector, onChangeFilter]);
-
-  // Level 3.5: Scoped by SubSector -> Feeds Area / إدارة المنطقة
-  const subSectorScopedSites = useMemo(() => {
-    const activeSubs = toFilterArray(filters.subSector);
-    if (isOrange && activeSubs.length > 0) {
-      return deptScopedSites.filter((s) =>
-        activeSubs.includes(String(s.subSector || '').trim())
-      );
-    }
-    return deptScopedSites;
-  }, [deptScopedSites, filters.subSector, isOrange]);
-
-  // Dynamic Competent Admins / Areas
-  const dynamicCompetentAdmins = useMemo(() => {
-    if (isOrange) {
-      const list = Array.from(
-        new Set(
-          subSectorScopedSites
-            .map((s) => String(s.competentAdmin || '').trim())
-            .filter(Boolean)
-        )
-      ).sort((a, b) => a.localeCompare(b, 'ar'));
-      return list;
-    }
-    const validSet = new Set(COMPETENT_ADMINS);
-    const set = new Set<string>();
-    deptScopedSites.forEach((s) => {
-      const c = String(s.competentAdmin || '').trim();
-      if (validSet.has(c)) {
-        set.add(c);
-      }
-    });
-    if (set.size === 0) {
-      sectorScopedSites.forEach((s) => {
-        const c = String(s.competentAdmin || '').trim();
-        if (validSet.has(c)) {
-          set.add(c);
-        }
-      });
-    }
-    const list = Array.from(set.size > 0 ? set : validSet);
-    return list.sort((a, b) => a.localeCompare(b, 'ar'));
-  }, [subSectorScopedSites, deptScopedSites, sectorScopedSites, isOrange]);
+  }, [deptScopedSites]);
 
   // Auto-reset Competent Admin if no longer valid
   useEffect(() => {
     const current = toFilterArray(filters.competentAdmin);
-    if (current.length > 0 && dynamicCompetentAdmins.length > 0) {
+    if (current.length > 0) {
       const valid = current.filter((c) => dynamicCompetentAdmins.includes(c));
       if (valid.length !== current.length) {
         onChangeFilter('competentAdmin', valid.length === 1 ? valid[0] : valid);
@@ -524,49 +466,33 @@ export const Filters: React.FC<FiltersProps> = ({
     }
   }, [dynamicCompetentAdmins, filters.competentAdmin, onChangeFilter]);
 
-  // ── Standard Levels (WE, Vodafone, Orange, Etaha) ──
-  // Level 3: Classification strictly from the uploaded Excel sheet
+  // Level 4: Classification strictly from active Executing Department
   const competentScopedSites = useMemo(() => {
-    const activeCAs = toFilterArray(filters.competentAdmin);
+    const activeCAs = toFilterArray(filters.competentAdmin).map((c) => String(c).trim());
     if (activeCAs.length > 0) {
-      return deptScopedSites.filter((s) =>
-        activeCAs.includes(String(s.competentAdmin || '').trim())
-      );
+      return deptScopedSites.filter((s) => {
+        const ca = String(s.competentAdmin || s.rawRecord?.['ادارة التنفيذ الفرعية'] || s.rawRecord?.['إدارة التنفيذ المختصة'] || s.rawRecord?.['المنطقة'] || '').trim();
+        return activeCAs.includes(ca);
+      });
     }
     return deptScopedSites;
   }, [deptScopedSites, filters.competentAdmin]);
 
+  // Dynamic Classifications strictly from the active parent scope
   const dynamicClassifications = useMemo(() => {
-    const list = Array.from(
+    return Array.from(
       new Set(
         competentScopedSites
-          .map((s) => getSiteClassification(s))
+          .map((s) => String(s.classification || s.rawRecord?.['التصنيف'] || s.rawRecord?.['التصنيف (مدني)'] || '').trim())
           .filter((c) => Boolean(c) && c !== 'غير محدد')
       )
-    );
-    const canonicalOrder = [
-      'تم الانتهاء',
-      'تم التشغيل فايبر',
-      'تم مدني',
-      'جاري العمل',
-      'جاري المعاينة',
-      'جاري تصريح',
-      'متعذر',
-      'معوقات',
-    ];
-    return list.sort((a, b) => {
-      const idxA = canonicalOrder.indexOf(a);
-      const idxB = canonicalOrder.indexOf(b);
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      if (idxA !== -1) return -1;
-      if (idxB !== -1) return 1;
-      return a.localeCompare(b, 'ar');
-    });
+    ).sort((a, b) => a.localeCompare(b, 'ar'));
   }, [competentScopedSites]);
 
+  // Auto-reset Classification if no longer valid
   useEffect(() => {
     const current = toFilterArray(filters.classification);
-    if (current.length > 0 && dynamicClassifications.length > 0) {
+    if (current.length > 0) {
       const valid = current.filter((c) => dynamicClassifications.includes(c));
       if (valid.length !== current.length) {
         onChangeFilter('classification', valid.length === 1 ? valid[0] : valid);
@@ -574,42 +500,40 @@ export const Filters: React.FC<FiltersProps> = ({
     }
   }, [dynamicClassifications, filters.classification, onChangeFilter]);
 
-  // Level 4: Obstacle Reasons
-  const typeScopedSites = useMemo(() => {
-    const activeCls = toFilterArray(filters.classification);
+  // Level 5: Delay Reasons (أسباب التعثر) strictly scoped by active Classification
+  const classificationScopedSites = useMemo(() => {
+    const activeCls = toFilterArray(filters.classification).map((c) => String(c).trim());
     if (activeCls.length > 0) {
       return competentScopedSites.filter((s) => {
-        const c = getSiteClassification(s);
-        const raw = String(s.classification || '').trim();
-        return activeCls.includes(c) || activeCls.includes(raw);
+        const cls = String(s.classification || s.rawRecord?.['التصنيف'] || s.rawRecord?.['التصنيف (مدني)'] || '').trim();
+        const siteCat = getSiteClassification(s);
+        return activeCls.includes(cls) || activeCls.includes(siteCat);
       });
     }
     return competentScopedSites;
   }, [competentScopedSites, filters.classification]);
 
+  // Dynamic Delay Reasons (أسباب التعثر) strictly from matching active records
   const dynamicObstacleReasons = useMemo(() => {
-    if (isOrange) return [];
-    const list = Array.from(
+    return Array.from(
       new Set(
-        typeScopedSites
-          .map((s) => String(s.obstacleReason || '').trim())
-          .filter(Boolean)
+        classificationScopedSites
+          .map((s) => String(s.obstacleReason || s.rawRecord?.['اسباب التعّذر'] || s.rawRecord?.['اسباب التعذر'] || s.rawRecord?.['نوع المعوق المدني'] || s.rawRecord?.['الملاحظات'] || '').trim())
+          .filter((r) => Boolean(r) && r !== 'لا يوجد تعذر' && r !== 'تم الانتهاء' && r !== 'لا يوجد')
       )
     ).sort((a, b) => a.localeCompare(b, 'ar'));
-    return list;
-  }, [typeScopedSites, isOrange]);
+  }, [classificationScopedSites]);
 
+  // Auto-reset Obstacle Reason if no longer valid
   useEffect(() => {
-    if (!isOrange) {
-      const current = toFilterArray(filters.obstacleReason);
-      if (current.length > 0 && dynamicObstacleReasons.length > 0) {
-        const valid = current.filter((o) => dynamicObstacleReasons.includes(o));
-        if (valid.length !== current.length) {
-          onChangeFilter('obstacleReason', valid.length === 1 ? valid[0] : valid);
-        }
+    const current = toFilterArray(filters.obstacleReason);
+    if (current.length > 0) {
+      const valid = current.filter((o) => dynamicObstacleReasons.includes(o));
+      if (valid.length !== current.length) {
+        onChangeFilter('obstacleReason', valid.length === 1 ? valid[0] : valid);
       }
     }
-  }, [isOrange, dynamicObstacleReasons, filters.obstacleReason, onChangeFilter]);
+  }, [dynamicObstacleReasons, filters.obstacleReason, onChangeFilter]);
 
   // ── Etaha Specific: Dynamic Options for 3 Axes ──
   const dynamicExternalPaths = useMemo(() => {
@@ -857,90 +781,6 @@ export const Filters: React.FC<FiltersProps> = ({
             </div>
           )}
         </div>
-      ) : isOrange ? (
-        /* Orange Slicers: 4 Hierarchical Multi-Select Filters in a single row on desktop */
-        <div className="flex flex-col sm:grid sm:grid-cols-2 lg:flex lg:flex-row items-stretch lg:items-end gap-2.5">
-          {/* 1. رئاسة القطاعات */}
-          <div className="flex-1 min-w-0">
-            <MultiFilterDropdown
-              id="filter-orange-presidency"
-              label={isSectorLocked ? `رئاسة القطاع (${user?.sector})` : 'رئاسة القطاعات'}
-              labelEn="Presidency"
-              icon={MapPin}
-              value={isSectorLocked ? [user?.sector || ''] : filters.sector}
-              options={dynamicSectors}
-              onChange={(val) => !isSectorLocked && onChangeFilter('sector', val)}
-              sitesData={baseSites}
-              filterKey="sector"
-              disabled={isSectorLocked}
-              lockedNote={`تم حجب باقي القطاعات - مقيد بقطاع ${user?.sector}`}
-            />
-          </div>
-
-          {/* 2. الإدارة العامة للتنفيذ */}
-          <div className="flex-1 min-w-0">
-            <MultiFilterDropdown
-              id="filter-orange-general-admin"
-              label="الإدارة العامة للتنفيذ"
-              labelEn="General Directorate"
-              icon={Building}
-              value={filters.generalAdmin}
-              options={dynamicGeneralAdmins}
-              onChange={(val) => onChangeFilter('generalAdmin', val)}
-              sitesData={sectorScopedSites}
-              filterKey="generalAdmin"
-            />
-          </div>
-
-          {/* 3. الإدارة المختصة */}
-          <div className="flex-1 min-w-0">
-            <MultiFilterDropdown
-              id="filter-orange-subsector"
-              label="الإدارة المختصة"
-              labelEn="Competent Admin"
-              icon={Briefcase}
-              value={filters.subSector || []}
-              options={dynamicSubSectors}
-              onChange={(val) => onChangeFilter('subSector', val)}
-              sitesData={deptScopedSites}
-              filterKey="subSector"
-            />
-          </div>
-
-          {/* 4. إدارة المنطقة */}
-          <div className="flex-1 min-w-0">
-            <MultiFilterDropdown
-              id="filter-orange-area"
-              label="إدارة المنطقة"
-              labelEn="Area Admin"
-              icon={Layers}
-              value={filters.competentAdmin}
-              options={dynamicCompetentAdmins}
-              onChange={(val) => onChangeFilter('competentAdmin', val)}
-              sitesData={subSectorScopedSites}
-              filterKey="competentAdmin"
-            />
-          </div>
-
-          {/* Reset Filters Action */}
-          {activeCount > 0 && (
-            <div className="flex-shrink-0 self-end">
-              <button
-                type="button"
-                onClick={onResetFilters}
-                id="btn-reset-filters-orange"
-                className="w-full lg:w-auto h-[38px] px-3.5 rounded-xl text-xs font-black text-white bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 hover:from-purple-600 hover:to-indigo-600 shadow-sm cursor-pointer transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
-                title="إلغاء وتصفية جميع الفلاتر والعودة لعرض كافة البيانات"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>إلغاء الفلاتر</span>
-                <span className="bg-white/25 text-white px-1.5 py-0.5 rounded-full font-mono font-bold text-[11px]">
-                  {activeCount}
-                </span>
-              </button>
-            </div>
-          )}
-        </div>
       ) : (
         /* Standard Multi-operator Slicers (5 Multi-Select Levels in a single row on desktop) */
         <div className="flex flex-col sm:grid sm:grid-cols-2 md:grid-cols-3 lg:flex lg:flex-row items-stretch lg:items-end gap-2.5">
@@ -1016,7 +856,7 @@ export const Filters: React.FC<FiltersProps> = ({
               value={filters.obstacleReason}
               options={dynamicObstacleReasons}
               onChange={(val) => onChangeFilter('obstacleReason', val)}
-              sitesData={typeScopedSites}
+              sitesData={classificationScopedSites}
               filterKey="obstacleReason"
             />
           </div>
