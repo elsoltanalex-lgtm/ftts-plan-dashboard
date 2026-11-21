@@ -114,11 +114,11 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {onAddNewSite && onEditSite && onDeleteSite && (
+            {companyVariant !== 'etaha' && onAddNewSite && onEditSite && onDeleteSite && (
               <SiteActionDropdown
                 variant={companyVariant || 'default'}
-                label={companyVariant === 'etaha' ? 'إدارة المشروعات' : 'إدارة المواقع'}
-                itemTypeLabel={companyVariant === 'etaha' ? 'مشروع' : 'موقع'}
+                label="إدارة المواقع"
+                itemTypeLabel="موقع"
                 onAdd={onAddNewSite}
                 onEdit={onEditSite}
                 onDelete={onDeleteSite}
@@ -137,7 +137,7 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
                 className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-lg transition-colors cursor-pointer"
               >
                 <Eye className="w-3.5 h-3.5" />
-                <span>عرض تفاصيل المواقع</span>
+                <span>{companyVariant === 'etaha' ? 'عرض تفاصيل المشروعات' : 'عرض تفاصيل المواقع'}</span>
               </button>
             )}
           </div>

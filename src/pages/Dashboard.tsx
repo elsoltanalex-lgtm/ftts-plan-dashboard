@@ -1624,13 +1624,8 @@ export const Dashboard: React.FC = () => {
                       onAddByOperator={handleAddByOperator}
                       onEditByOperator={handleEditByOperator}
                       onDeleteByOperator={handleDeleteByOperator}
-                      onAddNewSite={() => {
-                        if (activeScope === 'ETAHA') {
-                          setEtahaEditingSiteCode(undefined);
-                          setEtahaEditingRecord(null);
-                          setEtahaModalMode('add');
-                          setIsEtahaAddDataOpen(true);
-                        } else if (filters.company === 'Orange') {
+                      onAddNewSite={activeScope === 'ETAHA' || activeScope === 'AVAILABILITY' ? undefined : () => {
+                        if (filters.company === 'Orange') {
                           setOrangeEditingSiteCode(undefined);
                           setOrangeEditingRecord(null);
                           setOrangeModalMode('add');
@@ -1647,13 +1642,8 @@ export const Dashboard: React.FC = () => {
                           setIsWeAddDataOpen(true);
                         }
                       }}
-                      onEditSite={() => {
-                        if (activeScope === 'ETAHA') {
-                          setEtahaEditingSiteCode(undefined);
-                          setEtahaEditingRecord(null);
-                          setEtahaModalMode('edit');
-                          setIsEtahaAddDataOpen(true);
-                        } else if (filters.company === 'Orange') {
+                      onEditSite={activeScope === 'ETAHA' || activeScope === 'AVAILABILITY' ? undefined : () => {
+                        if (filters.company === 'Orange') {
                           setOrangeEditingSiteCode(undefined);
                           setOrangeEditingRecord(null);
                           setOrangeModalMode('edit');
@@ -1670,17 +1660,15 @@ export const Dashboard: React.FC = () => {
                           setIsWeAddDataOpen(true);
                         }
                       }}
-                      onDeleteSite={() => {
+                      onDeleteSite={activeScope === 'ETAHA' || activeScope === 'AVAILABILITY' ? undefined : () => {
                         setQuickDeleteTargetCompany(
-                          activeScope === 'ETAHA'
-                            ? undefined
-                            : filters.company === 'Orange'
-                              ? 'Orange'
-                              : filters.company === 'Vodafone'
-                                ? 'Vodafone'
-                                : filters.company === 'WE'
-                                  ? 'WE'
-                                  : undefined
+                          filters.company === 'Orange'
+                            ? 'Orange'
+                            : filters.company === 'Vodafone'
+                              ? 'Vodafone'
+                              : filters.company === 'WE'
+                                ? 'WE'
+                                : undefined
                         );
                         setIsQuickDeleteModalOpen(true);
                       }}
