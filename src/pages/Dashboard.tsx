@@ -1243,7 +1243,19 @@ export const Dashboard: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* 4. Summary KPI Cards ("Total Sites", "Completed", "In Progress", "Planned / Inspection") - Immediately below Mobile Operators */}
+            {/* 3. Sticky Interactive Filtering Row (شريط الفلاتر التفاعلي الموحد والمثبت كـ Frozen Pane) */}
+            <div className="sticky top-0 z-40 mb-4 bg-white/95 backdrop-blur-md rounded-2xl shadow-md border border-slate-200/90 p-3 transition-all">
+              <Filters
+                filters={filters}
+                onChangeFilter={handleFilterChange}
+                onResetFilters={handleResetFilters}
+                sitesData={baseFilterSites}
+                selectedCompany={filters.company}
+                activeScope={activeScope}
+              />
+            </div>
+
+            {/* 4. Summary KPI Cards ("Total Sites", "Completed", "In Progress", "Planned / Inspection") */}
             <div className="mb-4">
               {activeScope === 'ETAHA' || activeScope === 'AVAILABILITY' ? (
                 <EtahaKpiCards
@@ -1351,17 +1363,7 @@ export const Dashboard: React.FC = () => {
               )}
             </div>
 
-            {/* 5. Interactive Filtering Row (فلاتر التصفية التفاعلية الهرمية) */}
-            <div className="mb-5">
-              <Filters
-                filters={filters}
-                onChangeFilter={handleFilterChange}
-                onResetFilters={handleResetFilters}
-                sitesData={baseFilterSites}
-                selectedCompany={filters.company}
-                activeScope={activeScope}
-              />
-            </div>
+
 
             {/* 6. Main Action Buttons Row (مجموعة أزرار التحكم - تحليل وعمليات المواقع فقط) */}
             {activeScope === 'FTTS' && (

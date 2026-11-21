@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  Filter,
   ChevronDown,
   Search,
   X,
@@ -212,7 +211,11 @@ const MultiFilterDropdown: React.FC<MultiFilterDropdownProps> = ({
 
       {/* Dropdown Menu Modal */}
       {isOpen && !disabled && (
-        <div className="absolute z-50 mt-1 w-full sm:w-72 max-w-[92vw] right-0 bg-white border border-slate-200 rounded-xl shadow-2xl p-2.5 animate-in fade-in zoom-in-95 duration-150">
+        <div className={`absolute z-50 mt-1 w-full sm:w-72 max-w-[92vw] bg-white border border-slate-200 rounded-xl shadow-2xl p-2.5 animate-in fade-in zoom-in-95 duration-150 ${
+          id === 'filter-obstacle-reason' || id === 'filter-etaha-delivery-status' || id === 'filter-orange-area'
+            ? 'right-0 lg:right-auto lg:left-0'
+            : 'right-0'
+        }`}>
           {/* Search box inside dropdown */}
           <div className="relative mb-2">
             <Search className="w-3.5 h-3.5 absolute inset-y-0 right-2.5 my-auto text-slate-400 pointer-events-none" />
@@ -738,275 +741,304 @@ export const Filters: React.FC<FiltersProps> = ({
   }, [isEtaha, dynamicDeliveryStatuses, filters.deliveryStatus, onChangeFilter]);
 
   return (
-    <div className="pbi-card p-5 mt-2">
-      {/* Filters Header */}
-      <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100 flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-sky-50 flex items-center justify-center text-sky-600 border border-sky-100">
-            <Filter className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-base font-bold text-slate-800 leading-tight">
-                {isEtaha
-                  ? 'فلاتر تصفية مشروعات Availability (متعددة الاختيار Multi-Select)'
-                  : isOrange
-                    ? 'فلاتر التصفية الهرمية لـ Orange (متعددة الاختيار Multi-Select)'
-                    : 'فلاتر التصفية التفاعلية الهرمية (متعددة الاختيار Multi-Select)'}
-              </h3>
-              {activeCount > 0 && (
-                <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-300 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 shadow-2xs">
-                  <CheckSquare className="w-3 h-3 text-emerald-600" />
-                  <span>⚡ تصفية متعددة نشطة ({activeCount} محددات)</span>
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {isEtaha
-                ? 'تصفية مشروعات Availability: القطاع ← الإدارة العامة ← إدارة التنفيذ المختصة ← المحاور الثلاثة (المسار الخارجي، المسار الداخلي، وموقف التسليم)'
-                : isOrange
-                  ? 'تصفية المواقع طبقاً للهيكل الإداري لـ Orange: رئاسة القطاعات ← الإدارة العامة للتنفيذ ← الإدارة المختصة ← إدارة المنطقة'
-                  : 'تصفية المؤشرات طبقاً للهيكل الإداري المتسلسل: القطاع ← الإدارة العامة ← إدارة التنفيذ المختصة ← التصنيف (يدعم تحديد أكثر من خيار)'}
-            </p>
-          </div>
-        </div>
-
-        {/* Prominent Header Reset Button - Purple Theme */}
-        {activeCount > 0 ? (
-          <button
-            onClick={onResetFilters}
-            id="btn-reset-filters-header"
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black text-white bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 hover:from-purple-600 hover:to-indigo-600 shadow-md shadow-purple-500/25 ring-2 ring-purple-400/40 cursor-pointer transition-all hover:scale-105 active:scale-95"
-            title="إلغاء وتصفية جميع الفلاتر والعودة لعرض كافة البيانات"
-          >
-            <RotateCcw className="w-4 h-4" />
-            <span>إلغاء وتصفية الفلاتر</span>
-            <span className="bg-white/25 text-white px-2 py-0.5 rounded-full font-mono font-black text-xs shadow-2xs">
-              {activeCount}
-            </span>
-          </button>
-        ) : (
-          <button
-            disabled
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed opacity-60"
-            title="لا توجد فلاتر نشطة حالياً"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>إلغاء وتصفية الفلاتر</span>
-          </button>
-        )}
-      </div>
-
-      {/* Grid of Multi-Select Slicers */}
+    <div className="w-full">
+      {/* Slicers Controls Row */}
       {isEtaha ? (
-        /* Etaha Specific: 6 Multi-Select Slicers (القطاع، الإدارة العامة، إدارة التنفيذ، ومحاور التصنيف الثلاثة) */
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+        /* Etaha Specific: 6 Multi-Select Slicers in a single row on wide screens */
+        <div className="flex flex-col sm:grid sm:grid-cols-2 md:grid-cols-3 xl:flex xl:flex-row items-stretch xl:items-end gap-2.5">
           {/* 1. القطاع */}
-          <MultiFilterDropdown
-            id="filter-etaha-sector"
-            label={isSectorLocked ? `القطاع (${user?.sector})` : 'القطاع'}
-            labelEn="Sector"
-            icon={MapPin}
-            value={isSectorLocked ? [user?.sector || ''] : filters.sector}
-            options={dynamicSectors}
-            onChange={(val) => !isSectorLocked && onChangeFilter('sector', val)}
-            sitesData={baseSites}
-            filterKey="sector"
-            disabled={isSectorLocked}
-            lockedNote={`تم حجب باقي القطاعات - مقيد بقطاع ${user?.sector}`}
-          />
+          <div className="flex-1 min-w-0">
+            <MultiFilterDropdown
+              id="filter-etaha-sector"
+              label={isSectorLocked ? `القطاع (${user?.sector})` : 'القطاع'}
+              labelEn="Sector"
+              icon={MapPin}
+              value={isSectorLocked ? [user?.sector || ''] : filters.sector}
+              options={dynamicSectors}
+              onChange={(val) => !isSectorLocked && onChangeFilter('sector', val)}
+              sitesData={baseSites}
+              filterKey="sector"
+              disabled={isSectorLocked}
+              lockedNote={`تم حجب باقي القطاعات - مقيد بقطاع ${user?.sector}`}
+            />
+          </div>
 
           {/* 2. الإدارة العامة */}
-          <MultiFilterDropdown
-            id="filter-etaha-general-admin"
-            label="الإدارة العامة"
-            labelEn="General Admin"
-            icon={Building}
-            value={filters.generalAdmin}
-            options={dynamicGeneralAdmins}
-            onChange={(val) => onChangeFilter('generalAdmin', val)}
-            sitesData={sectorScopedSites}
-            filterKey="generalAdmin"
-          />
+          <div className="flex-1 min-w-0">
+            <MultiFilterDropdown
+              id="filter-etaha-general-admin"
+              label="الإدارة العامة"
+              labelEn="General Admin"
+              icon={Building}
+              value={filters.generalAdmin}
+              options={dynamicGeneralAdmins}
+              onChange={(val) => onChangeFilter('generalAdmin', val)}
+              sitesData={sectorScopedSites}
+              filterKey="generalAdmin"
+            />
+          </div>
 
           {/* 3. إدارة التنفيذ المختصة */}
-          <MultiFilterDropdown
-            id="filter-etaha-competent-admin"
-            label="إدارة التنفيذ المختصة"
-            labelEn="Execution Admin"
-            icon={Briefcase}
-            value={filters.competentAdmin}
-            options={dynamicCompetentAdmins}
-            onChange={(val) => onChangeFilter('competentAdmin', val)}
-            sitesData={deptScopedSites}
-            filterKey="competentAdmin"
-          />
+          <div className="flex-1 min-w-0">
+            <MultiFilterDropdown
+              id="filter-etaha-competent-admin"
+              label="إدارة التنفيذ المختصة"
+              labelEn="Execution Admin"
+              icon={Briefcase}
+              value={filters.competentAdmin}
+              options={dynamicCompetentAdmins}
+              onChange={(val) => onChangeFilter('competentAdmin', val)}
+              sitesData={deptScopedSites}
+              filterKey="competentAdmin"
+            />
+          </div>
 
           {/* 4. محور 1: المسار الخارجي */}
-          <MultiFilterDropdown
-            id="filter-etaha-external-path"
-            label="المسار الخارجي"
-            labelEn="External Path"
-            icon={Zap}
-            value={filters.externalPath || []}
-            options={dynamicExternalPaths}
-            onChange={(val) => onChangeFilter('externalPath', val)}
-            sitesData={baseSites}
-            filterKey="externalPath"
-          />
+          <div className="flex-1 min-w-0">
+            <MultiFilterDropdown
+              id="filter-etaha-external-path"
+              label="المسار الخارجي"
+              labelEn="External Path"
+              icon={Zap}
+              value={filters.externalPath || []}
+              options={dynamicExternalPaths}
+              onChange={(val) => onChangeFilter('externalPath', val)}
+              sitesData={baseSites}
+              filterKey="externalPath"
+            />
+          </div>
 
           {/* 5. محور 2: المسار الداخلي */}
-          <MultiFilterDropdown
-            id="filter-etaha-internal-path"
-            label="المسار الداخلي"
-            labelEn="Internal Route"
-            icon={Tag}
-            value={filters.internalPath || []}
-            options={dynamicInternalPaths}
-            onChange={(val) => onChangeFilter('internalPath', val)}
-            sitesData={baseSites}
-            filterKey="internalPath"
-          />
+          <div className="flex-1 min-w-0">
+            <MultiFilterDropdown
+              id="filter-etaha-internal-path"
+              label="المسار الداخلي"
+              labelEn="Internal Route"
+              icon={Tag}
+              value={filters.internalPath || []}
+              options={dynamicInternalPaths}
+              onChange={(val) => onChangeFilter('internalPath', val)}
+              sitesData={baseSites}
+              filterKey="internalPath"
+            />
+          </div>
 
           {/* 6. محور 3: موقف التسليم */}
-          <MultiFilterDropdown
-            id="filter-etaha-delivery-status"
-            label="موقف التسليم"
-            labelEn="Delivery Status"
-            icon={Award}
-            value={filters.deliveryStatus || []}
-            options={dynamicDeliveryStatuses}
-            onChange={(val) => onChangeFilter('deliveryStatus', val)}
-            sitesData={baseSites}
-            filterKey="deliveryStatus"
-          />
+          <div className="flex-1 min-w-0">
+            <MultiFilterDropdown
+              id="filter-etaha-delivery-status"
+              label="موقف التسليم"
+              labelEn="Delivery Status"
+              icon={Award}
+              value={filters.deliveryStatus || []}
+              options={dynamicDeliveryStatuses}
+              onChange={(val) => onChangeFilter('deliveryStatus', val)}
+              sitesData={baseSites}
+              filterKey="deliveryStatus"
+            />
+          </div>
+
+          {/* Reset Filters Action */}
+          {activeCount > 0 && (
+            <div className="flex-shrink-0 self-end">
+              <button
+                type="button"
+                onClick={onResetFilters}
+                id="btn-reset-filters-etaha"
+                className="w-full xl:w-auto h-[38px] px-3.5 rounded-xl text-xs font-black text-white bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 hover:from-purple-600 hover:to-indigo-600 shadow-sm cursor-pointer transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                title="إلغاء وتصفية جميع الفلاتر والعودة لعرض كافة البيانات"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>إلغاء الفلاتر</span>
+                <span className="bg-white/25 text-white px-1.5 py-0.5 rounded-full font-mono font-bold text-[11px]">
+                  {activeCount}
+                </span>
+              </button>
+            </div>
+          )}
         </div>
       ) : isOrange ? (
-        /* Orange Slicers: 4 Hierarchical Multi-Select Filters */
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        /* Orange Slicers: 4 Hierarchical Multi-Select Filters in a single row on desktop */
+        <div className="flex flex-col sm:grid sm:grid-cols-2 lg:flex lg:flex-row items-stretch lg:items-end gap-2.5">
           {/* 1. رئاسة القطاعات */}
-          <MultiFilterDropdown
-            id="filter-orange-presidency"
-            label={isSectorLocked ? `رئاسة القطاع (${user?.sector})` : 'رئاسة القطاعات'}
-            labelEn="Presidency"
-            icon={MapPin}
-            value={isSectorLocked ? [user?.sector || ''] : filters.sector}
-            options={dynamicSectors}
-            onChange={(val) => !isSectorLocked && onChangeFilter('sector', val)}
-            sitesData={baseSites}
-            filterKey="sector"
-            disabled={isSectorLocked}
-            lockedNote={`تم حجب باقي القطاعات - مقيد بقطاع ${user?.sector}`}
-          />
+          <div className="flex-1 min-w-0">
+            <MultiFilterDropdown
+              id="filter-orange-presidency"
+              label={isSectorLocked ? `رئاسة القطاع (${user?.sector})` : 'رئاسة القطاعات'}
+              labelEn="Presidency"
+              icon={MapPin}
+              value={isSectorLocked ? [user?.sector || ''] : filters.sector}
+              options={dynamicSectors}
+              onChange={(val) => !isSectorLocked && onChangeFilter('sector', val)}
+              sitesData={baseSites}
+              filterKey="sector"
+              disabled={isSectorLocked}
+              lockedNote={`تم حجب باقي القطاعات - مقيد بقطاع ${user?.sector}`}
+            />
+          </div>
 
           {/* 2. الإدارة العامة للتنفيذ */}
-          <MultiFilterDropdown
-            id="filter-orange-general-admin"
-            label="الإدارة العامة للتنفيذ"
-            labelEn="General Directorate"
-            icon={Building}
-            value={filters.generalAdmin}
-            options={dynamicGeneralAdmins}
-            onChange={(val) => onChangeFilter('generalAdmin', val)}
-            sitesData={sectorScopedSites}
-            filterKey="generalAdmin"
-          />
+          <div className="flex-1 min-w-0">
+            <MultiFilterDropdown
+              id="filter-orange-general-admin"
+              label="الإدارة العامة للتنفيذ"
+              labelEn="General Directorate"
+              icon={Building}
+              value={filters.generalAdmin}
+              options={dynamicGeneralAdmins}
+              onChange={(val) => onChangeFilter('generalAdmin', val)}
+              sitesData={sectorScopedSites}
+              filterKey="generalAdmin"
+            />
+          </div>
 
           {/* 3. الإدارة المختصة */}
-          <MultiFilterDropdown
-            id="filter-orange-subsector"
-            label="الإدارة المختصة"
-            labelEn="Competent Admin"
-            icon={Briefcase}
-            value={filters.subSector || []}
-            options={dynamicSubSectors}
-            onChange={(val) => onChangeFilter('subSector', val)}
-            sitesData={deptScopedSites}
-            filterKey="subSector"
-          />
+          <div className="flex-1 min-w-0">
+            <MultiFilterDropdown
+              id="filter-orange-subsector"
+              label="الإدارة المختصة"
+              labelEn="Competent Admin"
+              icon={Briefcase}
+              value={filters.subSector || []}
+              options={dynamicSubSectors}
+              onChange={(val) => onChangeFilter('subSector', val)}
+              sitesData={deptScopedSites}
+              filterKey="subSector"
+            />
+          </div>
 
           {/* 4. إدارة المنطقة */}
-          <MultiFilterDropdown
-            id="filter-orange-area"
-            label="إدارة المنطقة"
-            labelEn="Area Admin"
-            icon={Layers}
-            value={filters.competentAdmin}
-            options={dynamicCompetentAdmins}
-            onChange={(val) => onChangeFilter('competentAdmin', val)}
-            sitesData={subSectorScopedSites}
-            filterKey="competentAdmin"
-          />
+          <div className="flex-1 min-w-0">
+            <MultiFilterDropdown
+              id="filter-orange-area"
+              label="إدارة المنطقة"
+              labelEn="Area Admin"
+              icon={Layers}
+              value={filters.competentAdmin}
+              options={dynamicCompetentAdmins}
+              onChange={(val) => onChangeFilter('competentAdmin', val)}
+              sitesData={subSectorScopedSites}
+              filterKey="competentAdmin"
+            />
+          </div>
+
+          {/* Reset Filters Action */}
+          {activeCount > 0 && (
+            <div className="flex-shrink-0 self-end">
+              <button
+                type="button"
+                onClick={onResetFilters}
+                id="btn-reset-filters-orange"
+                className="w-full lg:w-auto h-[38px] px-3.5 rounded-xl text-xs font-black text-white bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 hover:from-purple-600 hover:to-indigo-600 shadow-sm cursor-pointer transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                title="إلغاء وتصفية جميع الفلاتر والعودة لعرض كافة البيانات"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>إلغاء الفلاتر</span>
+                <span className="bg-white/25 text-white px-1.5 py-0.5 rounded-full font-mono font-bold text-[11px]">
+                  {activeCount}
+                </span>
+              </button>
+            </div>
+          )}
         </div>
       ) : (
-        /* Standard Multi-operator Slicers (5 Multi-Select Levels) */
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
+        /* Standard Multi-operator Slicers (5 Multi-Select Levels in a single row on desktop) */
+        <div className="flex flex-col sm:grid sm:grid-cols-2 md:grid-cols-3 lg:flex lg:flex-row items-stretch lg:items-end gap-2.5">
           {/* 1. القطاع (Level 1: Sector) */}
-          <MultiFilterDropdown
-            id="filter-sector"
-            label={isSectorLocked ? `القطاع (${user?.sector})` : 'القطاع'}
-            labelEn="Sector"
-            icon={MapPin}
-            value={isSectorLocked ? [user?.sector || ''] : filters.sector}
-            options={dynamicSectors}
-            onChange={(val) => !isSectorLocked && onChangeFilter('sector', val)}
-            sitesData={baseSites}
-            filterKey="sector"
-            disabled={isSectorLocked}
-            lockedNote={`تم حجب باقي القطاعات - مقيد بقطاع ${user?.sector}`}
-          />
+          <div className="flex-1 min-w-0">
+            <MultiFilterDropdown
+              id="filter-sector"
+              label={isSectorLocked ? `القطاع (${user?.sector})` : 'القطاع'}
+              labelEn="Sector"
+              icon={MapPin}
+              value={isSectorLocked ? [user?.sector || ''] : filters.sector}
+              options={dynamicSectors}
+              onChange={(val) => !isSectorLocked && onChangeFilter('sector', val)}
+              sitesData={baseSites}
+              filterKey="sector"
+              disabled={isSectorLocked}
+              lockedNote={`تم حجب باقي القطاعات - مقيد بقطاع ${user?.sector}`}
+            />
+          </div>
 
           {/* 2. الإدارات العامه (Level 2: Department / General Admin) */}
-          <MultiFilterDropdown
-            id="filter-general-admin"
-            label="الإدارات العامه"
-            labelEn="Department"
-            icon={Building}
-            value={filters.generalAdmin}
-            options={dynamicGeneralAdmins}
-            onChange={(val) => onChangeFilter('generalAdmin', val)}
-            sitesData={sectorScopedSites}
-            filterKey="generalAdmin"
-          />
+          <div className="flex-1 min-w-0">
+            <MultiFilterDropdown
+              id="filter-general-admin"
+              label="الإدارات العامه"
+              labelEn="Department"
+              icon={Building}
+              value={filters.generalAdmin}
+              options={dynamicGeneralAdmins}
+              onChange={(val) => onChangeFilter('generalAdmin', val)}
+              sitesData={sectorScopedSites}
+              filterKey="generalAdmin"
+            />
+          </div>
 
           {/* 3. إدارة التنفيذ المختصة (Level 2.5: Competent Execution Admin) */}
-          <MultiFilterDropdown
-            id="filter-competent-admin"
-            label="إدارة التنفيذ المختصة"
-            labelEn="Execution Admin"
-            icon={Briefcase}
-            value={filters.competentAdmin}
-            options={dynamicCompetentAdmins}
-            onChange={(val) => onChangeFilter('competentAdmin', val)}
-            sitesData={deptScopedSites}
-            filterKey="competentAdmin"
-          />
+          <div className="flex-1 min-w-0">
+            <MultiFilterDropdown
+              id="filter-competent-admin"
+              label="إدارة التنفيذ المختصة"
+              labelEn="Execution Admin"
+              icon={Briefcase}
+              value={filters.competentAdmin}
+              options={dynamicCompetentAdmins}
+              onChange={(val) => onChangeFilter('competentAdmin', val)}
+              sitesData={deptScopedSites}
+              filterKey="competentAdmin"
+            />
+          </div>
 
           {/* 4. التصنيف (Level 3: Classification) */}
-          <MultiFilterDropdown
-            id="filter-classification"
-            label="التصنيف"
-            labelEn="Classification"
-            icon={Tag}
-            value={filters.classification}
-            options={dynamicClassifications}
-            onChange={(val) => onChangeFilter('classification', val)}
-            sitesData={competentScopedSites}
-            filterKey="classification"
-          />
+          <div className="flex-1 min-w-0">
+            <MultiFilterDropdown
+              id="filter-classification"
+              label="التصنيف"
+              labelEn="Classification"
+              icon={Tag}
+              value={filters.classification}
+              options={dynamicClassifications}
+              onChange={(val) => onChangeFilter('classification', val)}
+              sitesData={competentScopedSites}
+              filterKey="classification"
+            />
+          </div>
 
           {/* 5. أسباب التعذر (Level 4: Obstacle Reasons) */}
-          <MultiFilterDropdown
-            id="filter-obstacle-reason"
-            label="أسباب التعذر"
-            labelEn="Stall / Obstacle Reason"
-            icon={AlertCircle}
-            value={filters.obstacleReason}
-            options={dynamicObstacleReasons}
-            onChange={(val) => onChangeFilter('obstacleReason', val)}
-            sitesData={typeScopedSites}
-            filterKey="obstacleReason"
-          />
+          <div className="flex-1 min-w-0">
+            <MultiFilterDropdown
+              id="filter-obstacle-reason"
+              label="أسباب التعذر"
+              labelEn="Stall / Obstacle Reason"
+              icon={AlertCircle}
+              value={filters.obstacleReason}
+              options={dynamicObstacleReasons}
+              onChange={(val) => onChangeFilter('obstacleReason', val)}
+              sitesData={typeScopedSites}
+              filterKey="obstacleReason"
+            />
+          </div>
+
+          {/* Reset Filters Action */}
+          {activeCount > 0 && (
+            <div className="flex-shrink-0 self-end">
+              <button
+                type="button"
+                onClick={onResetFilters}
+                id="btn-reset-filters-header"
+                className="w-full lg:w-auto h-[38px] px-3.5 rounded-xl text-xs font-black text-white bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 hover:from-purple-600 hover:to-indigo-600 shadow-sm cursor-pointer transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                title="إلغاء وتصفية جميع الفلاتر والعودة لعرض كافة البيانات"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>إلغاء الفلاتر</span>
+                <span className="bg-white/25 text-white px-1.5 py-0.5 rounded-full font-mono font-bold text-[11px]">
+                  {activeCount}
+                </span>
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
