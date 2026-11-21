@@ -55,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pb-4 border-b border-white/10">
 
         {/* Title & Telecom Branding */}
-        <div className="flex items-center gap-3.5">
+        <div className="flex items-center gap-3.5 shrink-0">
           <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-lg shadow-sky-500/25 text-white font-bold ring-2 ring-white/20 shrink-0">
             <Radio className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
           </div>
@@ -79,27 +79,36 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
 
-            <p className="text-slate-300 text-xs sm:text-sm mt-1 flex items-center gap-2 flex-wrap">
-              <span>Fiber To The Site (FTTS) • WE • Vodafone • Orange Rollout Dashboard</span>
-              <span className="text-slate-500 hidden sm:inline">•</span>
-              <span className="text-sky-300 font-medium">
-                عرض {totalFilteredSites} من أصل {totalBaselineSites} موقع
-                {user && user.role !== 'admin' ? (
-                  <span className="mr-1.5 text-emerald-300 font-bold">({user.sector})</span>
-                ) : (
-                  <span className="mr-1.5 text-purple-300 font-bold">(كافة القطاعات)</span>
-                )}
-              </span>
+            {/* Subtitle line */}
+            <p className="text-slate-300 text-xs sm:text-sm mt-0.5 font-normal tracking-wide">
+              Fiber To The Site (FTTS) • WE • Vodafone • Orange Rollout Dashboard
             </p>
+
+            {/* Site count placed on its own clean line below subtitle */}
+            <div className="text-sky-300 text-xs mt-1 font-medium flex items-center gap-1.5">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>
+              <span>
+                عرض {totalFilteredSites} من أصل {totalBaselineSites} موقع
+              </span>
+              {user && user.role !== 'admin' ? (
+                <span className="mr-1 text-emerald-300 font-bold">({user.sector})</span>
+              ) : (
+                <span className="mr-1 text-purple-300 font-bold">(كافة القطاعات)</span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Center Optical-Fiber Branching Network (Exact Image Base with Fast Animated Glowing Pulses) */}
-        <div className="hidden md:flex flex-1 items-center justify-center px-1 mx-2 lg:mx-3 h-[78px] sm:h-[86px] max-w-[540px] pointer-events-none select-none">
-          <div className="w-full h-full bg-[#020714] border border-cyan-500/30 rounded-xl shadow-[0_0_25px_rgba(6,182,212,0.2),inset_0_0_15px_rgba(1,4,14,0.9)] flex items-center justify-center overflow-hidden relative backdrop-blur-md">
+        {/* Center Optical-Fiber Branching Network (Expanded Space with Generous Proportion & Smooth Blending) */}
+        <div className="hidden md:flex flex-1 items-center justify-center px-1 mx-1 lg:mx-3 h-[84px] sm:h-[92px] max-w-[660px] min-w-[280px] pointer-events-none select-none">
+          <div className="w-full h-full bg-[#020714] border border-cyan-500/35 rounded-2xl shadow-[0_0_30px_rgba(6,182,212,0.22),inset_0_0_20px_rgba(1,4,14,0.95)] flex items-center justify-center overflow-hidden relative backdrop-blur-md px-1">
+            {/* Subtle soft edge gradient blending on left and right */}
+            <div className="absolute inset-y-0 left-0 w-5 bg-gradient-to-r from-[#020714] to-transparent pointer-events-none z-10" />
+            <div className="absolute inset-y-0 right-0 w-5 bg-gradient-to-l from-[#020714] to-transparent pointer-events-none z-10" />
+
             <svg
               viewBox="0 0 534 302"
-              className="w-full h-full max-h-[84px] object-contain overflow-visible"
+              className="w-full h-full max-h-[90px] object-contain overflow-visible"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
             >
@@ -346,9 +355,9 @@ export const Header: React.FC<HeaderProps> = ({
         {/* User Account & Security RBAC Cluster (Single Unified Bar - No Duplication) */}
         <div className="flex items-center gap-2 flex-wrap self-stretch lg:self-auto justify-end">
           {user ? (
-            <div className="flex items-center gap-2.5 p-2 bg-slate-900/80 rounded-2xl border border-slate-700/80 shadow-inner">
+            <div className="flex items-center gap-2.5 p-2 bg-slate-900/80 rounded-2xl border border-slate-700/80 shadow-inner shrink-0">
               {/* Column 1: Identity on top, جدول الحسابات directly underneath */}
-              <div className="flex flex-col justify-between gap-1.5">
+              <div className="flex flex-col justify-between gap-1.5 min-w-[142px]">
                 {/* User Identity Info */}
                 <div className="flex items-center gap-2 px-1 h-[30px]">
                   <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow shrink-0">
@@ -360,17 +369,17 @@ export const Header: React.FC<HeaderProps> = ({
                       <Building2 className="w-4 h-4 text-emerald-200" />
                     )}
                   </div>
-                  <div className="text-right leading-tight">
-                    <div className="text-xs font-bold text-white truncate max-w-[130px]">
+                  <div className="text-right leading-tight whitespace-nowrap">
+                    <div className="text-xs font-bold text-white whitespace-nowrap">
                       {user.displayName}
                     </div>
-                    <div>
+                    <div className="mt-0.5">
                       {user.role === 'admin' ? (
-                        <span className="text-[10px] font-semibold text-purple-300 bg-purple-500/20 px-1.5 py-0.2 rounded-full border border-purple-400/30 inline-block">
+                        <span className="text-[10px] font-semibold text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded-full border border-purple-400/30 inline-flex items-center gap-1 whitespace-nowrap shadow-xs">
                           👑 الإدارة العامة المركزية
                         </span>
                       ) : (
-                        <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.2 rounded-full border border-emerald-400/30 inline-block">
+                        <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-400/30 inline-flex items-center gap-1 whitespace-nowrap shadow-xs">
                           قطاع: {user.sector}
                         </span>
                       )}
@@ -381,7 +390,7 @@ export const Header: React.FC<HeaderProps> = ({
                 {/* جدول الحسابات Button */}
                 <button
                   onClick={openLoginModal}
-                  className="w-28 sm:w-32 h-[30px] px-2.5 bg-slate-800/90 hover:bg-slate-700 text-amber-300 rounded-lg text-xs font-bold border border-amber-400/40 transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                  className="w-full h-[30px] px-2.5 bg-slate-800/90 hover:bg-slate-700 text-amber-300 rounded-lg text-xs font-bold border border-amber-400/40 transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
                   title="عرض جدول حسابات وكلمات مرور القطاعات المعتمدة"
                 >
                   <KeyRound className="w-3.5 h-3.5 text-amber-400" />
