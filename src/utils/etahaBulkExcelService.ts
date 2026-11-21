@@ -75,15 +75,15 @@ export async function generateEtahaBulkImportTemplate(sites: SiteRecord[]): Prom
   group1.font = { name: 'Segoe UI', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
   group1.alignment = { horizontal: 'center', vertical: 'middle' };
 
-  ws.mergeCells('M1:R1');
+  ws.mergeCells('M1:S1');
   const group2 = ws.getCell('M1');
-  group2.value = '✏️ الموقف التنفيذي وتفاصيل التعذر والمعوقات (متاح للتعديل)';
+  group2.value = '✏️ الموقف التنفيذي وتفاصيل التعذر والمعوقات والتواريخ (متاح للتعديل)';
   group2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD97706' } }; // Amber header
   group2.font = { name: 'Segoe UI', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
   group2.alignment = { horizontal: 'center', vertical: 'middle' };
 
-  ws.mergeCells('S1:U1');
-  const group3 = ws.getCell('S1');
+  ws.mergeCells('T1:V1');
+  const group3 = ws.getCell('T1');
   group3.value = '📋 موقف المسار الخارجي والتسليمات الميدانية';
   group3.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } }; // Blue header
   group3.font = { name: 'Segoe UI', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -109,6 +109,7 @@ export async function generateEtahaBulkImportTemplate(sites: SiteRecord[]): Prom
     { text: 'سبب المعوق او التعذر [تعديل]', key: 'obstacleReason', width: 28, locked: false },
     { text: 'ملحوظة عدم الانتهاء [تعديل]', key: 'notes', width: 35, locked: false },
     { text: 'مدير الإدارة وهاتفه [تعديل]', key: 'managerContact', width: 24, locked: false },
+    { text: 'تاريخ السداد والبدء في التنفيذ [تعديل]', key: 'startDate', width: 24, locked: false },
     { text: 'تاريخ الانتهاء [تعديل]', key: 'completionDate', width: 18, locked: false },
     { text: 'موقف التسليم [تعديل]', key: 'deliveryStatus', width: 18, locked: false },
     { text: 'المسار الخارجي [تعديل]', key: 'externalPath', width: 18, locked: false },
@@ -130,7 +131,7 @@ export async function generateEtahaBulkImportTemplate(sites: SiteRecord[]): Prom
       type: 'pattern',
       pattern: 'solid',
       fgColor: {
-        argb: h.locked ? 'FF1E293B' : colNumber <= 18 ? 'FFB45309' : 'FF1D4ED8',
+        argb: h.locked ? 'FF1E293B' : colNumber <= 19 ? 'FFB45309' : 'FF1D4ED8',
       },
     };
     cell.border = {
@@ -165,6 +166,7 @@ export async function generateEtahaBulkImportTemplate(sites: SiteRecord[]): Prom
       site.obstacleReason && site.obstacleReason !== 'لا يوجد تعذر' ? site.obstacleReason : (raw['سبب المعوق او التعذر'] || ''),
       raw['ملحوظه في حاله عدم الانتهاء'] || '',
       raw['اسم ورقم تليفون مدير الادارة'] || '',
+      site.paymentAndStartDate || raw['تاريخ السداد والبدء في التنفيذ'] || raw['تاريخ السداد و البدء فى التنفيذ'] || '',
       site.expectedDate || raw['تاريخ الانتهاء'] || '',
       raw['موقف التسليم'] || site.deliveryArea || '',
       raw['المسار الخارجي'] || '',

@@ -125,7 +125,7 @@ export const EtahaBulkImportModal: React.FC<EtahaBulkImportModalProps> = ({
                 الاستيراد والرفع الجماعي لشيت إكسيل مشروعات الإتاحة (Availability)
               </h2>
               <p className="text-xs text-teal-100 font-medium">
-                تحميل النموذج المعتمد • التحقق البرمجي • حماية الثوابت • تحديث الموقف التنفيذي
+                تحميل النموذج المعتمد • التحقق البرمجي • حماية الثوابت • تحديث الموقف التنفيذي وتاريخ السداد
               </p>
             </div>
           </div>
@@ -135,6 +135,36 @@ export const EtahaBulkImportModal: React.FC<EtahaBulkImportModalProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* ── Top Dual-Option Switcher (الإدخال اليدوي vs الرفع الجماعي) ── */}
+        <div className="bg-slate-200/90 border-b border-slate-300 px-6 py-2 flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2">
+            {onSwitchToManual && (
+              <button
+                type="button"
+                onClick={onSwitchToManual}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-300 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs group"
+              >
+                <span>✍️ الخيار الأول: إدخال مشروع فردي (Manual Entry)</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="px-3.5 py-1.5 rounded-xl text-xs font-black text-white bg-teal-700 border border-teal-600 shadow-sm cursor-default flex items-center gap-1.5 ring-2 ring-teal-500/20"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-teal-200" />
+              <span>📤 الخيار الثاني: إدخال جماعي عبر إكسيل (Bulk Excel Import)</span>
+              <span className="text-[10px] bg-teal-500/30 text-teal-200 px-1.5 py-0.2 rounded-full border border-teal-400/30">
+                مفعل حالياً
+              </span>
+            </button>
+          </div>
+
+          <span className="text-[11px] text-slate-500 font-medium hidden md:inline">
+            حماية الثوابت مقفلة برمجياً 🔒
+          </span>
         </div>
 
         {/* Body Content */}
@@ -150,12 +180,12 @@ export const EtahaBulkImportModal: React.FC<EtahaBulkImportModalProps> = ({
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
             <div className="space-y-1">
               <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                <Lock className="w-4 h-4 text-slate-600" />
+                <Lock className="w-4 h-4 text-teal-600" />
                 <span>حماية الثوابت الإلزامية لمشروعات الإتاحة:</span>
               </div>
-              <p className="text-slate-500">
+              <p className="text-slate-500 leading-relaxed">
                 الأعمدة (الكود، اسم المشروع، العميل، الفرع، العنوان، القطاع، الإدارة العامة، المحافظة، أمر الشغل) محمية ومؤمنة برمجياً.
-                التحديث متاح لحقول الموقف التنفيذي، التصنيف، سبب المعوقات، والملاحظات.
+                التحديث متاح لحقول الموقف التنفيذي، التصنيف، سبب المعوقات، <strong className="text-teal-900 font-bold">تاريخ السداد والبدء في التنفيذ</strong>، وتاريخ الانتهاء والملاحظات.
               </p>
             </div>
             {onSwitchToManual && (
@@ -299,6 +329,7 @@ export const EtahaBulkImportModal: React.FC<EtahaBulkImportModalProps> = ({
                       <th className="p-2 border-b">الفرع</th>
                       <th className="p-2 border-b">القطاع</th>
                       <th className="p-2 border-b">المحافظة</th>
+                      <th className="p-2 border-b">تاريخ السداد والبدء</th>
                       <th className="p-2 border-b">الموقف التنفيذي</th>
                       <th className="p-2 border-b text-center">الحالة</th>
                     </tr>
@@ -311,6 +342,7 @@ export const EtahaBulkImportModal: React.FC<EtahaBulkImportModalProps> = ({
                         <td className="p-2">{r.branchName}</td>
                         <td className="p-2">{r.sector}</td>
                         <td className="p-2">{r.governorate}</td>
+                        <td className="p-2 font-mono text-[11px] font-bold text-teal-900">{r.startDate || '—'}</td>
                         <td className="p-2 font-bold text-emerald-700">{r.classification}</td>
                         <td className="p-2 text-center">
                           {r.validationErrors.length > 0 ? (

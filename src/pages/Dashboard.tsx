@@ -2255,6 +2255,17 @@ export const Dashboard: React.FC = () => {
             }
             return res;
           }}
+          onBulkSave={async (savedRecords) => {
+            const res = await bulkImportEtahaRecords(savedRecords);
+            if (res.success) {
+              await refetchEtahaRecords();
+              const detail = ` (${res.insertedCount} إضافة جديدة، ${res.updatedCount} تحديث)`;
+              setToastMessage(`تم استيراد وحفظ ${res.savedCount} مشروع بنجاح في قاعدة بيانات الإتاحة${detail} ✅`);
+            } else {
+              setToastMessage(`خطأ أثناء استيراد بيانات الإتاحة: ${res.error || 'فشل الحفظ'}`);
+            }
+            return res;
+          }}
           onSwitchToBulk={() => {
             setIsEtahaAddDataOpen(false);
             setIsEtahaBulkImportOpen(true);

@@ -26,7 +26,19 @@ import {
   AlertTriangle,
   UploadCloud,
   FileText,
+  FileSpreadsheet,
+  Download,
+  Lock,
+  ShieldAlert,
+  XCircle,
+  ArrowRight,
+  Filter,
 } from 'lucide-react';
+import {
+  generateEtahaBulkImportTemplate,
+  parseAndValidateEtahaBulkExcel,
+  type EtahaValidationReport,
+} from '../utils/etahaBulkExcelService';
 
 export interface EtahaAddDataModalProps {
   isOpen: boolean;
@@ -38,6 +50,7 @@ export interface EtahaAddDataModalProps {
   mode?: 'add' | 'edit';
   sitesData?: SiteRecord[];
   onSwitchToBulk?: () => void;
+  onBulkSave?: (records: EtahaRecord[]) => Promise<{ success: boolean; error?: string; insertedCount?: number; updatedCount?: number; savedCount?: number }>;
 }
 
 // Approved Standard Values matching Availability Dataset & Requirements
@@ -149,8 +162,10 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
   mode = 'edit',
   sitesData = [],
   onSwitchToBulk,
+  onBulkSave,
 }) => {
   const { isAdmin } = useAuth();
+  const [entryType, setEntryType] = useState<'single' | 'bulk'>('single');
   const [activeMode, setActiveMode] = useState<'add' | 'edit'>(mode);
   const [step, setStep] = useState<'select-site' | 'fill-form'>(
     initialSiteCode || initialRecord || mode === 'add' ? 'fill-form' : 'select-site'
@@ -159,6 +174,18 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
   const [masterRecord, setMasterRecord] = useState<EtahaRecord | null>(initialRecord || null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Bulk Excel Mode State
+  const [bulkDownloading, setBulkDownloading] = useState(false);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkReport, setBulkReport] = useState<EtahaValidationReport | null>(null);
+  const [bulkFileName, setBulkFileName] = useState('');
+  const [bulkGeneralError, setBulkGeneralError] = useState('');
+  const [bulkSuccessMsg, setBulkSuccessMsg] = useState('');
+  const [bulkSearchQuery, setBulkSearchQuery] = useState('');
+  const [bulkFilterStatus, setBulkFilterStatus] = useState<'all' | 'valid' | 'errors'>('all');
+  const bulkFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [formData, setFormData] = useState<EtahaRecord>({
     Code: '',
@@ -683,6 +710,110 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
     }
   };
 
+  // Bulk Template Download
+  const handleDownloadTemplate = async () => {
+    try {
+      setBulkDownloading(true);
+      setBulkGeneralError('');
+      const buffer = await generateEtahaBulkImportTemplate(sitesData || []);
+      const blob = new Blob([buffer as any], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Availability_Etaha_Template_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setBulkGeneralError(`فشل تنزيل النموذج: ${err?.message || 'خطأ غير متوقع'}`);
+    } finally {
+      setBulkDownloading(false);
+    }
+  };
+
+  // Bulk File Upload & Validation
+  const handleBulkFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setBulkUploading(true);
+      setBulkGeneralError('');
+      setBulkSuccessMsg('');
+      setBulkReport(null);
+      setBulkFileName(file.name);
+
+      const arrayBuffer = await file.arrayBuffer();
+      const valReport = await parseAndValidateEtahaBulkExcel(arrayBuffer, sitesData || []);
+      setBulkReport(valReport);
+    } catch (err: any) {
+      setBulkGeneralError(`فشل قراءة وفحص الملف: ${err?.message || 'تأكد من اختيار ملف إكسيل معتمد'}`);
+    } finally {
+      setBulkUploading(false);
+      if (bulkFileInputRef.current) bulkFileInputRef.current.value = '';
+    }
+  };
+
+  // Bulk Execute Import
+  const handleExecuteBulkImport = async () => {
+    if (!bulkReport || bulkReport.recordsToImport.length === 0) return;
+    try {
+      setBulkImporting(true);
+      setBulkGeneralError('');
+      if (onBulkSave) {
+        const res = await onBulkSave(bulkReport.recordsToImport);
+        if (res.success) {
+          setBulkSuccessMsg(`تم استيراد وحفظ ${res.savedCount || bulkReport.validRows} مشروع بنجاح في قاعدة بيانات Availability ✅`);
+          setTimeout(() => {
+            onClose();
+          }, 1500);
+        } else {
+          setBulkGeneralError(`فشل إتمام الحفظ: ${res.error || 'خطأ غير معروف'}`);
+        }
+      } else {
+        // Fallback: save sequentially
+        let saved = 0;
+        for (const rec of bulkReport.recordsToImport) {
+          const res = await onSave(rec);
+          if (res.success) saved++;
+        }
+        setBulkSuccessMsg(`تم استيراد وحفظ ${saved} مشروع بنجاح في قاعدة بيانات Availability ✅`);
+        setTimeout(() => {
+          onClose();
+        }, 1500);
+      }
+    } catch (err: any) {
+      setBulkGeneralError(`فشل استيراد وحفظ البيانات: ${err?.message || 'حدث خطأ غير متوقع'}`);
+    } finally {
+      setBulkImporting(false);
+    }
+  };
+
+  // Filtered rows for Bulk Preview
+  const filteredBulkRows = useMemo(() => {
+    if (!bulkReport) return [];
+    return bulkReport.rows.filter((r) => {
+      if (bulkFilterStatus === 'valid' && r.validationErrors.length > 0) return false;
+      if (bulkFilterStatus === 'errors' && r.validationErrors.length === 0) return false;
+
+      if (bulkSearchQuery.trim()) {
+        const q = bulkSearchQuery.toLowerCase();
+        const matchesCode = (r.siteCode || '').toLowerCase().includes(q);
+        const matchesClient = (r.clientName || '').toLowerCase().includes(q);
+        const matchesBranch = (r.branchName || '').toLowerCase().includes(q);
+        const matchesSector = (r.sector || '').toLowerCase().includes(q);
+        const matchesCls = (r.classification || '').toLowerCase().includes(q);
+        if (!matchesCode && !matchesClient && !matchesBranch && !matchesSector && !matchesCls) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [bulkReport, bulkFilterStatus, bulkSearchQuery]);
+
   if (!isOpen) return null;
 
   return (
@@ -692,10 +823,12 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
         dir="rtl"
       >
         {/* Header */}
-        <div className="p-5 bg-gradient-to-r from-teal-900 via-emerald-950 to-slate-950 text-white flex items-center justify-between">
+        <div className="p-5 bg-gradient-to-r from-teal-900 via-emerald-950 to-slate-950 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-teal-500/20 border border-teal-400/40 flex items-center justify-center text-teal-300">
-              {activeMode === 'add' ? (
+              {entryType === 'bulk' ? (
+                <FileSpreadsheet className="w-6 h-6" />
+              ) : activeMode === 'add' ? (
                 <PlusCircle className="w-6 h-6" />
               ) : (
                 <Edit3 className="w-6 h-6" />
@@ -704,7 +837,9 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-black text-white">
-                  {activeMode === 'add'
+                  {entryType === 'bulk'
+                    ? 'الاستيراد والرفع الجماعي لشيت إكسيل مشروعات الإتاحة (Bulk Excel Import)'
+                    : activeMode === 'add'
                     ? 'إضافة مشروع إتاحة جديد (New Availability Project)'
                     : 'تعديل بيانات مشروع إتاحة (Edit Availability Project)'}
                 </h3>
@@ -713,7 +848,9 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-teal-200/80 mt-0.5">
-                إدخال وتحديث بيانات مشروعات الإتاحة مع القوائم المنسدلة المترابطة والتحقق الشرطي للمسارات والمستندات
+                {entryType === 'bulk'
+                  ? 'تحميل النموذج الاسترشادي المعتمد • الفحص البرمجي • حماية الثوابت • تحديث الموقف التنفيذي وتاريخ السداد'
+                  : 'إدخال وتحديث بيانات مشروعات الإتاحة مع القوائم المنسدلة المترابطة والتحقق الشرطي للمسارات والمستندات'}
               </p>
             </div>
           </div>
@@ -726,38 +863,40 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
               </span>
             )}
 
-            {/* Mode Switcher */}
-            <div className="bg-white/10 p-1 rounded-xl flex items-center gap-1 border border-white/15">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveMode('add');
-                  setStep('fill-form');
-                  setMasterRecord(null);
-                }}
-                className={`px-3 py-1 text-xs font-bold rounded-lg transition ${
-                  activeMode === 'add'
-                    ? 'bg-teal-500 text-white shadow-sm'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                إضافة جديد
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveMode('edit');
-                  setStep('select-site');
-                }}
-                className={`px-3 py-1 text-xs font-bold rounded-lg transition ${
-                  activeMode === 'edit'
-                    ? 'bg-teal-500 text-white shadow-sm'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                تعديل مشروع
-              </button>
-            </div>
+            {/* Single mode sub-toggle: add vs edit (only in single entry mode) */}
+            {entryType === 'single' && (
+              <div className="bg-white/10 p-1 rounded-xl flex items-center gap-1 border border-white/15">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveMode('add');
+                    setStep('fill-form');
+                    setMasterRecord(null);
+                  }}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition ${
+                    activeMode === 'add'
+                      ? 'bg-teal-500 text-white shadow-sm'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  إضافة جديد
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveMode('edit');
+                    setStep('select-site');
+                  }}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition ${
+                    activeMode === 'edit'
+                      ? 'bg-teal-500 text-white shadow-sm'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  تعديل مشروع
+                </button>
+              </div>
+            )}
 
             <button
               onClick={onClose}
@@ -766,6 +905,50 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
               <X className="w-5 h-5" />
             </button>
           </div>
+        </div>
+
+        {/* ── Top Dual-Option Switcher (الإدخال اليدوي vs الرفع الجماعي) ── */}
+        <div className="bg-slate-200/90 border-b border-slate-300 px-6 py-2 flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setEntryType('single')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                entryType === 'single'
+                  ? 'text-white bg-teal-700 border border-teal-600 shadow-sm ring-2 ring-teal-500/20'
+                  : 'text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-300'
+              }`}
+            >
+              <span>✍️ الخيار الأول: إدخال مشروع فردي (Manual Entry)</span>
+              {entryType === 'single' && (
+                <span className="text-[10px] bg-teal-500/30 text-teal-200 px-1.5 py-0.2 rounded-full border border-teal-400/30">
+                  مفعل حالياً
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setEntryType('bulk')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 group ${
+                entryType === 'bulk'
+                  ? 'text-white bg-teal-700 border border-teal-600 shadow-sm ring-2 ring-teal-500/20 font-black'
+                  : 'text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-300'
+              }`}
+            >
+              <FileSpreadsheet className={`w-3.5 h-3.5 ${entryType === 'bulk' ? 'text-teal-200' : 'text-teal-600 group-hover:scale-110'} transition-transform`} />
+              <span>📤 الخيار الثاني: إدخال جماعي عبر إكسيل (Bulk Excel Import)</span>
+              {entryType === 'bulk' && (
+                <span className="text-[10px] bg-teal-500/30 text-teal-200 px-1.5 py-0.2 rounded-full border border-teal-400/30">
+                  مفعل حالياً
+                </span>
+              )}
+            </button>
+          </div>
+
+          <span className="text-[11px] text-slate-500 font-medium hidden md:inline">
+            حماية الثوابت مقفلة برمجياً 🔒
+          </span>
         </div>
 
         {/* Success Message Banner */}
@@ -785,7 +968,279 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
         )}
 
         {/* Content Body */}
-        <div className="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1">
+        {entryType === 'bulk' ? (
+          <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1">
+            {bulkGeneralError && (
+              <div className="p-3.5 bg-red-50 border border-red-300 rounded-xl text-red-800 text-xs font-bold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{bulkGeneralError}</span>
+              </div>
+            )}
+
+            {bulkSuccessMsg && (
+              <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{bulkSuccessMsg}</span>
+              </div>
+            )}
+
+            {/* Guidelines Banner */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                  <Lock className="w-4 h-4 text-teal-600" />
+                  <span>حماية الثوابت الإلزامية لمشروعات الإتاحة:</span>
+                </div>
+                <p className="text-slate-500 leading-relaxed">
+                  الأعمدة الثابتة (كود المشروع، اسم العميل، الفرع، العنوان، القطاع، الإدارة العامة المنفذة، قطاع التنفيذ، المحافظة، أمر الخدمة) محمية ومؤمنة برمجياً.
+                  التعديل متاح للموقف التنفيذي، التصنيف، سبب المعوقات، <strong className="text-teal-900 font-bold">تاريخ السداد والبدء في التنفيذ</strong>، وتاريخ الانتهاء والملاحظات.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEntryType('single')}
+                className="px-3.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer"
+              >
+                <span>العودة للإدخال اليدوي</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Action Cards: Download Template & Upload File */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Card 1: Download Template */}
+              <div className="border border-teal-200 bg-teal-50/40 rounded-2xl p-5 flex flex-col justify-between space-y-3">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center mb-3">
+                    <Download className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-extrabold text-teal-950 text-sm">
+                    1. تحميل النموذج الاسترشادي المعتمد لمشروعات الإتاحة
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    تنزيل ملف إكسيل مجهز بمشروعات الإتاحة الحالية وقوائم الاختيار السريعة للحالات، شاملاً عمود <strong className="text-teal-800">تاريخ السداد والبدء في التنفيذ</strong> مع قفل الثوابت برمجياً.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  disabled={bulkDownloading}
+                  className="w-full py-2.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{bulkDownloading ? 'جارٍ إنشاء وتحميل النموذج...' : 'تحميل نموذج الإتاحة المعتمد (.xlsx)'}</span>
+                </button>
+              </div>
+
+              {/* Card 2: Upload File */}
+              <div className="border border-emerald-200 bg-emerald-50/40 rounded-2xl p-5 flex flex-col justify-between space-y-3">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-3">
+                    <UploadCloud className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-extrabold text-emerald-950 text-sm">
+                    2. رفع وفحص ملف الإكسيل المعبأ
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    يقوم النظام بالتحقق الآلي وتدقيق الأكواد، حماية الثوابت، تطابق التصنيفات، وصحة التواريخ قبل إتمام الحفظ والمزامنة السحابية.
+                  </p>
+                </div>
+
+                <input
+                  type="file"
+                  ref={bulkFileInputRef}
+                  onChange={handleBulkFileChange}
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => bulkFileInputRef.current?.click()}
+                  disabled={bulkUploading}
+                  className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  <span>{bulkUploading ? 'جارٍ قراءة وفحص الشيت...' : 'اختيار ورفع ملف الإكسيل'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Validation Report & Summary */}
+            {bulkReport && (
+              <div className="space-y-4 pt-2 border-t border-slate-200 animate-in fade-in">
+                {/* Header & Badges */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                    <FileCheck className="w-4 h-4 text-emerald-600" />
+                    <span>تقرير فحص ملف: {bulkFileName}</span>
+                  </h4>
+                  <div className="flex items-center flex-wrap gap-2 text-xs font-bold">
+                    <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200">
+                      الإجمالي: {bulkReport.totalRows} مشروع
+                    </span>
+                    <span className="bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-lg border border-emerald-200">
+                      جاهز للحفظ: {bulkReport.validRows}
+                    </span>
+                    {bulkReport.tamperedRows > 0 && (
+                      <span className="bg-amber-100 text-amber-800 px-2.5 py-1 rounded-lg border border-amber-200">
+                        ثوابت محمية مسترجعة: {bulkReport.tamperedRows}
+                      </span>
+                    )}
+                    {bulkReport.invalidRows > 0 && (
+                      <span className="bg-red-100 text-red-800 px-2.5 py-1 rounded-lg border border-red-200">
+                        أخطاء: {bulkReport.invalidRows}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Warnings on Tampered Constants */}
+                {bulkReport.warnings.length > 0 && (
+                  <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl space-y-1 text-xs">
+                    <div className="font-bold text-amber-900 flex items-center gap-1.5">
+                      <ShieldAlert className="w-4 h-4 text-amber-600" />
+                      <span>تنبيهات حماية الثوابت (تم الحفاظ على البيانات الأساسية ومنع التعديل غير المصرح به):</span>
+                    </div>
+                    <div className="max-h-24 overflow-y-auto space-y-0.5 text-amber-800 font-mono text-[11px]">
+                      {bulkReport.warnings.map((w, idx) => (
+                        <p key={idx}>• {w}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Errors List */}
+                {bulkReport.errors.length > 0 && (
+                  <div className="p-3 bg-red-50 border border-red-300 rounded-xl space-y-1 text-xs">
+                    <div className="font-bold text-red-900 flex items-center gap-1.5">
+                      <XCircle className="w-4 h-4 text-red-600" />
+                      <span>أخطاء يجب تصحيحها في الشيت:</span>
+                    </div>
+                    <div className="max-h-24 overflow-y-auto space-y-0.5 text-red-800 font-mono text-[11px]">
+                      {bulkReport.errors.map((e, idx) => (
+                        <p key={idx}>• {e}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Filter and Search Bar for Preview */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-1">
+                  <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setBulkFilterStatus('all')}
+                      className={`px-3 py-1 rounded-lg transition ${
+                        bulkFilterStatus === 'all'
+                          ? 'bg-white text-slate-900 shadow-2xs font-black'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      الكل ({bulkReport.totalRows})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkFilterStatus('valid')}
+                      className={`px-3 py-1 rounded-lg transition ${
+                        bulkFilterStatus === 'valid'
+                          ? 'bg-emerald-600 text-white shadow-2xs font-black'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      الجاهز فقط ({bulkReport.validRows})
+                    </button>
+                    {bulkReport.invalidRows > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setBulkFilterStatus('errors')}
+                        className={`px-3 py-1 rounded-lg transition ${
+                          bulkFilterStatus === 'errors'
+                            ? 'bg-red-600 text-white shadow-2xs font-black'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        الأخطاء ({bulkReport.invalidRows})
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="relative w-full sm:w-64">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={bulkSearchQuery}
+                      onChange={(e) => setBulkSearchQuery(e.target.value)}
+                      placeholder="بحث في نتائج الفحص..."
+                      className="w-full pr-8 pl-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                    />
+                  </div>
+                </div>
+
+                {/* Interactive Preview Table */}
+                <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-56 overflow-y-auto text-xs bg-white shadow-2xs">
+                  <table className="w-full text-right border-collapse">
+                    <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0 shadow-2xs">
+                      <tr>
+                        <th className="p-2.5 border-b">كود المشروع</th>
+                        <th className="p-2.5 border-b">اسم العميل / المشروع</th>
+                        <th className="p-2.5 border-b">الفرع</th>
+                        <th className="p-2.5 border-b">القطاع</th>
+                        <th className="p-2.5 border-b">المحافظة</th>
+                        <th className="p-2.5 border-b">تاريخ السداد والبدء</th>
+                        <th className="p-2.5 border-b">التصنيف</th>
+                        <th className="p-2.5 border-b text-center">الحالة</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredBulkRows.slice(0, 50).map((r, idx) => (
+                        <tr key={idx} className={r.validationErrors.length > 0 ? 'bg-red-50/40 hover:bg-red-50/70' : 'hover:bg-slate-50/80'}>
+                          <td className="p-2.5 font-mono font-bold text-teal-800">{r.siteCode}</td>
+                          <td className="p-2.5 font-bold text-slate-800">{r.clientName}</td>
+                          <td className="p-2.5 text-slate-600">{r.branchName || '—'}</td>
+                          <td className="p-2.5 text-slate-600">{r.sector || '—'}</td>
+                          <td className="p-2.5 text-slate-600">{r.governorate || '—'}</td>
+                          <td className="p-2.5 font-mono text-[11px] text-teal-900 font-bold">{r.startDate || '—'}</td>
+                          <td className="p-2.5 font-bold text-emerald-700">{r.classification}</td>
+                          <td className="p-2.5 text-center">
+                            {r.validationErrors.length > 0 ? (
+                              <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">
+                                خطأ ({r.validationErrors.join(', ')})
+                              </span>
+                            ) : (
+                              <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full font-bold inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" /> جاهز
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Footer Action Bar */}
+                <div className="pt-3 flex items-center justify-between border-t border-slate-200">
+                  <p className="text-xs text-slate-500 font-medium">
+                    {bulkReport.validRows > 0
+                      ? `سيتم استيراد وتحديث ${bulkReport.validRows} مشروع في قاعدة بيانات Availability سحابياً.`
+                      : 'لا توجد أسطر صالحة للاستيراد حالياً.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleExecuteBulkImport}
+                    disabled={bulkImporting || bulkReport.validRows === 0}
+                    className="px-6 py-2.5 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-800 hover:to-emerald-800 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <Save className="w-4 h-4 text-teal-200" />
+                    <span>{bulkImporting ? 'جارٍ الاستيراد والحفظ...' : `تأكيد استيراد وحفظ (${bulkReport.validRows}) مشروع`}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1">
           {/* STEP 1: Search and Select Site (Edit Mode Only) */}
           {activeMode === 'edit' && step === 'select-site' && (
             <div className="space-y-4">
@@ -1486,6 +1941,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
             </form>
           )}
         </div>
+        )}
       </div>
     </div>
   );
