@@ -23,6 +23,10 @@ interface SummaryTableProps {
   onAddNewSite?: () => void;
   onEditSite?: () => void;
   onDeleteSite?: () => void;
+  onAddByOperator?: (operator: 'WE' | 'Vodafone' | 'Orange') => void;
+  onEditByOperator?: (operator: 'WE' | 'Vodafone' | 'Orange') => void;
+  onDeleteByOperator?: (operator: 'WE' | 'Vodafone' | 'Orange') => void;
+  hasOperatorSubmenus?: boolean;
   companyVariant?: 'orange' | 'vodafone' | 'we' | 'etaha' | 'default';
 }
 
@@ -39,6 +43,10 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
   onAddNewSite,
   onEditSite,
   onDeleteSite,
+  onAddByOperator,
+  onEditByOperator,
+  onDeleteByOperator,
+  hasOperatorSubmenus,
   companyVariant,
 }) => {
   const [sortField, setSortField] = useState<SortField>('sitesCount');
@@ -114,6 +122,10 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
                 onAdd={onAddNewSite}
                 onEdit={onEditSite}
                 onDelete={onDeleteSite}
+                onAddByOperator={onAddByOperator}
+                onEditByOperator={onEditByOperator}
+                onDeleteByOperator={onDeleteByOperator}
+                hasOperatorSubmenus={hasOperatorSubmenus}
               />
             )}
             {onOpenDetailsModal && (

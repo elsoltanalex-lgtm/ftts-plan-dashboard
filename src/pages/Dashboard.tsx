@@ -259,6 +259,7 @@ export const Dashboard: React.FC = () => {
   const [isQuickDeleteModalOpen, setIsQuickDeleteModalOpen] = useState(false);
   const [quickDeleteSearch, setQuickDeleteSearch] = useState('');
   const [quickDeleteSelectedCode, setQuickDeleteSelectedCode] = useState<string>('');
+  const [quickDeleteTargetCompany, setQuickDeleteTargetCompany] = useState<'WE' | 'Vodafone' | 'Orange' | undefined>(undefined);
   const [isDeletingQuick, setIsDeletingQuick] = useState(false);
 
   // Set of deleted site codes / IDs for instant optimistic UI reflection across fallback & database
@@ -355,6 +356,50 @@ export const Dashboard: React.FC = () => {
     },
     [_removeRecordLocally, refetchWeRecords, refetchWeCodes]
   );
+
+  // Submenu handlers for Add / Edit / Delete by Operator when 'All Operators' is selected
+  const handleAddByOperator = useCallback((operator: 'WE' | 'Vodafone' | 'Orange') => {
+    if (operator === 'Orange') {
+      setOrangeEditingSiteCode(undefined);
+      setOrangeEditingRecord(null);
+      setOrangeModalMode('add');
+      setIsOrangeAddDataOpen(true);
+    } else if (operator === 'Vodafone') {
+      setVodafoneEditingSiteCode(undefined);
+      setVodafoneEditingRecord(null);
+      setVodafoneModalMode('add');
+      setIsVodafoneAddDataOpen(true);
+    } else {
+      setEditingSiteCode(undefined);
+      setEditingRecord(null);
+      setWeModalMode('add');
+      setIsWeAddDataOpen(true);
+    }
+  }, []);
+
+  const handleEditByOperator = useCallback((operator: 'WE' | 'Vodafone' | 'Orange') => {
+    if (operator === 'Orange') {
+      setOrangeEditingSiteCode(undefined);
+      setOrangeEditingRecord(null);
+      setOrangeModalMode('edit');
+      setIsOrangeAddDataOpen(true);
+    } else if (operator === 'Vodafone') {
+      setVodafoneEditingSiteCode(undefined);
+      setVodafoneEditingRecord(null);
+      setVodafoneModalMode('edit');
+      setIsVodafoneAddDataOpen(true);
+    } else {
+      setEditingSiteCode(undefined);
+      setEditingRecord(null);
+      setWeModalMode('edit');
+      setIsWeAddDataOpen(true);
+    }
+  }, []);
+
+  const handleDeleteByOperator = useCallback((operator: 'WE' | 'Vodafone' | 'Orange') => {
+    setQuickDeleteTargetCompany(operator);
+    setIsQuickDeleteModalOpen(true);
+  }, []);
 
   // Convert live Supabase WE records to SiteRecord format
   const liveWeSites = useMemo<SiteRecord[]>(() => {
@@ -1453,6 +1498,7 @@ export const Dashboard: React.FC = () => {
                       <SiteActionDropdown
                         variant="orange"
                         label="إدارة وعمليات المواقع"
+                        hasOperatorSubmenus={false}
                         onAdd={() => {
                           setOrangeEditingSiteCode(undefined);
                           setOrangeEditingRecord(null);
@@ -1466,6 +1512,7 @@ export const Dashboard: React.FC = () => {
                           setIsOrangeAddDataOpen(true);
                         }}
                         onDelete={() => {
+                          setQuickDeleteTargetCompany('Orange');
                           setIsQuickDeleteModalOpen(true);
                         }}
                       />
@@ -1508,6 +1555,7 @@ export const Dashboard: React.FC = () => {
                       <SiteActionDropdown
                         variant="vodafone"
                         label="إدارة وعمليات المواقع"
+                        hasOperatorSubmenus={false}
                         onAdd={() => {
                           setVodafoneEditingSiteCode(undefined);
                           setVodafoneEditingRecord(null);
@@ -1520,7 +1568,10 @@ export const Dashboard: React.FC = () => {
                           setVodafoneModalMode('edit');
                           setIsVodafoneAddDataOpen(true);
                         }}
-                        onDelete={() => setIsQuickDeleteModalOpen(true)}
+                        onDelete={() => {
+                          setQuickDeleteTargetCompany('Vodafone');
+                          setIsQuickDeleteModalOpen(true);
+                        }}
                       />
 
                       {/* 3. زر تحميل النسخة الاحتياطية */}
@@ -1547,10 +1598,11 @@ export const Dashboard: React.FC = () => {
                         <span>تحليل WE (WE Analysis)</span>
                       </button>
 
-                      {/* 2. زر موحد لإدارة وعمليات المواقع (إضافة / تعديل / حذف) */}
+                      {/* 2. زر موحد لإدارة وعمليات المواقع (إضافة / تعديل / حذف) مع دعم القوائم الفرعية عند All Operators */}
                       <SiteActionDropdown
-                        variant="we"
+                        variant={filters.company === 'WE' ? 'we' : 'default'}
                         label="إدارة وعمليات المواقع"
+                        hasOperatorSubmenus={filters.company === 'All' || !filters.company}
                         onAdd={() => {
                           setEditingSiteCode(undefined);
                           setEditingRecord(null);
@@ -1564,8 +1616,12 @@ export const Dashboard: React.FC = () => {
                           setIsWeAddDataOpen(true);
                         }}
                         onDelete={() => {
+                          setQuickDeleteTargetCompany(filters.company === 'WE' ? 'WE' : undefined);
                           setIsQuickDeleteModalOpen(true);
                         }}
+                        onAddByOperator={handleAddByOperator}
+                        onEditByOperator={handleEditByOperator}
+                        onDeleteByOperator={handleDeleteByOperator}
                       />
 
                       {/* 3. زر الرفع الجماعي عبر شيت الإكسيل */}
@@ -1802,8 +1858,13 @@ export const Dashboard: React.FC = () => {
                       companyVariant={
                         filters.company === 'Orange' ? 'orange' :
                           filters.company === 'Vodafone' ? 'vodafone' :
-                            activeScope === 'ETAHA' ? 'etaha' : 'we'
+                            activeScope === 'ETAHA' ? 'etaha' :
+                              (filters.company === 'All' || !filters.company ? 'default' : 'we')
                       }
+                      hasOperatorSubmenus={activeScope === 'FTTS' && (filters.company === 'All' || !filters.company)}
+                      onAddByOperator={handleAddByOperator}
+                      onEditByOperator={handleEditByOperator}
+                      onDeleteByOperator={handleDeleteByOperator}
                       onAddNewSite={() => {
                         if (activeScope === 'ETAHA') {
                           setEtahaEditingSiteCode(undefined);
@@ -1851,6 +1912,17 @@ export const Dashboard: React.FC = () => {
                         }
                       }}
                       onDeleteSite={() => {
+                        setQuickDeleteTargetCompany(
+                          activeScope === 'ETAHA'
+                            ? undefined
+                            : filters.company === 'Orange'
+                              ? 'Orange'
+                              : filters.company === 'Vodafone'
+                                ? 'Vodafone'
+                                : filters.company === 'WE'
+                                  ? 'WE'
+                                  : undefined
+                        );
                         setIsQuickDeleteModalOpen(true);
                       }}
                     />
@@ -2374,20 +2446,34 @@ export const Dashboard: React.FC = () => {
         onClose={() => {
           setIsQuickDeleteModalOpen(false);
           setQuickDeleteSelectedCode('');
+          setQuickDeleteTargetCompany(undefined);
         }}
-        sites={authorizedScopeData}
+        sites={
+          quickDeleteTargetCompany
+            ? authorizedScopeData.filter((s) => s.company === quickDeleteTargetCompany)
+            : (filters.company && filters.company !== 'All'
+                ? authorizedScopeData.filter((s) => s.company === filters.company)
+                : authorizedScopeData)
+        }
         initialSelectedCodes={quickDeleteSelectedCode ? [quickDeleteSelectedCode] : []}
-        activeScopeLabel={activeScope === 'ETAHA' ? 'مشروعات الإتاحة' : 'مواقع FTTS'}
+        activeScopeLabel={
+          activeScope === 'ETAHA'
+            ? 'مشروعات الإتاحة'
+            : quickDeleteTargetCompany
+              ? `مواقع ${quickDeleteTargetCompany}`
+              : 'مواقع FTTS'
+        }
         onDeleteBulk={async (siteCodes) => {
           if (!siteCodes || siteCodes.length === 0) return;
           try {
+            const targetCompany = quickDeleteTargetCompany || filters.company;
             if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
               await deleteEtahaRecordsBulk(siteCodes);
               setToastMessage(`تم حذف ${siteCodes.length} مشروع بنجاح من قاعدة بيانات الإتاحة ✅`);
-            } else if (filters.company === 'Orange') {
+            } else if (targetCompany === 'Orange') {
               await deleteOrangeRecordsBulk(siteCodes);
               setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Orange ✅`);
-            } else if (filters.company === 'Vodafone') {
+            } else if (targetCompany === 'Vodafone') {
               await deleteVodafoneRecordsBulk(siteCodes);
               setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Vodafone ✅`);
             } else {
@@ -2402,6 +2488,7 @@ export const Dashboard: React.FC = () => {
               return next;
             });
             setIsQuickDeleteModalOpen(false);
+            setQuickDeleteTargetCompany(undefined);
           } catch (err: any) {
             setToastMessage(`حدث خطأ أثناء الحذف: ${err?.message || ''}`);
           }

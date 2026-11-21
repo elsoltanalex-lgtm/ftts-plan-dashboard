@@ -568,11 +568,10 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
                   setStep('fill-form');
                   setMasterRecord(null);
                 }}
-                className={`px-3 py-1 text-xs font-bold rounded-lg transition ${
-                  activeMode === 'add'
+                className={`px-3 py-1 text-xs font-bold rounded-lg transition ${activeMode === 'add'
                     ? 'bg-rose-600 text-white shadow-sm'
                     : 'text-slate-200 hover:text-white'
-                }`}
+                  }`}
               >
                 إضافة جديد
               </button>
@@ -582,11 +581,10 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
                   setActiveMode('edit');
                   setStep('select-site');
                 }}
-                className={`px-3 py-1 text-xs font-bold rounded-lg transition ${
-                  activeMode === 'edit'
+                className={`px-3 py-1 text-xs font-bold rounded-lg transition ${activeMode === 'edit'
                     ? 'bg-rose-600 text-white shadow-sm'
                     : 'text-slate-200 hover:text-white'
-                }`}
+                  }`}
               >
                 تعديل موقع
               </button>
@@ -734,9 +732,8 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
                       onChange={(e) => handleInputChange('Site code', e.target.value)}
                       placeholder="مثال: VDF-0100 أو CAI-102"
                       disabled={activeMode === 'edit' && !isAdmin}
-                      className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 dir-ltr ${
-                        errors['Site code'] ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
-                      }`}
+                      className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 dir-ltr ${errors['Site code'] ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
+                        }`}
                     />
                     {errors['Site code'] && (
                       <p className="text-[10px] text-rose-500 mt-1 font-bold">{errors['Site code']}</p>
@@ -937,9 +934,8 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
                         value={formData['اسباب التعذر'] || formData['اسباب التعّذر'] || ''}
                         onChange={(e) => handleInputChange('اسباب التعذر', e.target.value)}
                         placeholder="توضيح تفاصيل وأسباب التعذر الميداني..."
-                        className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 ${
-                          errors['اسباب التعذر'] ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
-                        }`}
+                        className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 ${errors['اسباب التعذر'] ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
+                          }`}
                       />
                       {errors['اسباب التعذر'] && (
                         <p className="text-[10px] text-rose-500 mt-1 font-bold">{errors['اسباب التعذر']}</p>
@@ -961,9 +957,8 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
                           handleInputChange('اسباب التعذر', e.target.value);
                         }}
                         placeholder="توضيح تفاصيل وأسباب المعوقات الميدانية..."
-                        className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 ${
-                          errors['اسباب المعوق'] ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
-                        }`}
+                        className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 ${errors['اسباب المعوق'] ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
+                          }`}
                       />
                       {errors['اسباب المعوق'] && (
                         <p className="text-[10px] text-rose-500 mt-1 font-bold">{errors['اسباب المعوق']}</p>
@@ -990,13 +985,12 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
               {/* CONDITIONAL DOCUMENT UPLOAD */}
               {isDocRequired && (
                 <div
-                  className={`border-2 rounded-2xl p-4 sm:p-5 transition ${
-                    errors['المستند']
+                  className={`border-2 rounded-2xl p-4 sm:p-5 transition ${errors['المستند']
                       ? 'bg-rose-50/70 border-rose-400 ring-2 ring-rose-200'
                       : formData['المستند']
                         ? 'bg-emerald-50/60 border-emerald-300'
                         : 'bg-slate-50 border-slate-300'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between pb-2 mb-3 border-b border-rose-200/60">
                     <div className="flex items-center gap-2">
