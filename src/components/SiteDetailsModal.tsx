@@ -18,11 +18,13 @@ import {
   CheckSquare,
   Square,
   FileSpreadsheet,
+  Calendar,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../context/AuthContext';
 import { isRecordInSector } from '../utils/sectorPermissions';
 import { BulkDeleteModal } from './BulkDeleteModal';
+import { parseToDateInputValue } from '../utils/filterUtils';
 
 import type { SiteRecord } from '../types/dashboard';
 import { STATUS_CONFIG } from '../data/dashboardData';
@@ -55,6 +57,7 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
   const [siteToDelete, setSiteToDelete] = useState<SiteRecord | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [expandedOrangeCode, setExpandedOrangeCode] = useState<string | null>(null);
+  const [expandedEtahaCode, setExpandedEtahaCode] = useState<string | null>(null);
   const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
   const pageSize = 8;
@@ -394,6 +397,13 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                     textColor: '#334155',
                   };
                   const codeNorm = String(site?.siteCode || '').trim().toUpperCase();
+                  const isEtahaSite = Boolean(
+                    site?.id?.startsWith('ETAH-') ||
+                    site?.rawRecord?.['المشروع'] === 'اتاحة' ||
+                    site?.paymentAndStartDate ||
+                    site?.rawRecord?.['تاريخ السداد و البدء فى التنفيذ'] ||
+                    site?.rawRecord?.['تاريخ السداد والبدء في التنفيذ']
+                  );
 
                   return (
                     <React.Fragment key={site?.id || site?.siteCode || sIdx}>
@@ -423,6 +433,17 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                             >
                               {expandedOrangeCode === site.siteCode ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
                               <span>بيانات شيت أورنج</span>
+                            </button>
+                          )}
+                          {isEtahaSite && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedEtahaCode(expandedEtahaCode === site.siteCode ? null : site.siteCode)}
+                              className="mt-1 px-1.5 py-0.5 text-[10px] font-bold bg-teal-50 hover:bg-teal-100 text-teal-800 rounded border border-teal-200 transition flex items-center gap-0.5 cursor-pointer"
+                              title="استعراض تفاصيل مشروع الإتاحة وتاريخ السداد والبدء في التنفيذ"
+                            >
+                              {expandedEtahaCode === site.siteCode ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
+                              <span>بيانات مشروع الإتاحة</span>
                             </button>
                           )}
                         </td>
@@ -506,7 +527,15 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                           )}
                         </td>
                         <td className="py-2.5 px-3 font-mono text-slate-600">
-                          {site.expectedDate}
+                          <div>{site.expectedDate}</div>
+                          {(site.paymentAndStartDate || site.rawRecord?.['تاريخ السداد والبدء في التنفيذ'] || site.rawRecord?.['تاريخ السداد و البدء فى التنفيذ']) && (
+                            <span
+                              className="text-[10px] text-teal-800 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded font-sans font-bold block mt-1"
+                              title="تاريخ السداد والبدء في التنفيذ"
+                            >
+                              بدء وسداد: {site.paymentAndStartDate || parseToDateInputValue(site.rawRecord?.['تاريخ السداد والبدء في التنفيذ'] || site.rawRecord?.['تاريخ السداد و البدء فى التنفيذ'])}
+                            </span>
+                          )}
                         </td>
                         <td className="py-2.5 px-3 text-slate-500">
                           <span className="block font-medium text-slate-700">
@@ -629,6 +658,78 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                                     <div><strong className="text-slate-600">موقف المرفقات:</strong> <span className="font-semibold text-emerald-700">{raw['موقف المرفقات'] || site.documentStatus}</span></div>
                                     <div><strong className="text-slate-600">إحداثيات:</strong> {raw['احدثيات خط العرض'] || 'N/A'}, {raw['احدثيات خط الطول'] || 'N/A'}</div>
                                     <div><strong className="text-slate-600">إجمالي التكلفة:</strong> {raw['اجمالي تكلفة الموقع'] || '0'}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })()}
+
+                      {/* Expandable sub-row for Availability / Etaha project details */}
+                      {isEtahaSite && expandedEtahaCode === site.siteCode && (() => {
+                        const raw = (site.rawRecord as any) || {};
+                        const pDate = site.paymentAndStartDate || parseToDateInputValue(raw['تاريخ السداد والبدء في التنفيذ'] || raw['تاريخ السداد و البدء فى التنفيذ']);
+                        return (
+                          <tr className="bg-teal-50/50 border-b-2 border-teal-200">
+                            <td colSpan={11} className="p-4 text-xs">
+                              <div className="bg-white rounded-xl p-4 border border-teal-200 shadow-sm space-y-3">
+                                <div className="flex items-center justify-between pb-2 border-b border-teal-100">
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-2 py-0.5 rounded bg-teal-600 text-white font-bold text-xs">
+                                      بيانات مشروع الإتاحة (Availability Project)
+                                    </span>
+                                    <span className="font-mono font-bold text-slate-800">
+                                      كود المشروع: {site.siteCode}
+                                    </span>
+                                  </div>
+                                  <span className="text-[11px] text-slate-500">
+                                    العميل: {raw['اسم العميل'] || site.siteName}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-slate-700">
+                                  {/* كارت تاريخ السداد والبدء في التنفيذ وأمر الخدمة */}
+                                  <div className="p-2.5 rounded-lg bg-teal-50/80 border border-teal-300 space-y-1.5">
+                                    <span className="text-[11px] font-black text-teal-900 flex items-center gap-1">
+                                      <Calendar className="w-3.5 h-3.5 text-teal-600" />
+                                      <span>تاريخ السداد وأمر الخدمة</span>
+                                    </span>
+                                    <div>
+                                      <strong className="text-teal-950 font-bold block text-[11px]">تاريخ السداد والبدء في التنفيذ:</strong>
+                                      <span className="font-mono font-bold text-xs text-teal-900 bg-white px-2 py-0.5 rounded border border-teal-300 inline-block mt-0.5 shadow-2xs">
+                                        {pDate || 'غير مسجل'}
+                                      </span>
+                                    </div>
+                                    <div><strong className="text-slate-600">أمر الخدمة (Order Service):</strong> <span className="font-mono font-bold">{raw['  Order Service'] || raw.orderService || 'N/A'}</span></div>
+                                    <div><strong className="text-slate-600">تاريخ التسليم:</strong> {raw['تاريخ التسليم '] || raw['تاريخ التسليم'] || 'لم يتم'}</div>
+                                  </div>
+
+                                  {/* الهيكل الإداري والتنفيذي */}
+                                  <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                                    <span className="text-[11px] font-bold text-slate-500 block">الهيكل الإداري والتنفيذي</span>
+                                    <div><strong className="text-slate-600">القطاعات:</strong> {raw['القطاعات'] || site.sector}</div>
+                                    <div><strong className="text-slate-600">قطاع التنفيذ:</strong> {raw['قطاع التنفيذ'] || site.executionSector || 'غير محدد'}</div>
+                                    <div><strong className="text-slate-600">الإدارة العامة المنفذة:</strong> {raw['الادارة العامة المنفذة'] || site.generalAdmin}</div>
+                                    <div><strong className="text-slate-600">إدارة التنفيذ:</strong> {raw['ادارة التنفيذ'] || site.competentAdmin}</div>
+                                  </div>
+
+                                  {/* مسارات المشروع واللحامات */}
+                                  <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                                    <span className="text-[11px] font-bold text-slate-500 block">موقف المسارات والتسليم</span>
+                                    <div><strong className="text-slate-600">المسار الخارجي:</strong> <span className="font-semibold text-teal-800">{raw['المسار الخارجي'] || site.externalPath || 'غير محدد'}</span></div>
+                                    <div><strong className="text-slate-600">المسار الداخلي:</strong> <span className="font-semibold text-teal-800">{raw['المسار الداخلى'] || site.internalPath || 'غير محدد'}</span></div>
+                                    <div><strong className="text-slate-600">موقف اللحامات:</strong> {raw['موقف اللحامات'] || 'لم يتم'}</div>
+                                    <div><strong className="text-slate-600">موقف التسليم:</strong> {raw['موقف التسليم'] || site.deliveryStatus || 'لم يتم'}</div>
+                                  </div>
+
+                                  {/* المعوقات والملاحظات */}
+                                  <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                                    <span className="text-[11px] font-bold text-slate-500 block">المعوقات والملاحظات</span>
+                                    <div><strong className="text-slate-600">التصنيف:</strong> <span className="font-bold text-indigo-700">{raw['التصنيف'] || site.classification}</span></div>
+                                    <div><strong className="text-slate-600">سبب المعوق أو التعذر:</strong> {raw['سبب المعوق او التعذر'] || 'لا يوجد'}</div>
+                                    <div><strong className="text-slate-600">ملحوظة عدم الانتهاء:</strong> {raw['ملحوظه في حاله عدم الانتهاء'] || 'لا يوجد'}</div>
+                                    <div><strong className="text-slate-600">مدير الإدارة:</strong> {raw['اسم ورقم تليفون مدير الادارة'] || 'غير مسجل'}</div>
                                   </div>
                                 </div>
                               </div>

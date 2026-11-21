@@ -84,3 +84,51 @@ export function toggleFilterValue(
     return [...existing, trimmed];
   }
 }
+
+/**
+ * Converts various date formats (Excel serial number like 45656, ISO date string, or Date)
+ * into a valid YYYY-MM-DD string suitable for HTML date inputs (<input type="date">).
+ */
+export function parseToDateInputValue(val: any): string {
+  if (val === undefined || val === null || val === '') return '';
+  if (typeof val === 'number') {
+    // Excel serial dates: e.g. 45656 is around year 2024
+    if (val > 30000 && val < 70000) {
+      const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+      if (!isNaN(d.getTime())) {
+        return d.toISOString().split('T')[0];
+      }
+    }
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    return '';
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!trimmed) return '';
+    // If it's already YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    // If it's ISO like 2024-12-30T...
+    if (trimmed.includes('T')) return trimmed.split('T')[0];
+    // If it's pure digits like "45656"
+    const num = Number(trimmed);
+    if (!isNaN(num) && num > 30000 && num < 70000) {
+      const d = new Date(Math.round((num - 25569) * 86400 * 1000));
+      if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    }
+    // Try DD/MM/YYYY or DD-MM-YYYY
+    if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(trimmed)) {
+      const parts = trimmed.split(/[\/\-]/);
+      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    // Try native Date parsing
+    const d = new Date(trimmed);
+    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    return trimmed;
+  }
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    return val.toISOString().split('T')[0];
+  }
+  return '';
+}
+

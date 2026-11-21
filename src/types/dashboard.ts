@@ -62,6 +62,7 @@ export interface SiteRecord {
   internalPath?: string;
   deliveryStatus?: string;
   excelStatus?: string;
+  paymentAndStartDate?: string;
   rawRecord?: any;
 }
 

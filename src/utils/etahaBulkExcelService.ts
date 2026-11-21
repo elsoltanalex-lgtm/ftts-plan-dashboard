@@ -311,7 +311,7 @@ export function parseAndValidateEtahaBulkExcel(
     const executionAdmin = extractCell(row, ['ادارة التنفيذ', 'إدارة التنفيذ', 'ادارة']);
     const managerContact = extractCell(row, ['اسم ورقم تليفون مدير الادارة', 'مدير الادارة', 'مدير']);
     const orderService = extractCell(row, ['orderservice', 'order service', 'أمر الخدمة']);
-    const startDate = extractCell(row, ['تاريخ السداد و البدء فى التنفيذ', 'تاريخ البدء']);
+    const startDate = extractCell(row, ['تاريخ السداد والبدء في التنفيذ', 'تاريخ السداد و البدء فى التنفيذ', 'تاريخ السداد', 'تاريخ البدء']);
 
     // Editable fields
     const classification = extractCell(row, ['التصنيف', 'classification']) || 'جاري التنفيذ';
@@ -365,7 +365,9 @@ export function parseAndValidateEtahaBulkExcel(
       'ادارة التنفيذ': baseline?.competentAdmin || executionAdmin,
       'اسم ورقم تليفون مدير الادارة': managerContact || baseline?.rawRecord?.['اسم ورقم تليفون مدير الادارة'] || '',
       '  Order Service': orderService || baseline?.rawRecord?.['  Order Service'] || '',
-      'تاريخ السداد و البدء فى التنفيذ': startDate || baseline?.rawRecord?.['تاريخ السداد و البدء فى التنفيذ'] || '',
+      'تاريخ السداد و البدء فى التنفيذ': startDate || baseline?.rawRecord?.['تاريخ السداد و البدء فى التنفيذ'] || baseline?.rawRecord?.['تاريخ السداد والبدء في التنفيذ'] || '',
+      'تاريخ السداد والبدء في التنفيذ': startDate || baseline?.rawRecord?.['تاريخ السداد والبدء في التنفيذ'] || baseline?.rawRecord?.['تاريخ السداد و البدء فى التنفيذ'] || '',
+      paymentAndStartDate: startDate || baseline?.paymentAndStartDate || '',
       // Editable fields from upload
       'التصنيف': classification,
       'سبب المعوق او التعذر': obstacleReason,

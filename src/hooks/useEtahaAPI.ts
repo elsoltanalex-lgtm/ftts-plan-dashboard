@@ -5,6 +5,7 @@ import { useState, useCallback, useEffect } from 'react';
 import type { SiteRecord } from '../types/dashboard';
 import { ETAHA_RAW_RECORDS, type EtahaRecord } from '../data/etahaSites';
 import { supabase } from '../lib/supabase';
+import { parseToDateInputValue } from '../utils/filterUtils';
 
 const STORAGE_KEY = 'availability_etaha_records_v4_360';
 
@@ -137,6 +138,12 @@ export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecor
     internalPath: String(r['المسار الداخلى'] || r['المسار_الداخلى'] || r['موقف اللحامات'] || r['موقف_اللحامات'] || '').trim(),
     deliveryStatus: String(r['موقف التسليم'] || r['موقف_التسليم'] || '').trim(),
     excelStatus: rawStatus || 'إتاحة',
+    paymentAndStartDate: parseToDateInputValue(
+      r['تاريخ السداد والبدء في التنفيذ'] ||
+      r['تاريخ السداد و البدء فى التنفيذ'] ||
+      r.paymentAndStartDate ||
+      r.payment_and_start_date
+    ),
     rawRecord: r,
   };
 }
@@ -232,6 +239,8 @@ export function useEtahaAPI() {
       saveStoredEtahaRecords(updated);
       setEtahaRecords(updated);
 
+      const paymentDate = enriched['تاريخ السداد والبدء في التنفيذ'] || enriched['تاريخ السداد و البدء فى التنفيذ'] || enriched.paymentAndStartDate || enriched.payment_and_start_date || '';
+
       // Persist directly into Supabase availability / etaha tables
       for (const table of ['etaha_records', 'etaha', 'availability']) {
         try {
@@ -246,6 +255,9 @@ export function useEtahaAPI() {
             'القطاع': enriched['رئاسة قطاعات التنفيذ'] || enriched.sector || '',
             'المحافظة': enriched['المحافظه'] || enriched.governorate || '',
             'الملاحظات': enriched['الملاحظات'] || enriched.notes || '',
+            'تاريخ السداد والبدء في التنفيذ': paymentDate,
+            'تاريخ السداد و البدء فى التنفيذ': paymentDate,
+            payment_and_start_date: paymentDate,
             data: enriched,
             updated_at: now,
           };

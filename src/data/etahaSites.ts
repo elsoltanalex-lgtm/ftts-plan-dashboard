@@ -20,6 +20,9 @@ export interface EtahaRecord {
   'اسم ورقم تليفون مدير الادارة'?: string;
   '  Order Service'?: any;
   'تاريخ السداد و البدء فى التنفيذ'?: any;
+  'تاريخ السداد والبدء في التنفيذ'?: any;
+  paymentAndStartDate?: string;
+  payment_and_start_date?: string;
   المسار_الخارجي?: string;
   'المسار الخارجي'?: string;
   موقف_اللحامات?: string;

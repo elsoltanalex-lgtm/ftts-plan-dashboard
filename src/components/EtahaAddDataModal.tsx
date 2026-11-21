@@ -7,6 +7,7 @@ import { ETAHA_RAW_RECORDS, type EtahaRecord } from '../data/etahaSites';
 import type { SiteRecord } from '../types/dashboard';
 import { useAuth } from '../context/AuthContext';
 import { uploadAttachment } from '../lib/supabase';
+import { parseToDateInputValue } from '../utils/filterUtils';
 import {
   X,
   PlusCircle,
@@ -175,6 +176,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
     'موقف اللحامات': 'لم يتم البدء',
     'التصنيف': 'جاري العمل',
     'موقف التسليم': 'لم يتم',
+    'تاريخ السداد والبدء في التنفيذ': '',
+    'تاريخ السداد و البدء فى التنفيذ': '',
     'سبب المعوق او التعذر': '',
     'ملحوظه في حاله عدم الانتهاء': '',
     'الملاحظات': '',
@@ -435,6 +438,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
         'موقف اللحامات': 'لم يتم البدء',
         'التصنيف': 'جاري العمل',
         'موقف التسليم': 'لم يتم',
+        'تاريخ السداد والبدء في التنفيذ': '',
+        'تاريخ السداد و البدء فى التنفيذ': '',
         'سبب المعوق او التعذر': '',
         'ملحوظه في حاله عدم الانتهاء': '',
         'الملاحظات': '',
@@ -447,7 +452,17 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
     } else {
       if (initialRecord) {
         setMasterRecord(initialRecord);
-        setFormData({ ...initialRecord });
+        const pDate = parseToDateInputValue(
+          initialRecord['تاريخ السداد والبدء في التنفيذ'] ||
+          initialRecord['تاريخ السداد و البدء فى التنفيذ'] ||
+          initialRecord.paymentAndStartDate ||
+          initialRecord.payment_and_start_date
+        );
+        setFormData({
+          ...initialRecord,
+          'تاريخ السداد والبدء في التنفيذ': pDate,
+          'تاريخ السداد و البدء فى التنفيذ': pDate,
+        });
         setStep('fill-form');
       } else if (initialSiteCode) {
         handleSelectSiteCode(initialSiteCode);
@@ -474,8 +489,24 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
     const raw = (site?.rawRecord as EtahaRecord) || null;
     if (raw) {
       setMasterRecord(raw);
-      setFormData({ ...raw });
+      const pDate = parseToDateInputValue(
+        raw['تاريخ السداد والبدء في التنفيذ'] ||
+        raw['تاريخ السداد و البدء فى التنفيذ'] ||
+        raw.paymentAndStartDate ||
+        raw.payment_and_start_date ||
+        site?.paymentAndStartDate
+      );
+      setFormData({
+        ...raw,
+        'تاريخ السداد والبدء في التنفيذ': pDate,
+        'تاريخ السداد و البدء فى التنفيذ': pDate,
+      });
     } else {
+      const pDate = parseToDateInputValue(
+        site?.paymentAndStartDate ||
+        site?.rawRecord?.['تاريخ السداد والبدء في التنفيذ'] ||
+        site?.rawRecord?.['تاريخ السداد و البدء فى التنفيذ']
+      );
       setFormData((prev) => ({
         ...prev,
         Code: code,
@@ -491,6 +522,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
         'المسار الخارجي': site?.rawRecord?.['المسار الخارجي'] || 'جاري العمل مدني',
         'موقف اللحامات': site?.rawRecord?.['موقف اللحامات'] || 'لم يتم البدء',
         'التصنيف': site?.classification || 'جاري العمل',
+        'تاريخ السداد والبدء في التنفيذ': pDate,
+        'تاريخ السداد و البدء فى التنفيذ': pDate,
       }));
     }
     setStep('fill-form');
@@ -615,9 +648,18 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
     try {
       const code = String(formData.Code).trim();
       const cleanedData: EtahaRecord = { ...formData };
+      const paymentDate = String(
+        formData['تاريخ السداد والبدء في التنفيذ'] ||
+        formData['تاريخ السداد و البدء فى التنفيذ'] ||
+        ''
+      ).trim();
 
       const payload: EtahaRecord = {
         ...cleanedData,
+        'تاريخ السداد والبدء في التنفيذ': paymentDate,
+        'تاريخ السداد و البدء فى التنفيذ': paymentDate,
+        paymentAndStartDate: paymentDate,
+        payment_and_start_date: paymentDate,
         Code: code,
         المشروع: 'اتاحة',
         _id: `ETAHA-${code}`,
@@ -889,6 +931,23 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                         </option>
                       ))}
                     </select>
+                  </div>
+
+                  {/* تاريخ السداد والبدء في التنفيذ */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-teal-600" />
+                      <span>تاريخ السداد والبدء في التنفيذ</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={parseToDateInputValue(formData['تاريخ السداد والبدء في التنفيذ'] || formData['تاريخ السداد و البدء فى التنفيذ'])}
+                      onChange={(e) => {
+                        handleInputChange('تاريخ السداد والبدء في التنفيذ', e.target.value);
+                        handleInputChange('تاريخ السداد و البدء فى التنفيذ', e.target.value);
+                      }}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 text-slate-800"
+                    />
                   </div>
 
                   {/* العنوان التفصيلي للموقع */}
