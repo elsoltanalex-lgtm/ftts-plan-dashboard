@@ -316,6 +316,36 @@ export const APPROVED_CLASSIFICATIONS = [
 
 export type ApprovedClassification = typeof APPROVED_CLASSIFICATIONS[number];
 
+export const CLASSIFICATION_VALUES = [
+  'تم الانتهاء',
+  'تم التشغيل فايبر',
+  'جاري المعاينة',
+  'جاري تصاريح',
+  'جاري كهربي',
+  'جاري العمل كهربى',
+  'جاري العمل مدني',
+  'جاري مدني',
+  'متعذر',
+  'معوقات',
+  'متعثرات',
+  'تم التسليم',
+  'تم التشغيل',
+  'جاري العمل',
+  'معوقات / متعذر',
+];
+
+/**
+ * Checks whether a given string is a classification value or operational tracking text
+ * rather than a valid WE Site Status.
+ */
+export function isClassificationValue(val?: string | null): boolean {
+  if (!val) return false;
+  const s = String(val).replace(/\s+/g, ' ').trim();
+  if (!s) return false;
+  if (/[\u0600-\u06FF]/.test(s)) return true; // Any Arabic text belongs to classification/operational category
+  return CLASSIFICATION_VALUES.some((c) => c.toLowerCase() === s.toLowerCase());
+}
+
 /**
  * Normalizes any classification string strictly returning the trimmed Excel classification
  * without any hardcoded overrides or artificial reclassifications.

@@ -17,6 +17,7 @@ import {
   APPROVED_CLASSIFICATIONS,
   normalizeClassification,
   isDocumentRequired,
+  isClassificationValue,
 } from '../config/fieldConfig';
 import type { WeRecord } from '../config/fieldConfig';
 import type { SiteRecord } from '../types/dashboard';
@@ -311,16 +312,17 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
   }, [isAdmin, isOpen]);
 
   // Computed values
-  const currentStatus = formData['Site Status'] || masterRecord?.['Site Status'] || 'ON AIR';
+  const rawStatusVal = formData['Site Status'] || masterRecord?.['Site Status'] || '';
+  const currentStatus = rawStatusVal && !isClassificationValue(rawStatusVal) ? rawStatusVal.trim() : 'ON AIR';
 
-  // Distinct Site Status options matching WE Excel sheet and Supabase records, preserving current site status
+  // Distinct Site Status options matching WE Excel sheet and Supabase records, strictly decoupled from Classification
   const availableSiteStatuses = useMemo(() => {
     const rawList = dropdownValues['Site Status'] || WE_OFFICIAL_SITE_STATUSES;
     const set = new Set<string>();
 
     for (const item of rawList) {
       const trimmed = (item || '').replace(/\s+/g, ' ').trim();
-      if (trimmed && trimmed !== '0' && trimmed.toLowerCase() !== 'site status') {
+      if (trimmed && trimmed !== '0' && trimmed.toLowerCase() !== 'site status' && !isClassificationValue(trimmed)) {
         set.add(trimmed);
       }
     }
@@ -330,9 +332,9 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       set.add(opt);
     }
 
-    // Always preserve current record status if set, so existing site status is never lost during edit
+    // Always preserve current record status if set, provided it is a valid site status and NOT a classification value
     const cur = (formData['Site Status'] || masterRecord?.['Site Status'] || '').replace(/\s+/g, ' ').trim();
-    if (cur && cur !== '0' && cur.toLowerCase() !== 'site status') {
+    if (cur && cur !== '0' && cur.toLowerCase() !== 'site status' && !isClassificationValue(cur)) {
       set.add(cur);
     }
 
@@ -347,11 +349,10 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
     return Array.from(seenMap.values());
   }, [dropdownValues, formData['Site Status'], masterRecord]);
+
   const rawClassification =
     formData['التصنيف'] ||
     masterRecord?.['التصنيف'] ||
-    formData['Site Status'] ||
-    masterRecord?.['Site Status'] ||
     'جاري مدني';
   const currentClassification = normalizeClassification(rawClassification);
   const currentReason = formData['اسباب التعذر'] || masterRecord?.['اسباب التعذر'] || '';
@@ -456,7 +457,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
           if (field.csvColumn === 'Site Status') {
             const cleanVals = vals
               .map((v) => (v || '').replace(/\s+/g, ' ').trim())
-              .filter((v) => v && v !== '0' && v.toLowerCase() !== 'site status');
+              .filter((v) => v && v !== '0' && v.toLowerCase() !== 'site status' && !isClassificationValue(v));
             const merged = [...new Set([...cleanVals, ...WE_OFFICIAL_SITE_STATUSES])];
             values['Site Status'] = merged;
           } else {
@@ -546,8 +547,6 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
         const recordedTasneef =
           record['التصنيف'] ||
           inMemorySite?.classification ||
-          record['Site Status'] ||
-          inMemorySite?.status ||
           'جاري مدني';
         initial['التصنيف'] = normalizeClassification(recordedTasneef);
 
@@ -575,6 +574,9 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
           }
         }
 
+        const rawStatus = (inMemorySite.rawRecord?.['Site Status'] || inMemorySite.rawRecord?.['حالة الموقع'] || '').replace(/\s+/g, ' ').trim();
+        const cleanSiteStatus = rawStatus && !isClassificationValue(rawStatus) ? rawStatus : 'ON AIR';
+
         const fallback: WeRecord = {
           'site code': inMemorySite.siteCode,
           'Exc sector': inMemorySite.sector || userDefaultSector,
@@ -587,8 +589,8 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
           'Exc Zone': inMemorySite.generalAdmin || '',
           'المسئولية': inMemorySite.civilContractor || '',
           'Type': inMemorySite.classification || 'FTTS',
-          'Site Status': inMemorySite.status === 'تم التسليم' ? 'ON AIR' : inMemorySite.status,
-          'التصنيف': normalizeClassification(inMemorySite.classification || inMemorySite.status),
+          'Site Status': cleanSiteStatus,
+          'التصنيف': normalizeClassification(inMemorySite.classification || 'جاري مدني'),
           'اسباب التعذر': inMemorySite.obstacleReason || 'لا يوجد تعذر',
           'نسبة الإنجاز %': String(inMemorySite.progressPercent || 0),
           'التاريخ المتوقع للانتهاء': inMemorySite.expectedDate || '',
@@ -636,8 +638,6 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       const recordedTasneef =
         initialRecord['التصنيف'] ||
         inMemorySite?.classification ||
-        initialRecord['Site Status'] ||
-        inMemorySite?.status ||
         'جاري مدني';
 
       const normRecord = {

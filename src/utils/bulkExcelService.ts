@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import type { SiteRecord } from '../types/dashboard';
 import type { WeRecord } from '../config/fieldConfig';
+import { isClassificationValue } from '../config/fieldConfig';
 import { normalizeStatus } from './excelParser';
 import { isRecordInSector } from './sectorPermissions';
 import { saveRecord } from '../hooks/useWeAPI';
@@ -228,6 +229,8 @@ export async function generateBulkImportTemplate(
       const rowNumber = rowIdx + 3;
       const row = ws.getRow(rowNumber);
       const planYear = site.expectedDate ? site.expectedDate.slice(0, 4) : '2026';
+      const rawExcelStatus = ((site as any).rawRecord?.['Site Status'] || (site as any).rawRecord?.['حالة الموقع'] || '').replace(/\s+/g, ' ').trim();
+      const outputSiteStatus = rawExcelStatus && !isClassificationValue(rawExcelStatus) ? rawExcelStatus : 'ON AIR';
 
       row.values = [
         site.siteCode || '',                                                                  // A
@@ -240,7 +243,7 @@ export async function generateBulkImportTemplate(
         site.central || '',                                                                   // H
         site.competentAdmin || 'إدارة التنفيذ والمسارات',                                       // I
         site.company || 'WE',                                                                 // J
-        site.status || 'جاري المعاينة',                                                       // K
+        outputSiteStatus,                                                                     // K
         site.classification || 'جاري المعاينة',                                               // L
         site.progressPercent || (site.status === 'تم التسليم' || site.status === 'تم الانتهاء' ? 100 : 0), // M
         site.obstacleReason || 'لا يوجد تعذر',                                                // N
@@ -654,15 +657,19 @@ export function parseAndValidateBulkExcel(
       );
     }
 
-    // 6. Validate Operational Status & Classification
-    const normalizedSiteStatus = rawStatus ? normalizeStatus(rawStatus) : (baseline?.status || 'جاري المعاينة');
+    // 6. Validate Operational Status & Classification independently
+    const cleanRawStatus = rawStatus ? rawStatus.replace(/\s+/g, ' ').trim() : '';
+    const siteStatus = cleanRawStatus && !isClassificationValue(cleanRawStatus)
+      ? cleanRawStatus
+      : (((baseline as any)?.rawRecord?.['Site Status'] || (baseline as any)?.rawRecord?.['حالة الموقع']) || 'ON AIR');
+
     if (!rawStatus && !classification) {
       warnings.push('حالة الموقع والتصنيف لم يُحددا، تم الإبقاء على الحالة السابقة.');
     }
 
     // 7. Validate Obstacles
     if (
-      (normalizedSiteStatus === 'معوقات' || normalizedSiteStatus === 'متعذر' || normalizedSiteStatus === 'متعثرات' || classification === 'متعذر' || classification === 'معوقات') &&
+      (classification === 'متعذر' || classification === 'معوقات') &&
       !obstacleReason &&
       !notes
     ) {
@@ -670,7 +677,7 @@ export function parseAndValidateBulkExcel(
     }
 
     // Auto adjust progress for finished sites
-    if ((normalizedSiteStatus === 'تم التسليم' || classification === 'تم الانتهاء' || classification === 'تم التشغيل فايبر') && progressPercent < 100) {
+    if ((classification === 'تم الانتهاء' || classification === 'تم التشغيل فايبر') && progressPercent < 100) {
       progressPercent = 100;
     }
 
@@ -696,7 +703,7 @@ export function parseAndValidateBulkExcel(
       'المسئولية': baseline?.civilContractor || civilContractor || 'المصرية للاتصالات',
       'خطة': baseline?.expectedDate ? baseline.expectedDate.slice(0, 4) : planYear,
       'Type': baseline?.classification || siteType || 'FTTS',
-      'Site Status': normalizedSiteStatus === 'تم التسليم' ? 'ON AIR' : normalizedSiteStatus,
+      'Site Status': siteStatus,
       'التصنيف': classification,
       'اسباب التعذر': obstacleReason || baseline?.obstacleReason || '',
       'الجهة المطلوب الدعم منها': supportRequired || '',

@@ -25,7 +25,7 @@ import { getSiteCompetentAdmin } from '../data/siteAdminMapping';
 import { useWeRecords, useWeSiteCodes, exportToCSV, deleteRecord, deleteRecordsBulk } from '../hooks/useWeAPI';
 import { exportFullDatabaseBackup } from '../utils/backupExportService';
 import type { WeRecord } from '../config/fieldConfig';
-import { normalizeClassification } from '../config/fieldConfig';
+import { normalizeClassification, isClassificationValue } from '../config/fieldConfig';
 import { useOrangeAPI } from '../hooks/useOrangeAPI';
 import type { OrangeRecord } from '../types/orange';
 import { OrangeAddDataModal } from '../components/OrangeAddDataModal';
@@ -1951,7 +1951,15 @@ export const Dashboard: React.FC = () => {
               }
 
               if (matched) {
+                const weRaw = (matched?.rawRecord as WeRecord) || weCentralRecords.find(
+                  (r) => String(r?.['site code'] || r?.['Site code'] || (r as any)?.site_code || '').trim().toUpperCase() === targetCode
+                );
+                const rawSiteStatus = (weRaw?.['Site Status'] || weRaw?.['حالة الموقع'] || (matched.rawRecord?.['Site Status']) || '').replace(/\s+/g, ' ').trim();
+                const cleanSiteStatus = rawSiteStatus && !isClassificationValue(rawSiteStatus) ? rawSiteStatus : 'ON AIR';
+                const rawTasneef = weRaw?.['التصنيف'] || matched.classification || 'جاري مدني';
+
                 setEditingRecord({
+                  ...weRaw,
                   'site code': matched.siteCode || targetCode,
                   'Exc sector': matched.sector,
                   'Sectores': matched.sector,
@@ -1963,13 +1971,13 @@ export const Dashboard: React.FC = () => {
                   'Exc Zone': matched.generalAdmin || '',
                   'المسئولية': matched.civilContractor || '',
                   'Type': matched.classification || 'FTTS',
-                  'Site Status': matched.status === 'تم التسليم' ? 'ON AIR' : matched.status,
-                  'التصنيف': matched.classification || matched.status || 'جاري مدني',
-                  'اسباب التعذر': matched.obstacleReason || 'لا يوجد تعذر',
+                  'Site Status': cleanSiteStatus,
+                  'التصنيف': rawTasneef,
+                  'اسباب التعذر': weRaw?.['اسباب التعذر'] || matched.obstacleReason || 'لا يوجد تعذر',
                   'نسبة الإنجاز %': String(matched.progressPercent || 0),
-                  'التاريخ المتوقع للانتهاء': matched.expectedDate || '',
-                  'الملاحظات': matched.notes || '',
-                  _id: matched.id || '',
+                  'التاريخ المتوقع للانتهاء': weRaw?.['التاريخ المتوقع للانتهاء'] || matched.expectedDate || '',
+                  'الملاحظات': weRaw?.['الملاحظات'] || matched.notes || '',
+                  _id: weRaw?._id || matched.id || '',
                 });
               } else {
                 setEditingRecord(null);

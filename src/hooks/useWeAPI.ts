@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { WeRecord } from '../config/fieldConfig';
+import { isClassificationValue } from '../config/fieldConfig';
 import { supabase, supabaseFallback, supabaseClients } from '../lib/supabase';
 import { WE_EXCEL_SITES } from '../data/preloadedProjects';
 import { WE_MASTER_RECORDS } from '../data/weSites';
@@ -411,7 +412,13 @@ export async function fetchDropdownValues(
             .map((r: any) => (r as any)[column] || (column === 'Site Status' ? (r as any)['حالة الموقع'] : undefined))
             .filter(Boolean)
             .map((v: any) => String(v).replace(/\s+/g, ' ').trim())
-            .filter((v: string) => v && v !== '0' && v.toLowerCase() !== column.toLowerCase());
+            .filter((v: string) => {
+              if (!v || v === '0' || v.toLowerCase() === column.toLowerCase()) return false;
+              if (column === 'Site Status' || column === 'حالة الموقع') {
+                if (isClassificationValue(v)) return false;
+              }
+              return true;
+            });
 
           const uniqueVals = [...new Set(rawVals)].sort();
           if (uniqueVals.length > 0) return uniqueVals;
@@ -424,7 +431,7 @@ export async function fetchDropdownValues(
       const excelVals = [...new Set(
         WE_MASTER_RECORDS
           .map((r) => (r['Site Status'] || r['حالة الموقع'] || '').replace(/\s+/g, ' ').trim())
-          .filter((v) => v && v !== '0' && v.toLowerCase() !== 'site status')
+          .filter((v) => v && v !== '0' && v.toLowerCase() !== 'site status' && !isClassificationValue(v))
       )].sort();
       if (excelVals.length > 0) return excelVals;
     }
