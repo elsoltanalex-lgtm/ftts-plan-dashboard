@@ -1,9 +1,9 @@
 // src/components/EtahaAddDataModal.tsx
 // Data-entry and modification modal for Availability (الإتاحة) projects
-// Strict match with Availability requirements and conditional logic
+// Strict match with Availability requirements, cascading administrative dropdowns, and conditional logic
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import type { EtahaRecord } from '../data/etahaSites';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { ETAHA_RAW_RECORDS, type EtahaRecord } from '../data/etahaSites';
 import type { SiteRecord } from '../types/dashboard';
 import { useAuth } from '../context/AuthContext';
 import { uploadAttachment } from '../lib/supabase';
@@ -119,6 +119,25 @@ const EGYPT_GOVERNORATES = [
   'جنوب سيناء',
 ];
 
+/**
+ * Deduplicates strings while ignoring extra whitespace and normalising equivalent Arabic characters
+ */
+function deduplicateOptions(options: string[]): string[] {
+  const seenNorm = new Map<string, string>();
+  for (const opt of options) {
+    const trimmed = (opt || '').replace(/\s+/g, ' ').trim();
+    if (!trimmed) continue;
+    const normKey = trimmed
+      .replace(/[إأآا]/g, 'ا')
+      .replace(/[ىي]/g, 'ي')
+      .replace(/[ةه]/g, 'ه');
+    if (!seenNorm.has(normKey)) {
+      seenNorm.set(normKey, trimmed);
+    }
+  }
+  return Array.from(seenNorm.values()).sort((a, b) => a.localeCompare(b, 'ar'));
+}
+
 export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
   isOpen,
   onClose,
@@ -169,6 +188,218 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Helper to normalize spaces and text
+  const cleanStr = useCallback((str?: string) => {
+    return (str || '').replace(/\s+/g, ' ').trim();
+  }, []);
+
+  // Comprehensive hierarchical mapping combining live sitesData and base ETAHA_RAW_RECORDS
+  const combinedEtahaHierarchy = useMemo(() => {
+    const list: Array<{
+      sector: string;
+      execSector: string;
+      generalAdmin: string;
+      competentAdmin: string;
+    }> = [];
+
+    const addEntry = (sec?: string, es?: string, ga?: string, ca?: string) => {
+      const s = cleanStr(sec);
+      const e = cleanStr(es);
+      const g = cleanStr(ga);
+      const c = cleanStr(ca);
+      if (e || g || c) {
+        list.push({ sector: s, execSector: e, generalAdmin: g, competentAdmin: c });
+      }
+    };
+
+    // 1. From live sitesData (Supabase live state)
+    for (const site of sitesData || []) {
+      const raw = (site.rawRecord as EtahaRecord) || {};
+      addEntry(
+        raw['القطاعات'] || site.sector,
+        raw['قطاع التنفيذ'] || site.subSector,
+        raw['الادارة العامة المنفذة'] || site.generalAdmin,
+        raw['ادارة التنفيذ'] || site.competentAdmin
+      );
+    }
+
+    // 2. From ETAHA_RAW_RECORDS (Excel master records)
+    for (const raw of ETAHA_RAW_RECORDS || []) {
+      addEntry(
+        raw['القطاعات'],
+        raw['قطاع التنفيذ'],
+        raw['الادارة العامة المنفذة'],
+        raw['ادارة التنفيذ']
+      );
+    }
+
+    return list;
+  }, [sitesData, cleanStr]);
+
+  // 1. قطاع التنفيذ (Execution Sectors) - Extracted from actual Excel / Supabase records
+  const availableExecSectors = useMemo(() => {
+    const rawOptions: string[] = [];
+    for (const item of combinedEtahaHierarchy) {
+      if (item.execSector) rawOptions.push(item.execSector);
+    }
+    const cur = cleanStr(formData['قطاع التنفيذ']);
+    if (cur) rawOptions.push(cur);
+
+    return deduplicateOptions(rawOptions);
+  }, [combinedEtahaHierarchy, formData['قطاع التنفيذ'], cleanStr]);
+
+  // 2. الإدارة العامة للتنفيذ (General Administrations) - Filtered automatically by selected قطاع التنفيذ
+  const availableGeneralAdmins = useMemo(() => {
+    const selectedEs = cleanStr(formData['قطاع التنفيذ']);
+    const rawOptions: string[] = [];
+
+    for (const item of combinedEtahaHierarchy) {
+      if (!selectedEs || item.execSector === selectedEs) {
+        if (item.generalAdmin) rawOptions.push(item.generalAdmin);
+      }
+    }
+
+    const cur = cleanStr(formData['الادارة العامة المنفذة']);
+    if (cur) rawOptions.push(cur);
+
+    return deduplicateOptions(rawOptions);
+  }, [combinedEtahaHierarchy, formData['قطاع التنفيذ'], formData['الادارة العامة المنفذة'], cleanStr]);
+
+  // 3. إدارة التنفيذ المختصة (Competent Administrations) - Filtered automatically by selected الإدارة العامة للتنفيذ
+  const availableCompetentAdmins = useMemo(() => {
+    const selectedEs = cleanStr(formData['قطاع التنفيذ']);
+    const selectedGa = cleanStr(formData['الادارة العامة المنفذة']);
+    const rawOptions: string[] = [];
+
+    for (const item of combinedEtahaHierarchy) {
+      const matchEs = !selectedEs || item.execSector === selectedEs;
+      const matchGa = !selectedGa || item.generalAdmin === selectedGa;
+      if (matchEs && matchGa && item.competentAdmin) {
+        rawOptions.push(item.competentAdmin);
+      }
+    }
+
+    // Fallback: if strictly filtered is empty but GA is selected, filter by GA alone
+    if (rawOptions.length === 0 && selectedGa) {
+      for (const item of combinedEtahaHierarchy) {
+        if (item.generalAdmin === selectedGa && item.competentAdmin) {
+          rawOptions.push(item.competentAdmin);
+        }
+      }
+    }
+
+    const cur = cleanStr(formData['ادارة التنفيذ']);
+    if (cur) rawOptions.push(cur);
+
+    return deduplicateOptions(rawOptions);
+  }, [combinedEtahaHierarchy, formData['قطاع التنفيذ'], formData['الادارة العامة المنفذة'], formData['ادارة التنفيذ'], cleanStr]);
+
+  // Cascading Handlers:
+  // When قطاع التنفيذ changes, update and reset dependent GA and CA
+  const handleExecSectorChange = (newEs: string) => {
+    const cleanedEs = cleanStr(newEs);
+
+    // Valid General Admins under the new Execution Sector
+    const validGas = new Set(
+      combinedEtahaHierarchy
+        .filter((item) => cleanStr(item.execSector) === cleanedEs && item.generalAdmin)
+        .map((item) => cleanStr(item.generalAdmin))
+    );
+
+    const currentGa = cleanStr(formData['الادارة العامة المنفذة']);
+    let nextGa = validGas.has(currentGa) ? currentGa : '';
+    if (!nextGa && validGas.size === 1) {
+      nextGa = Array.from(validGas)[0];
+    }
+
+    // Valid Competent Admins under the new General Admin & Execution Sector
+    const validCas = new Set(
+      combinedEtahaHierarchy
+        .filter((item) => {
+          const matchEs = cleanStr(item.execSector) === cleanedEs;
+          const matchGa = !nextGa || cleanStr(item.generalAdmin) === nextGa;
+          return matchEs && matchGa && item.competentAdmin;
+        })
+        .map((item) => cleanStr(item.competentAdmin))
+    );
+
+    const currentCa = cleanStr(formData['ادارة التنفيذ']);
+    let nextCa = validCas.has(currentCa) ? currentCa : '';
+    if (!nextCa && validCas.size === 1) {
+      nextCa = Array.from(validCas)[0];
+    }
+
+    // Auto-correlate with geographical sector if available
+    const matchingSector = combinedEtahaHierarchy.find(
+      (item) => cleanStr(item.execSector) === cleanedEs && item.sector
+    )?.sector;
+
+    setFormData((prev) => ({
+      ...prev,
+      'قطاع التنفيذ': cleanedEs,
+      'الادارة العامة المنفذة': nextGa,
+      'ادارة التنفيذ': nextCa,
+      ...(matchingSector ? { القطاعات: matchingSector } : {}),
+    }));
+  };
+
+  // When الإدارة العامة للتنفيذ changes, update and reset dependent CA
+  const handleGeneralAdminChange = (newGa: string) => {
+    const cleanedGa = cleanStr(newGa);
+    const selectedEs = cleanStr(formData['قطاع التنفيذ']);
+
+    const validCas = new Set(
+      combinedEtahaHierarchy
+        .filter((item) => {
+          const matchEs = !selectedEs || cleanStr(item.execSector) === selectedEs;
+          const matchGa = cleanStr(item.generalAdmin) === cleanedGa;
+          return matchEs && matchGa && item.competentAdmin;
+        })
+        .map((item) => cleanStr(item.competentAdmin))
+    );
+
+    const currentCa = cleanStr(formData['ادارة التنفيذ']);
+    let nextCa = validCas.has(currentCa) ? currentCa : '';
+    if (!nextCa && validCas.size === 1) {
+      nextCa = Array.from(validCas)[0];
+    }
+
+    // If Execution Sector was empty, auto-populate from this General Admin
+    const matchingEs = !selectedEs
+      ? combinedEtahaHierarchy.find((item) => cleanStr(item.generalAdmin) === cleanedGa && item.execSector)?.execSector
+      : undefined;
+
+    setFormData((prev) => ({
+      ...prev,
+      'الادارة العامة المنفذة': cleanedGa,
+      'ادارة التنفيذ': nextCa,
+      ...(matchingEs ? { 'قطاع التنفيذ': matchingEs } : {}),
+    }));
+  };
+
+  // When إدارة التنفيذ المختصة changes
+  const handleCompetentAdminChange = (newCa: string) => {
+    const cleanedCa = cleanStr(newCa);
+    let extraUpdates = {};
+
+    // If General Admin was empty, auto-populate from Competent Admin
+    if (!formData['الادارة العامة المنفذة']) {
+      const match = combinedEtahaHierarchy.find((item) => cleanStr(item.competentAdmin) === cleanedCa);
+      if (match) {
+        extraUpdates = {
+          ...(match.generalAdmin ? { 'الادارة العامة المنفذة': match.generalAdmin } : {}),
+          ...(match.execSector ? { 'قطاع التنفيذ': match.execSector } : {}),
+        };
+      }
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      'ادارة التنفيذ': cleanedCa,
+      ...extraUpdates,
+    }));
+  };
 
   // Check if both internal and external routes are completed
   const internalRoute = String(formData['المسار الداخلى'] || '').trim();
@@ -292,7 +523,6 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
       return next;
     });
 
-    // Clean up or synchronize delivery status
     if (newCls === 'تم الانتهاء والتسليم') {
       handleInputChange('موقف التسليم', 'تم التسليم');
     }
@@ -384,16 +614,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
     setSuccessMessage('');
     try {
       const code = String(formData.Code).trim();
-      const cls = String(formData['التصنيف'] || '').trim();
-
-      // Clean non-selected conditional fields before saving so they don't block
       const cleanedData: EtahaRecord = { ...formData };
-      if (cls !== 'تم الانتهاء والتسليم') {
-        // Not delivery
-      }
-      if (cls !== 'معوقات' && cls !== 'متعذرات' && cls !== 'متعذر') {
-        // Clear obstacle reasons if not applicable
-      }
 
       const payload: EtahaRecord = {
         ...cleanedData,
@@ -450,7 +671,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-teal-200/80 mt-0.5">
-                إدخال وتحديث بيانات مشروعات الإتاحة مع التحقق الشرطي للمسارات والمستندات والحفظ في Supabase
+                إدخال وتحديث بيانات مشروعات الإتاحة مع القوائم المنسدلة المترابطة والتحقق الشرطي للمسارات والمستندات
               </p>
             </div>
           </div>
@@ -688,22 +909,21 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
 
               {/* ============================================================== */}
               {/* القسم الثاني: النطاق الإداري والتنفيذي */}
-              {/* الترتيب المطلوب: */}
+              {/* قوائم اختيار منسدلة مترابطة (Cascading Dropdowns) */}
               {/* 1) القطاعات */}
               {/* 2) قطاع التنفيذ */}
               {/* 3) الإدارة العامة للتنفيذ */}
               {/* 4) إدارة التنفيذ المختصة */}
-              {/* (تمت إزالة اسم وتليفون مدير الإدارة تماماً) */}
               {/* ============================================================== */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
                   <MapPin className="w-4 h-4 text-teal-600" />
                   <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                    القسم الثاني - النطاق الإداري والتنفيذي
+                    القسم الثاني - النطاق الإداري والتنفيذي (Cascading Dropdowns)
                   </h4>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   {/* 1. القطاعات */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -722,46 +942,83 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                     </select>
                   </div>
 
-                  {/* 2. قطاع التنفيذ */}
+                  {/* 2. قطاع التنفيذ (Dropdown) */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       2) قطاع التنفيذ
                     </label>
-                    <input
-                      type="text"
+                    <select
                       value={formData['قطاع التنفيذ'] || ''}
-                      onChange={(e) => handleInputChange('قطاع التنفيذ', e.target.value)}
-                      placeholder="مثال: قطاع تنفيذ شبكات الغربية"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                    />
+                      onChange={(e) => handleExecSectorChange(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-teal-300/80 rounded-xl text-xs font-bold text-teal-950 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer"
+                    >
+                      <option value="">-- اختر قطاع التنفيذ --</option>
+                      {availableExecSectors.map((es) => (
+                        <option key={es} value={es}>
+                          {es}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
-                  {/* 3. الإدارة العامة للتنفيذ */}
+                  {/* 3. الإدارة العامة للتنفيذ (Cascading Dropdown) */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      3) الإدارة العامة للتنفيذ
-                    </label>
-                    <input
-                      type="text"
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700">
+                        3) الإدارة العامة للتنفيذ
+                      </label>
+                      {formData['قطاع التنفيذ'] && (
+                        <span className="text-[10px] text-teal-700 font-bold bg-teal-50 px-1.5 py-0.5 rounded-md border border-teal-200">
+                          مفلترة لـ: {formData['قطاع التنفيذ']}
+                        </span>
+                      )}
+                    </div>
+                    <select
                       value={formData['الادارة العامة المنفذة'] || ''}
-                      onChange={(e) => handleInputChange('الادارة العامة المنفذة', e.target.value)}
-                      placeholder="مثال: تنفيذ شبكات وسط الدلتا"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                    />
+                      onChange={(e) => handleGeneralAdminChange(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-teal-300/80 rounded-xl text-xs font-bold text-teal-950 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer"
+                    >
+                      <option value="">
+                        {formData['قطاع التنفيذ']
+                          ? '-- اختر الإدارة العامة للتنفيذ --'
+                          : '-- اختر قطاع التنفيذ أولاً أو حدد الإدارة --'}
+                      </option>
+                      {availableGeneralAdmins.map((ga) => (
+                        <option key={ga} value={ga}>
+                          {ga}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
-                  {/* 4. إدارة التنفيذ المختصة */}
+                  {/* 4. إدارة التنفيذ المختصة (Cascading Dropdown) */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      4) إدارة التنفيذ المختصة
-                    </label>
-                    <input
-                      type="text"
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700">
+                        4) إدارة التنفيذ المختصة
+                      </label>
+                      {formData['الادارة العامة المنفذة'] && (
+                        <span className="text-[10px] text-teal-700 font-bold bg-teal-50 px-1.5 py-0.5 rounded-md border border-teal-200">
+                          مفلترة لـ: {formData['الادارة العامة المنفذة']}
+                        </span>
+                      )}
+                    </div>
+                    <select
                       value={formData['ادارة التنفيذ'] || ''}
-                      onChange={(e) => handleInputChange('ادارة التنفيذ', e.target.value)}
-                      placeholder="مثال: الغربية الأولى - الزقازيق..."
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                    />
+                      onChange={(e) => handleCompetentAdminChange(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-teal-300/80 rounded-xl text-xs font-bold text-teal-950 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer"
+                    >
+                      <option value="">
+                        {formData['الادارة العامة المنفذة']
+                          ? '-- اختر إدارة التنفيذ المختصة --'
+                          : '-- اختر الإدارة العامة أولاً أو حدد الإدارة المختصة --'}
+                      </option>
+                      {availableCompetentAdmins.map((ca) => (
+                        <option key={ca} value={ca}>
+                          {ca}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>
