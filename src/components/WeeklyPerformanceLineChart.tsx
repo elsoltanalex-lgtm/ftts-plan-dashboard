@@ -1,10 +1,10 @@
 // src/components/WeeklyPerformanceLineChart.tsx
 // Executive Interactive Weekly Performance & SLA Line Chart
 // Supports both:
-// 1. FTTS Fiber Rollout Mode (Completed vs Fiber Activated)
+// 1. Operator FTTS Mobile Rollout Mode (WE, Vodafone, Orange - October & November Weekly Target vs Delivered Dataset)
 // 2. Availability Projects Mode (Weekly SLA / 3-Month Execution Window: Target vs Achieved vs Overdue)
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { SiteRecord, FilterState } from '../types/dashboard';
 import {
   TrendingUp,
@@ -21,8 +21,21 @@ import {
   CheckCheck,
   ShieldAlert,
   BarChart3,
-  CalendarCheck2
+  CalendarCheck2,
+  Building2,
+  Smartphone,
+  ChevronDown,
+  ArrowUpRight,
+  Filter
 } from 'lucide-react';
+import {
+  OPERATOR_WEEKS,
+  CANONICAL_DEPARTMENTS,
+  toCanonicalDepartment,
+  getOperatorWeeklyRollout,
+  type OperatorWeeklySummary,
+  type OperatorWeekAggregated,
+} from '../data/operatorWeeklyRolloutData';
 
 export interface WeeklyPerformanceLineChartProps {
   sites: SiteRecord[];
@@ -31,18 +44,10 @@ export interface WeeklyPerformanceLineChartProps {
   activeScope?: string;
 }
 
-export interface WeekDataPoint {
+export interface AvailabilityWeekDataPoint {
   week: number;
   arabicName: string;
   dateRange: string;
-  // FTTS fields
-  completedThisWeek: number;
-  fiberActivatedThisWeek: number;
-  totalThisWeek: number;
-  cumulativeCompleted: number;
-  cumulativeFiberActivated: number;
-  cumulativeTotal: number;
-  // Availability SLA fields (3-Month Window)
   targetThisWeek: number;
   achievedThisWeek: number;
   overdueThisWeek: number;
@@ -105,16 +110,6 @@ const ARABIC_ORDINALS: Record<number, string> = {
   51: 'الحادي والخمسون',
   52: 'الثاني والخمسون',
 };
-
-// Seasonal weights for realistic FTTS rollout distribution across weeks 1 to 52
-const WEEKLY_WEIGHTS = [
-  0.6, 0.7, 0.8, 0.7, 0.9, 1.0, 1.1, 1.0, 1.2, 1.3,
-  1.1, 1.0, 1.4, 1.2, 1.1, 1.3, 1.5, 1.2, 1.0, 1.3,
-  1.4, 1.2, 1.3, 1.1, 0.9, 1.2, 1.5, 1.4, 1.2, 1.4,
-  1.3, 1.1, 1.4, 1.2, 1.5, 1.3, 1.1, 1.4, 1.5, 1.3,
-  1.4, 1.3, 1.5, 1.4, 1.2, 1.3, 1.2, 1.1, 1.0, 1.0,
-  0.9, 0.8
-];
 
 function getWeekDateRange(w: number, year = 2026): string {
   const weekStart = new Date(year, 0, 1 + (w - 1) * 7);
@@ -196,7 +191,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
   currentWeek = 47,
   activeScope,
 }) => {
-  // Chart Display Mode: 'cumulative' (المسار التراكمي) or 'weekly' (الإنجاز الأسبوعي)
+  // Chart Display Mode: 'cumulative' | 'weekly'
   const [viewMode, setViewMode] = useState<'cumulative' | 'weekly'>('cumulative');
   const [hoveredWeekIndex, setHoveredWeekIndex] = useState<number | null>(null);
 
@@ -205,6 +200,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
     return (
       activeScope === 'AVAILABILITY' ||
       activeScope === 'ETAHA' ||
+      filters.company === 'Availability' ||
+      filters.company === 'الإتاحة' ||
       sites.some(
         (s) =>
           s.id?.startsWith('ETAH-') ||
@@ -214,48 +211,59 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
           Boolean(s.paymentAndStartDate)
       )
     );
-  }, [activeScope, sites]);
+  }, [activeScope, filters.company, sites]);
 
   // Current As-Of Date (November 2026 dataset reference)
   const asOfDate = useMemo(() => new Date('2026-11-22T23:59:59Z'), []);
 
   // ─────────────────────────────────────────────────────────────
-  // 1. FTTS ROLLOUT DATA CALCULATION (for WE, Vodafone, Orange)
+  // 1. OPERATOR SELECTION (WE, Vodafone, Orange, All)
   // ─────────────────────────────────────────────────────────────
-  const { completedSites, fiberActivatedSites } = useMemo(() => {
-    if (isAvailability) return { completedSites: [], fiberActivatedSites: [] };
+  const initialCompany = useMemo<'Vodafone' | 'Orange' | 'WE' | 'All'>(() => {
+    const comp = String(filters.company || '').trim();
+    if (comp === 'WE' || comp === 'Vodafone' || comp === 'Orange') return comp;
+    const sc = String(activeScope || '').toUpperCase();
+    if (sc === 'WE') return 'WE';
+    if (sc === 'VODAFONE') return 'Vodafone';
+    if (sc === 'ORANGE') return 'Orange';
+    return 'All';
+  }, [filters.company, activeScope]);
 
-    const completed: SiteRecord[] = [];
-    const activated: SiteRecord[] = [];
+  const [selectedOperator, setSelectedOperator] = useState<'Vodafone' | 'Orange' | 'WE' | 'All'>(initialCompany);
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState<string | null>(null);
 
-    sites.forEach((s) => {
-      const st = String(s.status || '').trim();
-      const tasneef = String(s.classification || (s as any)['التصنيف'] || '').trim();
+  // Sync operator when top filter changes
+  useEffect(() => {
+    const comp = String(filters.company || '').trim();
+    if (comp === 'WE' || comp === 'Vodafone' || comp === 'Orange') {
+      setSelectedOperator(comp);
+    } else {
+      const sc = String(activeScope || '').toUpperCase();
+      if (sc === 'WE') setSelectedOperator('WE');
+      else if (sc === 'VODAFONE') setSelectedOperator('Vodafone');
+      else if (sc === 'ORANGE') setSelectedOperator('Orange');
+      else if (comp === 'All') setSelectedOperator('All');
+    }
+  }, [filters.company, activeScope]);
 
-      if (
-        st === 'تم التشغيل فايبر' ||
-        st === 'تم التشغيل' ||
-        tasneef.includes('تشغيل فايبر') ||
-        tasneef.includes('تشغيل فيبر')
-      ) {
-        activated.push(s);
-      } else if (
-        st === 'تم الانتهاء' ||
-        st === 'تم التسليم' ||
-        tasneef.includes('انتهاء') ||
-        tasneef.includes('تسليم') ||
-        Number(s.progressPercent || 0) >= 100
-      ) {
-        completed.push(s);
+  // Active general department filter from dashboard or local selector
+  const activeDeptFilter = useMemo(() => {
+    if (selectedDeptFilter) return selectedDeptFilter;
+    if (filters.generalAdmin) {
+      if (Array.isArray(filters.generalAdmin) && filters.generalAdmin.length > 0) {
+        return filters.generalAdmin;
       }
-    });
+      if (typeof filters.generalAdmin === 'string' && filters.generalAdmin && filters.generalAdmin !== 'All' && filters.generalAdmin !== 'ALL') {
+        return filters.generalAdmin;
+      }
+    }
+    return undefined;
+  }, [selectedDeptFilter, filters.generalAdmin]);
 
-    return { completedSites: completed, fiberActivatedSites: activated };
-  }, [sites, isAvailability]);
-
-  const totalFttsCompleted = completedSites.length;
-  const totalFttsFiberActivated = fiberActivatedSites.length;
-  const totalFttsAll = totalFttsCompleted + totalFttsFiberActivated;
+  // Operator Rollout Data (Parsed from official operations Excel)
+  const operatorRollout: OperatorWeeklySummary = useMemo(() => {
+    return getOperatorWeeklyRollout(selectedOperator, activeDeptFilter);
+  }, [selectedOperator, activeDeptFilter]);
 
   // ─────────────────────────────────────────────────────────────
   // 2. AVAILABILITY WEEKLY SLA / 3-MONTH DELIVERY CALCULATION
@@ -269,7 +277,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         totalOverdue: 0,
         totalWithinSla: 0,
         onTimeRate: 0,
-        weeklyPoints: [] as WeekDataPoint[],
+        weeklyPoints: [] as AvailabilityWeekDataPoint[],
       };
     }
 
@@ -330,7 +338,6 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
           weeklyBuckets[tInfo.week - 1].targetThisWeek++;
           dueTargetCount++;
         } else {
-          // Future target due in 2027 or after week 47
           withinSlaCount++;
         }
       }
@@ -344,7 +351,6 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
           else if (dInfo.year === 2026 && dInfo.week <= totalWeeks) targetAchievedWeek = Math.max(1, dInfo.week);
           else if (dInfo.year === 2026 && dInfo.week > totalWeeks) targetAchievedWeek = totalWeeks;
         } else {
-          // Delivered without date record (default to recent weeks)
           targetAchievedWeek = Math.min(45, totalWeeks);
         }
         weeklyBuckets[targetAchievedWeek - 1].achievedThisWeek++;
@@ -361,12 +367,11 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
       }
     }
 
-    // Accumulate weekly metrics
     let cTarget = 0;
     let cAchieved = 0;
     let cOverdue = 0;
 
-    const weeklyPoints: WeekDataPoint[] = [];
+    const weeklyPoints: AvailabilityWeekDataPoint[] = [];
 
     for (let w = 1; w <= totalWeeks; w++) {
       const b = weeklyBuckets[w - 1];
@@ -378,14 +383,6 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         week: w,
         arabicName: ARABIC_ORDINALS[w] || `${w}`,
         dateRange: getWeekDateRange(w, 2026),
-        // FTTS dummy
-        completedThisWeek: 0,
-        fiberActivatedThisWeek: 0,
-        totalThisWeek: 0,
-        cumulativeCompleted: 0,
-        cumulativeFiberActivated: 0,
-        cumulativeTotal: 0,
-        // Availability SLA
         targetThisWeek: b.targetThisWeek,
         achievedThisWeek: b.achievedThisWeek,
         overdueThisWeek: b.overdueThisWeek,
@@ -409,103 +406,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
   }, [isAvailability, sites, currentWeek, asOfDate]);
 
   // ─────────────────────────────────────────────────────────────
-  // 3. WEEKLY DATA SET SELECTION (Availability vs FTTS)
-  // ─────────────────────────────────────────────────────────────
-  const weeklyData: WeekDataPoint[] = useMemo(() => {
-    if (isAvailability) {
-      return availabilityStats.weeklyPoints;
-    }
-
-    // Default FTTS synthetic rollout
-    const totalWeeks = Math.min(currentWeek, 52);
-    const weightsSlice = WEEKLY_WEIGHTS.slice(0, totalWeeks);
-    const sumWeights = weightsSlice.reduce((a, b) => a + b, 0) || 1;
-
-    let cumCompleted = 0;
-    let cumActivated = 0;
-    const history: WeekDataPoint[] = [];
-
-    for (let w = 1; w <= totalWeeks; w++) {
-      const ratio = weightsSlice[w - 1] / sumWeights;
-
-      let thisCompleted = Math.round(ratio * totalFttsCompleted);
-      let thisActivated = Math.round(ratio * totalFttsFiberActivated);
-
-      if (w === totalWeeks) {
-        thisCompleted = Math.max(0, totalFttsCompleted - cumCompleted);
-        thisActivated = Math.max(0, totalFttsFiberActivated - cumActivated);
-      } else {
-        thisCompleted = Math.min(thisCompleted, Math.max(0, totalFttsCompleted - cumCompleted));
-        thisActivated = Math.min(thisActivated, Math.max(0, totalFttsFiberActivated - cumActivated));
-      }
-
-      cumCompleted += thisCompleted;
-      cumActivated += thisActivated;
-
-      const totalThis = thisCompleted + thisActivated;
-      const cumTotal = cumCompleted + cumActivated;
-
-      history.push({
-        week: w,
-        arabicName: ARABIC_ORDINALS[w] || `${w}`,
-        dateRange: getWeekDateRange(w, 2026),
-        completedThisWeek: thisCompleted,
-        fiberActivatedThisWeek: thisActivated,
-        totalThisWeek: totalThis,
-        cumulativeCompleted: cumCompleted,
-        cumulativeFiberActivated: cumActivated,
-        cumulativeTotal: cumTotal,
-        targetThisWeek: 0,
-        achievedThisWeek: 0,
-        overdueThisWeek: 0,
-        cumTarget: 0,
-        cumAchieved: 0,
-        cumOverdue: 0,
-      });
-    }
-
-    return history;
-  }, [isAvailability, availabilityStats.weeklyPoints, totalFttsCompleted, totalFttsFiberActivated, currentWeek]);
-
-  // Dynamic filter description label
-  const activeScopeLabel = useMemo(() => {
-    const parts: string[] = [];
-    if (isAvailability) {
-      parts.push('مشاريع الإتاحة (Availability Projects)');
-    } else if (filters.company && filters.company !== 'All') {
-      parts.push(`شركة ${filters.company}`);
-    }
-    if (filters.sector && filters.sector !== 'ALL' && filters.sector !== 'All') {
-      const secStr = Array.isArray(filters.sector) ? filters.sector.join(' + ') : filters.sector;
-      if (secStr) parts.push(secStr);
-    }
-    if (filters.generalAdmin) {
-      const gaStr = Array.isArray(filters.generalAdmin) ? filters.generalAdmin.join(' + ') : filters.generalAdmin;
-      if (gaStr) parts.push(gaStr);
-    }
-    if (filters.competentAdmin) {
-      const caStr = Array.isArray(filters.competentAdmin) ? filters.competentAdmin.join(' + ') : filters.competentAdmin;
-      if (caStr) parts.push(`إدارة: ${caStr}`);
-    }
-    if (filters.specialTarget) {
-      parts.push('⭐ سبيشال تارجت');
-    }
-    if (parts.length === 0) {
-      return 'كافة القطاعات والمشروعات المعتمدة (Overall Plan)';
-    }
-    return parts.join(' • ');
-  }, [filters, isAvailability]);
-
-  // Average weekly completion rate
-  const weeklyAverage = useMemo(() => {
-    const totalCount = isAvailability ? availabilityStats.totalAchieved : totalFttsAll;
-    const weeksCount = weeklyData.length || currentWeek;
-    if (weeksCount <= 0) return 0;
-    return Number((totalCount / weeksCount).toFixed(1));
-  }, [isAvailability, availabilityStats.totalAchieved, totalFttsAll, weeklyData.length, currentWeek]);
-
-  // ─────────────────────────────────────────────────────────────
-  // 4. SVG GEOMETRY AND SCALING (Origin 0,0 strictly anchored)
+  // 3. SVG GEOMETRY AND SCALING (Origin 0,0 strictly anchored)
   // ─────────────────────────────────────────────────────────────
   const svgWidth = 1000;
   const svgHeight = 360;
@@ -520,7 +421,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
   const originX = marginLeft;
   const originY = svgHeight - marginBottom;
 
-  const totalWeeksDisplayed = weeklyData.length || currentWeek;
+  // Total steps on X-axis: 6 weeks for operators, 47..52 for Availability
+  const totalSteps = isAvailability ? availabilityStats.weeklyPoints.length : operatorRollout.weeks.length;
 
   // Maximum value for Y scaling
   const maxY = useMemo(() => {
@@ -528,113 +430,110 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
       if (viewMode === 'cumulative') {
         const maxVal = Math.max(
           10,
-          ...weeklyData.map((d) => Math.max(d.cumTarget, d.cumAchieved, d.cumOverdue))
+          ...availabilityStats.weeklyPoints.map((d) => Math.max(d.cumTarget, d.cumAchieved, d.cumOverdue))
         );
         return Math.max(10, Math.ceil((maxVal * 1.15) / 10) * 10);
       } else {
         const maxWeekly = Math.max(
           1,
-          ...weeklyData.map((d) => Math.max(d.targetThisWeek, d.achievedThisWeek, d.overdueThisWeek))
+          ...availabilityStats.weeklyPoints.map((d) => Math.max(d.targetThisWeek, d.achievedThisWeek, d.overdueThisWeek))
         );
         return Math.max(5, Math.ceil((maxWeekly * 1.25) / 5) * 5);
       }
     } else {
-      if (viewMode === 'cumulative') {
-        return Math.max(10, Math.ceil((totalFttsAll * 1.15) / 10) * 10);
-      } else {
-        const maxWeekly = Math.max(1, ...weeklyData.map((d) => d.totalThisWeek));
-        return Math.max(5, Math.ceil((maxWeekly * 1.25) / 5) * 5);
-      }
+      // Operator Mode
+      const maxSite = Math.max(
+        10,
+        ...operatorRollout.weeks.map((d) => Math.max(d.totalSites, d.targetRate, d.delivered))
+      );
+      return Math.max(10, Math.ceil((maxSite * 1.15) / 10) * 10);
     }
-  }, [isAvailability, viewMode, weeklyData, totalFttsAll]);
+  }, [isAvailability, viewMode, availabilityStats.weeklyPoints, operatorRollout.weeks]);
 
   // Coordinate scales
-  const getX = (w: number) => originX + (w / totalWeeksDisplayed) * chartWidth;
-  const getY = (val: number) => originY - (Math.max(0, val) / maxY) * chartHeight;
+  const getX = (stepIndex: number) => originX + (stepIndex / totalSteps) * chartWidth;
+  const getY = (val: number) => originY - (Math.max(0, val) / (maxY || 1)) * chartHeight;
 
-  // Points arrays starting strictly from Origin (0,0)
   // ── Availability Points ──
-  const targetPoints = useMemo(() => {
+  const availabilityTargetPoints = useMemo(() => {
     if (!isAvailability) return [];
     const pts = [{ x: originX, y: originY }];
-    weeklyData.forEach((d) => {
+    availabilityStats.weeklyPoints.forEach((d) => {
       const val = viewMode === 'cumulative' ? d.cumTarget : d.targetThisWeek;
       pts.push({ x: getX(d.week), y: getY(val) });
     });
     return pts;
-  }, [isAvailability, weeklyData, viewMode, originX, originY, maxY]);
+  }, [isAvailability, availabilityStats.weeklyPoints, viewMode, originX, originY, maxY]);
 
-  const achievedPoints = useMemo(() => {
+  const availabilityAchievedPoints = useMemo(() => {
     if (!isAvailability) return [];
     const pts = [{ x: originX, y: originY }];
-    weeklyData.forEach((d) => {
+    availabilityStats.weeklyPoints.forEach((d) => {
       const val = viewMode === 'cumulative' ? d.cumAchieved : d.achievedThisWeek;
       pts.push({ x: getX(d.week), y: getY(val) });
     });
     return pts;
-  }, [isAvailability, weeklyData, viewMode, originX, originY, maxY]);
+  }, [isAvailability, availabilityStats.weeklyPoints, viewMode, originX, originY, maxY]);
 
-  const overduePoints = useMemo(() => {
+  const availabilityOverduePoints = useMemo(() => {
     if (!isAvailability) return [];
     const pts = [{ x: originX, y: originY }];
-    weeklyData.forEach((d) => {
+    availabilityStats.weeklyPoints.forEach((d) => {
       const val = viewMode === 'cumulative' ? d.cumOverdue : d.overdueThisWeek;
       pts.push({ x: getX(d.week), y: getY(val) });
     });
     return pts;
-  }, [isAvailability, weeklyData, viewMode, originX, originY, maxY]);
+  }, [isAvailability, availabilityStats.weeklyPoints, viewMode, originX, originY, maxY]);
 
-  // ── FTTS Points ──
-  const totalPoints = useMemo(() => {
+  // ── Operator Mode Points (Weeks 1 to 6) ──
+  const operatorTargetPoints = useMemo(() => {
     if (isAvailability) return [];
     const pts = [{ x: originX, y: originY }];
-    weeklyData.forEach((d) => {
-      const val = viewMode === 'cumulative' ? d.cumulativeTotal : d.totalThisWeek;
-      pts.push({ x: getX(d.week), y: getY(val) });
+    operatorRollout.weeks.forEach((w, idx) => {
+      pts.push({ x: getX(idx + 1), y: getY(w.targetRate) });
     });
     return pts;
-  }, [isAvailability, weeklyData, viewMode, originX, originY, maxY]);
+  }, [isAvailability, operatorRollout.weeks, originX, originY, maxY]);
 
-  const completedPoints = useMemo(() => {
+  const operatorDeliveredPoints = useMemo(() => {
     if (isAvailability) return [];
     const pts = [{ x: originX, y: originY }];
-    weeklyData.forEach((d) => {
-      const val = viewMode === 'cumulative' ? d.cumulativeCompleted : d.completedThisWeek;
-      pts.push({ x: getX(d.week), y: getY(val) });
+    operatorRollout.weeks.forEach((w, idx) => {
+      pts.push({ x: getX(idx + 1), y: getY(w.delivered) });
     });
     return pts;
-  }, [isAvailability, weeklyData, viewMode, originX, originY, maxY]);
+  }, [isAvailability, operatorRollout.weeks, originX, originY, maxY]);
 
-  const fiberPoints = useMemo(() => {
+  const operatorTotalSitesPoints = useMemo(() => {
     if (isAvailability) return [];
     const pts = [{ x: originX, y: originY }];
-    weeklyData.forEach((d) => {
-      const val = viewMode === 'cumulative' ? d.cumulativeFiberActivated : d.fiberActivatedThisWeek;
-      pts.push({ x: getX(d.week), y: getY(val) });
+    operatorRollout.weeks.forEach((w, idx) => {
+      pts.push({ x: getX(idx + 1), y: getY(w.totalSites) });
     });
     return pts;
-  }, [isAvailability, weeklyData, viewMode, originX, originY, maxY]);
+  }, [isAvailability, operatorRollout.weeks, originX, originY, maxY]);
 
-  // Curve and Area Paths
-  const targetCurvePath = useMemo(() => getSmoothCurvePath(targetPoints), [targetPoints]);
-  const achievedCurvePath = useMemo(() => getSmoothCurvePath(achievedPoints), [achievedPoints]);
-  const overdueCurvePath = useMemo(() => getSmoothCurvePath(overduePoints), [overduePoints]);
+  // Smooth Curves
+  const availTargetCurve = useMemo(() => getSmoothCurvePath(availabilityTargetPoints), [availabilityTargetPoints]);
+  const availAchievedCurve = useMemo(() => getSmoothCurvePath(availabilityAchievedPoints), [availabilityAchievedPoints]);
+  const availOverdueCurve = useMemo(() => getSmoothCurvePath(availabilityOverduePoints), [availabilityOverduePoints]);
 
-  const totalCurvePath = useMemo(() => getSmoothCurvePath(totalPoints), [totalPoints]);
-  const completedCurvePath = useMemo(() => getSmoothCurvePath(completedPoints), [completedPoints]);
-  const fiberCurvePath = useMemo(() => getSmoothCurvePath(fiberPoints), [fiberPoints]);
+  const opTargetCurve = useMemo(() => getSmoothCurvePath(operatorTargetPoints), [operatorTargetPoints]);
+  const opDeliveredCurve = useMemo(() => getSmoothCurvePath(operatorDeliveredPoints), [operatorDeliveredPoints]);
+  const opTotalCurve = useMemo(() => getSmoothCurvePath(operatorTotalSitesPoints), [operatorTotalSitesPoints]);
 
-  const targetAreaPath = useMemo(() => {
-    if (targetPoints.length === 0) return '';
-    const last = targetPoints[targetPoints.length - 1];
-    return `${targetCurvePath} L ${last.x.toFixed(1)} ${originY} L ${originX} ${originY} Z`;
-  }, [targetCurvePath, targetPoints, originX, originY]);
+  // Area Paths
+  const availTargetArea = useMemo(() => {
+    if (availabilityTargetPoints.length === 0) return '';
+    const last = availabilityTargetPoints[availabilityTargetPoints.length - 1];
+    return `${availTargetCurve} L ${last.x.toFixed(1)} ${originY} L ${originX} ${originY} Z`;
+  }, [availTargetCurve, availabilityTargetPoints, originX, originY]);
 
-  const totalAreaPath = useMemo(() => {
-    if (totalPoints.length === 0) return '';
-    const last = totalPoints[totalPoints.length - 1];
-    return `${totalCurvePath} L ${last.x.toFixed(1)} ${originY} L ${originX} ${originY} Z`;
-  }, [totalCurvePath, totalPoints, originX, originY]);
+  const opTargetArea = useMemo(() => {
+    if (operatorTargetPoints.length === 0) return '';
+    const last = operatorTargetPoints[operatorTargetPoints.length - 1];
+    return `${opTargetCurve} L ${last.x.toFixed(1)} ${originY} L ${originX} ${originY} Z`;
+  }, [opTargetCurve, operatorTargetPoints, originX, originY]);
 
   // Y-axis grid ticks (4 steps)
   const yTicks = useMemo(() => {
@@ -647,27 +546,36 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
     return ticks;
   }, [maxY]);
 
-  // X-axis week ticks (every 5 weeks + week 1 + current week)
-  const xTicks = useMemo(() => {
-    const ticks: number[] = [1];
-    for (let w = 5; w < totalWeeksDisplayed; w += 5) {
-      ticks.push(w);
-    }
-    if (!ticks.includes(totalWeeksDisplayed)) {
-      ticks.push(totalWeeksDisplayed);
-    }
-    return ticks;
-  }, [totalWeeksDisplayed]);
+  // Hovered Data
+  const hoveredAvailabilityWeek = isAvailability && hoveredWeekIndex !== null
+    ? availabilityStats.weeklyPoints[hoveredWeekIndex]
+    : null;
 
-  // Currently hovered week data
-  const hoveredWeek = hoveredWeekIndex !== null ? weeklyData[hoveredWeekIndex] : null;
+  const hoveredOperatorWeek = !isAvailability && hoveredWeekIndex !== null
+    ? operatorRollout.weeks[hoveredWeekIndex]
+    : null;
+
   const hoveredPoint = useMemo(() => {
     if (hoveredWeekIndex === null) return null;
     if (isAvailability) {
-      return achievedPoints[hoveredWeekIndex + 1] || targetPoints[hoveredWeekIndex + 1] || null;
+      return availabilityAchievedPoints[hoveredWeekIndex + 1] || availabilityTargetPoints[hoveredWeekIndex + 1] || null;
     }
-    return totalPoints[hoveredWeekIndex + 1] || null;
-  }, [hoveredWeekIndex, isAvailability, achievedPoints, targetPoints, totalPoints]);
+    return operatorDeliveredPoints[hoveredWeekIndex + 1] || operatorTargetPoints[hoveredWeekIndex + 1] || null;
+  }, [hoveredWeekIndex, isAvailability, availabilityAchievedPoints, availabilityTargetPoints, operatorDeliveredPoints, operatorTargetPoints]);
+
+  // Company Name in Arabic
+  const companyLabelAr = useMemo(() => {
+    switch (selectedOperator) {
+      case 'WE':
+        return 'المصرية للاتصالات (WE)';
+      case 'Vodafone':
+        return 'فودافون (Vodafone)';
+      case 'Orange':
+        return 'أورنج (Orange)';
+      default:
+        return 'كافة المشغلين (WE - Vodafone - Orange)';
+    }
+  }, [selectedOperator]);
 
   return (
     <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-7 shadow-sm my-6 transition-all duration-300">
@@ -678,17 +586,17 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-md ring-4 ${
               isAvailability
                 ? 'bg-gradient-to-br from-teal-600 via-sky-600 to-indigo-700 ring-teal-50'
-                : 'bg-gradient-to-br from-indigo-600 to-purple-700 ring-indigo-50'
+                : 'bg-gradient-to-br from-indigo-600 via-sky-600 to-purple-700 ring-indigo-50'
             }`}
           >
-            {isAvailability ? <CalendarCheck2 className="w-6 h-6" /> : <TrendingUp className="w-6 h-6" />}
+            {isAvailability ? <CalendarCheck2 className="w-6 h-6" /> : <Smartphone className="w-6 h-6" />}
           </div>
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
               <h3 className="text-base sm:text-lg font-black text-slate-800 leading-tight">
                 {isAvailability
                   ? 'المسار الأسبوعي ومتابعة التزام التسليم (Availability Weekly SLA & Delivery Tracking)'
-                  : 'المسار الأسبوعي لمواقع الفايبر المنتهية والمشغلة (Weekly Progress)'}
+                  : 'المسار الأسبوعي لمواقع الفايبر المنتهية والمشغلة (Weekly Fiber Rollout: Target vs Delivered)'}
               </h3>
               <span
                 className={`text-xs px-2.5 py-0.5 rounded-full font-bold border ${
@@ -697,64 +605,116 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                     : 'bg-indigo-50 text-indigo-700 border-indigo-200/80'
                 }`}
               >
-                {activeScopeLabel}
+                {isAvailability ? 'مشاريع الإتاحة (Availability Projects)' : companyLabelAr}
               </span>
+              {selectedDeptFilter && (
+                <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
+                  <Filter className="w-3 h-3 text-amber-600" />
+                  <span>{selectedDeptFilter}</span>
+                  <button
+                    onClick={() => setSelectedDeptFilter(null)}
+                    className="ml-1 text-amber-600 hover:text-amber-950 font-black cursor-pointer"
+                    title="إلغاء التصفية الخاصة بالإدارة"
+                  >
+                    ×
+                  </button>
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 mt-1">
               {isAvailability
-                ? `متابعة أسبوعية لمشروعات الإتاحة: نافذة التسليم القياسية (3 أشهر من السداد)، ومعدل التسليم الفعلي، وحالات التأخير من الأسبوع 1 حتى الأسبوع ${totalWeeksDisplayed}`
-                : `رسم بياني خطي يبدأ من نقطة التقاطع (0,0) ويعكس أداء الجهة المحددة أسبوعياً من بداية العام حتى الأسبوع الحالي (${totalWeeksDisplayed})`}
+                ? `متابعة أسبوعية لمشروعات الإتاحة: نافذة التسليم القياسية (3 أشهر من السداد)، ومعدل التسليم الفعلي، وحالات التأخير من الأسبوع 1 حتى الأسبوع ${totalSteps}`
+                : `متابعة أسبوعية دقيقة لمواقع المحمول (أكتوبر - نوفمبر 2026): مقارنة المعدل المطلوب تسليمه بالمحقق فعلياً وتوزيع الإدارات العامة`}
             </p>
           </div>
         </div>
 
-        {/* View Mode Switcher & Summary Badges */}
+        {/* View Mode & Operator Switcher */}
         <div className="flex items-center gap-2.5 flex-wrap justify-end">
-          {/* View Mode Toggle */}
-          <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
-            <button
-              onClick={() => setViewMode('cumulative')}
-              className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                viewMode === 'cumulative'
-                  ? 'bg-white text-indigo-700 shadow-2xs font-black'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              📈 {isAvailability ? 'المسار التراكمي' : 'المسار التراكمي'}
-            </button>
-            <button
-              onClick={() => setViewMode('weekly')}
-              className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                viewMode === 'weekly'
-                  ? 'bg-white text-indigo-700 shadow-2xs font-black'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              📊 {isAvailability ? 'الإنجاز الأسبوعي' : 'الأداء الأسبوعي'}
-            </button>
-          </div>
+          {/* Operator Selector Pills (When not in Availability mode) */}
+          {!isAvailability && (
+            <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+              <button
+                onClick={() => setSelectedOperator('All')}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                  selectedOperator === 'All'
+                    ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                الكل
+              </button>
+              <button
+                onClick={() => setSelectedOperator('WE')}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                  selectedOperator === 'WE'
+                    ? 'bg-purple-600 text-white shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-purple-700'
+                }`}
+              >
+                WE
+              </button>
+              <button
+                onClick={() => setSelectedOperator('Vodafone')}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                  selectedOperator === 'Vodafone'
+                    ? 'bg-rose-600 text-white shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-rose-700'
+                }`}
+              >
+                Vodafone
+              </button>
+              <button
+                onClick={() => setSelectedOperator('Orange')}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                  selectedOperator === 'Orange'
+                    ? 'bg-orange-600 text-white shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-orange-700'
+                }`}
+              >
+                Orange
+              </button>
+            </div>
+          )}
+
+          {/* Availability View Mode Toggle */}
+          {isAvailability && (
+            <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+              <button
+                onClick={() => setViewMode('cumulative')}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                  viewMode === 'cumulative'
+                    ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                📈 المسار التراكمي
+              </button>
+              <button
+                onClick={() => setViewMode('weekly')}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                  viewMode === 'weekly'
+                    ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                📊 الإنجاز الأسبوعي
+              </button>
+            </div>
+          )}
 
           {/* Quick Metrics Badges */}
           {isAvailability ? (
             <div className="flex items-center gap-2 text-xs font-mono flex-wrap">
-              <span
-                className="bg-sky-50 text-sky-800 border border-sky-300 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 shadow-2xs"
-                title="مواقع مستهدفة للتسليم خلال نافذة الـ 3 أشهر حتى الأسبوع الحالي"
-              >
+              <span className="bg-sky-50 text-sky-800 border border-sky-300 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 shadow-2xs">
                 <Target className="w-3.5 h-3.5 text-sky-600" />
                 <span>المستهدف: <strong>{availabilityStats.totalTarget}</strong></span>
               </span>
-              <span
-                className="bg-emerald-50 text-emerald-800 border border-emerald-300 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 shadow-2xs"
-                title="مواقع تم تسليمها واعتمادها بنجاح"
-              >
+              <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 shadow-2xs">
                 <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
                 <span>تم التسليم: <strong>{availabilityStats.totalAchieved}</strong></span>
               </span>
-              <span
-                className="bg-rose-50 text-rose-800 border border-rose-300 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 shadow-2xs"
-                title="مواقع تجاوزت نافذة الـ 3 أشهر ولم يتم تسليمها"
-              >
+              <span className="bg-rose-50 text-rose-800 border border-rose-300 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 shadow-2xs">
                 <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
                 <span>تجاوز المدة: <strong>{availabilityStats.totalOverdue}</strong></span>
               </span>
@@ -764,16 +724,16 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             </div>
           ) : (
             <div className="hidden sm:flex items-center gap-2 text-xs font-mono">
-              <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                <span>تم الانتهاء: <strong>{totalFttsCompleted}</strong></span>
+              <span className="bg-sky-50 text-sky-800 border border-sky-200 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
+                <Target className="w-3.5 h-3.5 text-sky-600" />
+                <span>المعدل المطلوب (W2-Nov): <strong>{operatorRollout.latestWeek.targetRate}</strong></span>
               </span>
-              <span className="bg-purple-50 text-purple-800 border border-purple-200 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                <span>تم التشغيل فايبر: <strong>{totalFttsFiberActivated}</strong></span>
+              <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>تم التسليم: <strong>{operatorRollout.latestWeek.delivered}</strong></span>
               </span>
               <span className="bg-slate-900 text-white px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 shadow-2xs">
-                <span>الإجمالي: <strong>{totalFttsAll}</strong> موقع</span>
+                <span>إجمالي المواقع: <strong>{operatorRollout.latestWeek.totalSites}</strong></span>
               </span>
             </div>
           )}
@@ -799,25 +759,23 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
           </div>
         ) : (
           <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2 text-indigo-700">
-              <span className="w-3.5 h-1 bg-indigo-600 rounded-full inline-block"></span>
-              <span>المجموع الإجمالي (تم الانتهاء + تشغيل فايبر)</span>
+            <div className="flex items-center gap-2 text-sky-700">
+              <span className="w-3.5 h-1 bg-sky-600 rounded-full inline-block"></span>
+              <span>المعدل المطلوب تسليمه (Required Target Rate)</span>
             </div>
             <div className="flex items-center gap-2 text-emerald-700">
               <span className="w-3.5 h-1 bg-emerald-500 rounded-full inline-block"></span>
-              <span>مواقع تم الانتهاء</span>
+              <span>ما تم تسليمه فعلياً (Actual Delivered Sites)</span>
             </div>
             <div className="flex items-center gap-2 text-purple-700">
-              <span className="w-3.5 h-1 bg-purple-500 rounded-full inline-block"></span>
-              <span>مواقع تم التشغيل فايبر</span>
+              <span className="w-3.5 h-1 bg-purple-500 rounded-full inline-block border-b-2 border-dashed border-purple-500"></span>
+              <span>إجمالي عدد المواقع (Total Mobile Sites)</span>
             </div>
           </div>
         )}
 
         <div className="text-[11px] text-slate-500 font-normal">
-          <span>متوسط الإنجاز الأسبوعي: </span>
-          <strong className="text-slate-800 font-mono font-bold">{weeklyAverage}</strong>
-          <span> مشروع / أسبوع</span>
+          <span>البيانات معتمدة من خطة التشغيل الميدانية • أكتوبر & نوفمبر 2026</span>
         </div>
       </div>
 
@@ -834,18 +792,12 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
               <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.0" />
             </linearGradient>
 
-            {/* FTTS Total Area Gradient */}
-            <linearGradient id="totalAreaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.22" />
-              <stop offset="100%" stopColor="#4f46e5" stopOpacity="0.0" />
-            </linearGradient>
-
             {/* Glowing Stroke Filter */}
-            <filter id="lineGlow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#10b981" floodOpacity="0.3" />
+            <filter id="lineGlowEmerald" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#10b981" floodOpacity="0.35" />
             </filter>
-            <filter id="targetGlow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#0284c7" floodOpacity="0.25" />
+            <filter id="targetGlowSky" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#0284c7" floodOpacity="0.3" />
             </filter>
           </defs>
 
@@ -883,33 +835,54 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
           />
 
           {/* Bottom Horizontal Axis Label (Weeks) */}
-          {xTicks.map((w) => {
-            const x = getX(w);
-            return (
-              <g key={w}>
-                <line
-                  x1={x}
-                  y1={originY}
-                  x2={x}
-                  y2={originY + 6}
-                  stroke="#64748b"
-                  strokeWidth="1.5"
-                />
-                <text
-                  x={x}
-                  y={originY + 22}
-                  textAnchor="middle"
-                  className={`text-[11px] font-mono ${
-                    w === totalWeeksDisplayed
-                      ? 'font-black fill-teal-700 font-bold'
-                      : 'font-semibold fill-slate-500'
-                  }`}
-                >
-                  {w === totalWeeksDisplayed ? `أسبوع ${w} (الحالي)` : `أسبوع ${w}`}
-                </text>
-              </g>
-            );
-          })}
+          {isAvailability
+            ? availabilityStats.weeklyPoints.map((d) => {
+                const w = d.week;
+                const showTick = w === 1 || w % 5 === 0 || w === totalSteps;
+                if (!showTick) return null;
+                const x = getX(w);
+                return (
+                  <g key={w}>
+                    <line x1={x} y1={originY} x2={x} y2={originY + 6} stroke="#64748b" strokeWidth="1.5" />
+                    <text
+                      x={x}
+                      y={originY + 22}
+                      textAnchor="middle"
+                      className={`text-[11px] font-mono ${
+                        w === totalSteps ? 'font-black fill-teal-700 font-bold' : 'font-semibold fill-slate-500'
+                      }`}
+                    >
+                      {w === totalSteps ? `أسبوع ${w} (الحالي)` : `أسبوع ${w}`}
+                    </text>
+                  </g>
+                );
+              })
+            : operatorRollout.weeks.map((w, idx) => {
+                const x = getX(idx + 1);
+                return (
+                  <g key={w.weekKey}>
+                    <line x1={x} y1={originY} x2={x} y2={originY + 6} stroke="#64748b" strokeWidth="1.5" />
+                    <text
+                      x={x}
+                      y={originY + 20}
+                      textAnchor="middle"
+                      className={`text-[11px] font-bold ${
+                        idx === operatorRollout.weeks.length - 1 ? 'fill-sky-800 font-black' : 'fill-slate-600'
+                      }`}
+                    >
+                      {w.weekDef.shortAr}
+                    </text>
+                    <text
+                      x={x}
+                      y={originY + 34}
+                      textAnchor="middle"
+                      className="text-[9px] font-mono fill-slate-400"
+                    >
+                      {w.weekDef.dateRangeAr.replace(' 2026', '')}
+                    </text>
+                  </g>
+                );
+              })}
 
           {/* Origin (0,0) Intersection Indicator */}
           <circle cx={originX} cy={originY} r="4" fill="#64748b" />
@@ -919,42 +892,35 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             textAnchor="end"
             className="text-[10px] font-bold fill-slate-400 font-mono"
           >
-            نقطة الأصل (0)
+            0
           </text>
 
           {/* ───────────────────────────────────────────────────────── */}
-          {/* AVAILABILITY RENDER PATHS & SERIES                        */}
+          {/* AVAILABILITY RENDER PATHS                                 */}
           {/* ───────────────────────────────────────────────────────── */}
           {isAvailability ? (
             <>
-              {/* Target Area Fill */}
-              <path d={targetAreaPath} fill="url(#targetAreaGrad)" />
-
-              {/* Series 1: Sky/Indigo Line - Target (3-Month Window) */}
+              <path d={availTargetArea} fill="url(#targetAreaGrad)" />
               <path
-                d={targetCurvePath}
+                d={availTargetCurve}
                 fill="none"
                 stroke="#0284c7"
                 strokeWidth="2.75"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                filter="url(#targetGlow)"
+                filter="url(#targetGlowSky)"
               />
-
-              {/* Series 2: Emerald Line - Achieved / Delivered */}
               <path
-                d={achievedCurvePath}
+                d={availAchievedCurve}
                 fill="none"
                 stroke="#10b981"
                 strokeWidth="3.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                filter="url(#lineGlow)"
+                filter="url(#lineGlowEmerald)"
               />
-
-              {/* Series 3: Rose Line - Overdue / Delayed */}
               <path
-                d={overdueCurvePath}
+                d={availOverdueCurve}
                 fill="none"
                 stroke="#ef4444"
                 strokeWidth="2.5"
@@ -964,101 +930,99 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                 opacity="0.9"
               />
 
-              {/* Interactive Circles along Achieved and Target Lines */}
-              {achievedPoints.slice(1).map((pt, idx) => {
+              {availabilityAchievedPoints.slice(1).map((pt, idx) => {
                 const isHovered = hoveredWeekIndex === idx;
-                const d = weeklyData[idx];
+                const d = availabilityStats.weeklyPoints[idx];
                 const achVal = viewMode === 'cumulative' ? d?.cumAchieved : d?.achievedThisWeek;
                 if (!isHovered && achVal === 0) return null;
 
                 return (
-                  <g key={`ach-${idx}`}>
-                    <circle
-                      cx={pt.x}
-                      cy={pt.y}
-                      r={isHovered ? 6 : 3.5}
-                      fill={isHovered ? '#10b981' : '#ffffff'}
-                      stroke="#10b981"
-                      strokeWidth={isHovered ? '2.5' : '1.75'}
-                      className="transition-all duration-150"
-                    />
-                  </g>
-                );
-              })}
-
-              {targetPoints.slice(1).map((pt, idx) => {
-                const isHovered = hoveredWeekIndex === idx;
-                if (!isHovered) return null;
-                return (
-                  <g key={`tgt-${idx}`}>
-                    <circle
-                      cx={pt.x}
-                      cy={pt.y}
-                      r={5}
-                      fill="#0284c7"
-                      stroke="#ffffff"
-                      strokeWidth="2"
-                    />
-                  </g>
+                  <circle
+                    key={`ach-${idx}`}
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={isHovered ? 6 : 3.5}
+                    fill={isHovered ? '#10b981' : '#ffffff'}
+                    stroke="#10b981"
+                    strokeWidth={isHovered ? '2.5' : '1.75'}
+                    className="transition-all duration-150"
+                  />
                 );
               })}
             </>
           ) : (
             /* ───────────────────────────────────────────────────────── */
-            /* FTTS RENDER PATHS & SERIES                                */
+            /* OPERATOR RENDER PATHS (Target Rate vs Actual Delivered)   */
             /* ───────────────────────────────────────────────────────── */
             <>
-              {/* Area Fill beneath Total Curve */}
-              <path d={totalAreaPath} fill="url(#totalAreaGrad)" />
+              {/* Target Area Fill */}
+              <path d={opTargetArea} fill="url(#targetAreaGrad)" />
 
-              {/* Series 1: Green Curve (Completed Sites) */}
+              {/* Series 1: Total Mobile Sites Reference Line (Dashed) */}
               <path
-                d={completedCurvePath}
+                d={opTotalCurve}
+                fill="none"
+                stroke="#8b5cf6"
+                strokeWidth="2"
+                strokeDasharray="4 3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity="0.75"
+              />
+
+              {/* Series 2: Required Target Rate (Sky Curve) */}
+              <path
+                d={opTargetCurve}
+                fill="none"
+                stroke="#0284c7"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                filter="url(#targetGlowSky)"
+              />
+
+              {/* Series 3: Actual Delivered (Emerald Curve) */}
+              <path
+                d={opDeliveredCurve}
                 fill="none"
                 stroke="#10b981"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity="0.85"
-              />
-
-              {/* Series 2: Purple Curve (Fiber Activated Sites) */}
-              <path
-                d={fiberCurvePath}
-                fill="none"
-                stroke="#a855f7"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity="0.85"
-              />
-
-              {/* Series 3: Primary Bold Indigo Curve (Total Completed + Activated) */}
-              <path
-                d={totalCurvePath}
-                fill="none"
-                stroke="#4f46e5"
                 strokeWidth="3.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                filter="url(#lineGlow)"
+                filter="url(#lineGlowEmerald)"
               />
 
-              {/* Interactive Weekly Points along Total Line */}
-              {totalPoints.slice(1).map((pt, idx) => {
+              {/* Circles on Target Rate Curve */}
+              {operatorTargetPoints.slice(1).map((pt, idx) => {
                 const isHovered = hoveredWeekIndex === idx;
                 return (
-                  <g key={idx}>
-                    <circle
-                      cx={pt.x}
-                      cy={pt.y}
-                      r={isHovered ? 6 : 3}
-                      fill={isHovered ? '#4f46e5' : '#ffffff'}
-                      stroke="#4f46e5"
-                      strokeWidth={isHovered ? '2.5' : '1.75'}
-                      className="transition-all duration-150"
-                    />
-                  </g>
+                  <circle
+                    key={`optgt-${idx}`}
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={isHovered ? 5.5 : 3.5}
+                    fill={isHovered ? '#0284c7' : '#ffffff'}
+                    stroke="#0284c7"
+                    strokeWidth="2"
+                    className="transition-all duration-150"
+                  />
+                );
+              })}
+
+              {/* Circles on Delivered Curve */}
+              {operatorDeliveredPoints.slice(1).map((pt, idx) => {
+                const isHovered = hoveredWeekIndex === idx;
+                return (
+                  <circle
+                    key={`opdel-${idx}`}
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={isHovered ? 6.5 : 4}
+                    fill={isHovered ? '#10b981' : '#ffffff'}
+                    stroke="#10b981"
+                    strokeWidth="2.5"
+                    className="transition-all duration-150"
+                  />
                 );
               })}
             </>
@@ -1072,7 +1036,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                 y1={marginTop}
                 x2={hoveredPoint.x}
                 y2={originY}
-                stroke={isAvailability ? '#0284c7' : '#6366f1'}
+                stroke={isAvailability ? '#0284c7' : '#0ea5e9'}
                 strokeWidth="1.5"
                 strokeDasharray="4 3"
               />
@@ -1080,7 +1044,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                 cx={hoveredPoint.x}
                 cy={hoveredPoint.y}
                 r="7"
-                fill={isAvailability ? '#10b981' : '#4f46e5'}
+                fill="#10b981"
                 stroke="#ffffff"
                 strokeWidth="2.5"
               />
@@ -1088,19 +1052,19 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                 cx={hoveredPoint.x}
                 cy={hoveredPoint.y}
                 r="13"
-                fill={isAvailability ? '#10b981' : '#4f46e5'}
+                fill="#10b981"
                 opacity="0.2"
               />
             </g>
           )}
 
-          {/* Invisible Interactive Columns for smooth hover detection */}
-          {weeklyData.map((d, idx) => {
-            const colWidth = chartWidth / totalWeeksDisplayed;
+          {/* Invisible Interactive Columns for hover */}
+          {(isAvailability ? availabilityStats.weeklyPoints : operatorRollout.weeks).map((_, idx) => {
+            const colWidth = chartWidth / totalSteps;
             const x = originX + idx * colWidth;
             return (
               <rect
-                key={d.week}
+                key={idx}
                 x={x}
                 y={marginTop}
                 width={colWidth}
@@ -1115,7 +1079,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         </svg>
 
         {/* ── Hover Tooltip (Interactive Floating Details Card) ── */}
-        {hoveredWeek && hoveredPoint && (
+        {hoveredPoint && (
           <div
             className="absolute z-20 pointer-events-none transition-all duration-75 animate-in fade-in zoom-in-95"
             style={{
@@ -1125,132 +1089,122 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             }}
           >
             <div
-              className={`text-white p-3.5 rounded-2xl shadow-2xl border text-right min-w-[270px] backdrop-blur-md ${
+              className={`text-white p-3.5 rounded-2xl shadow-2xl border text-right min-w-[280px] max-w-[340px] backdrop-blur-md ${
                 isAvailability
                   ? 'bg-slate-950/95 border-teal-500/40 shadow-teal-950/40'
-                  : 'bg-slate-900/95 border-indigo-400/40 shadow-indigo-950/40'
+                  : 'bg-slate-950/95 border-sky-400/40 shadow-sky-950/40'
               }`}
             >
               {/* Header: Week number & Dates */}
               <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-700/70 gap-2">
                 <span
                   className={`font-black text-xs flex items-center gap-1.5 ${
-                    isAvailability ? 'text-teal-300' : 'text-indigo-300'
+                    isAvailability ? 'text-teal-300' : 'text-sky-300'
                   }`}
                 >
                   <Calendar className="w-3.5 h-3.5 shrink-0" />
-                  <span>الأسبوع {hoveredWeek.arabicName} ({hoveredWeek.week})</span>
+                  <span>
+                    {isAvailability
+                      ? `الأسبوع ${hoveredAvailabilityWeek?.arabicName} (${hoveredAvailabilityWeek?.week})`
+                      : hoveredOperatorWeek?.weekDef.fullAr}
+                  </span>
                 </span>
                 <span className="text-[10px] text-slate-400 font-mono">
-                  {hoveredWeek.dateRange}
+                  {isAvailability ? hoveredAvailabilityWeek?.dateRange : hoveredOperatorWeek?.weekDef.dateRangeAr}
                 </span>
               </div>
 
-              {/* Availability SLA Tooltip Content */}
-              {isAvailability ? (
+              {/* Tooltip Content */}
+              {isAvailability && hoveredAvailabilityWeek ? (
                 <div className="space-y-1.5 text-xs">
-                  {/* 1. التارجت المستهدف خلال نافذة الـ 3 أشهر */}
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 text-slate-300">
                       <span className="w-2 h-2 rounded-full bg-sky-400 shrink-0"></span>
-                      <span>
-                        {viewMode === 'cumulative' ? 'المستهدف التراكمي (3 أشهر):' : 'تارجت الأسبوع (نافذة 3 أشهر):'}
-                      </span>
+                      <span>{viewMode === 'cumulative' ? 'المستهدف التراكمي (3 أشهر):' : 'تارجت الأسبوع (3 أشهر):'}</span>
                     </span>
                     <span className="font-mono font-bold text-sky-400">
-                      {viewMode === 'cumulative' ? hoveredWeek.cumTarget : hoveredWeek.targetThisWeek} موقع
+                      {viewMode === 'cumulative' ? hoveredAvailabilityWeek.cumTarget : hoveredAvailabilityWeek.targetThisWeek} موقع
                     </span>
                   </div>
-
-                  {/* 2. ما تم تحقيقه (تم التسليم) */}
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 text-slate-300">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
-                      <span>
-                        {viewMode === 'cumulative' ? 'تم التسليم التراكمي:' : 'تم تسليمه هذا الأسبوع:'}
-                      </span>
+                      <span>{viewMode === 'cumulative' ? 'تم التسليم التراكمي:' : 'تم تسليمه هذا الأسبوع:'}</span>
                     </span>
                     <span className="font-mono font-bold text-emerald-400">
-                      {viewMode === 'cumulative' ? hoveredWeek.cumAchieved : hoveredWeek.achievedThisWeek} موقع
+                      {viewMode === 'cumulative' ? hoveredAvailabilityWeek.cumAchieved : hoveredAvailabilityWeek.achievedThisWeek} موقع
                     </span>
                   </div>
-
-                  {/* 3. تجاوز المدة ولم يتم التسليم */}
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 text-slate-300">
                       <span className="w-2 h-2 rounded-full bg-rose-400 shrink-0"></span>
-                      <span>
-                        {viewMode === 'cumulative' ? 'تجاوز المدة التراكمي:' : 'تجاوز المدة هذا الأسبوع:'}
-                      </span>
+                      <span>{viewMode === 'cumulative' ? 'تجاوز المدة التراكمي:' : 'تجاوز المدة هذا الأسبوع:'}</span>
                     </span>
                     <span className="font-mono font-bold text-rose-400">
-                      {viewMode === 'cumulative' ? hoveredWeek.cumOverdue : hoveredWeek.overdueThisWeek} موقع
-                    </span>
-                  </div>
-
-                  {/* Compliance Summary Tag */}
-                  <div className="pt-2 mt-1.5 border-t border-slate-700/60 flex items-center justify-between bg-teal-950/70 -mx-1 px-2.5 py-1.5 rounded-xl border border-teal-500/30">
-                    <span className="font-bold text-teal-200 flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      <span>
-                        {viewMode === 'cumulative' ? 'نسبة الالتزام التراكمي:' : 'فارق الأداء (الفعلي - التارجت):'}
-                      </span>
-                    </span>
-                    <span className="font-mono font-black text-white text-xs">
-                      {viewMode === 'cumulative'
-                        ? `${hoveredWeek.cumTarget > 0 ? Math.round((hoveredWeek.cumAchieved / hoveredWeek.cumTarget) * 100) : 100}%`
-                        : `${hoveredWeek.achievedThisWeek - hoveredWeek.targetThisWeek > 0 ? '+' : ''}${hoveredWeek.achievedThisWeek - hoveredWeek.targetThisWeek} موقع`}
+                      {viewMode === 'cumulative' ? hoveredAvailabilityWeek.cumOverdue : hoveredAvailabilityWeek.overdueThisWeek} موقع
                     </span>
                   </div>
                 </div>
-              ) : (
-                /* FTTS Tooltip Content */
+              ) : hoveredOperatorWeek ? (
                 <div className="space-y-1.5 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 text-slate-300">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
-                      <span>مواقع "تم الانتهاء":</span>
+                      <span className="w-2 h-2 rounded-full bg-purple-400 shrink-0"></span>
+                      <span>إجمالي مواقع النطاق:</span>
                     </span>
-                    <span className="font-mono font-bold text-emerald-400">
-                      {hoveredWeek.completedThisWeek} موقع
+                    <span className="font-mono font-bold text-purple-300">
+                      {hoveredOperatorWeek.totalSites} موقع
                     </span>
                   </div>
-
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 text-slate-300">
-                      <span className="w-2 h-2 rounded-full bg-purple-400 shrink-0"></span>
-                      <span>مواقع "تم التشغيل فايبر":</span>
+                      <span className="w-2 h-2 rounded-full bg-sky-400 shrink-0"></span>
+                      <span>المعدل المطلوب تسليمه:</span>
                     </span>
-                    <span className="font-mono font-bold text-purple-400">
-                      {hoveredWeek.fiberActivatedThisWeek} موقع
+                    <span className="font-mono font-bold text-sky-400">
+                      {hoveredOperatorWeek.targetRate} موقع
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-slate-300">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+                      <span>ما تم تسليمه فعلياً:</span>
+                    </span>
+                    <span className="font-mono font-bold text-emerald-400">
+                      {hoveredOperatorWeek.delivered} موقع
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-slate-300">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0"></span>
+                      <span>نسبة تحقيق المطلوب:</span>
+                    </span>
+                    <span className="font-mono font-bold text-amber-300">
+                      {hoveredOperatorWeek.achievementPercent}%
                     </span>
                   </div>
 
-                  <div className="pt-2 mt-1.5 border-t border-slate-700/60 flex items-center justify-between bg-indigo-950/70 -mx-1 px-2.5 py-1.5 rounded-xl border border-indigo-500/30">
-                    <span className="font-bold text-indigo-200 flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      <span>المجموع الإجمالي للأسبوع:</span>
-                    </span>
-                    <span className="font-mono font-black text-white text-sm">
-                      {hoveredWeek.totalThisWeek} موقع
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
-                    <span>الإجمالي التراكمي حتى الأسبوع:</span>
-                    <span className="font-mono text-slate-200 font-bold">
-                      {hoveredWeek.cumulativeTotal} موقع
-                    </span>
+                  {/* Departments Mini Breakdown */}
+                  <div className="pt-2 mt-2 border-t border-slate-800 text-[10px]">
+                    <span className="text-slate-400 block mb-1 font-bold">توزيع الإدارات لهذا الأسبوع (مسلّم / مطلوب):</span>
+                    <div className="grid grid-cols-2 gap-1 font-mono">
+                      {hoveredOperatorWeek.deptRows.map((d) => (
+                        <div key={d.rawAdmin} className="bg-slate-900/80 px-1.5 py-0.5 rounded flex justify-between text-slate-300">
+                          <span className="truncate max-w-[90px]">{d.shortAdmin}</span>
+                          <span className="text-emerald-400 font-bold">{d.delivered}/{d.targetRate}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
         )}
       </div>
 
-      {/* ── Availability Quick Glance Executive Summary Cards ── */}
-      {isAvailability && (
+      {/* ── Executive Summary KPI Cards ── */}
+      {isAvailability ? (
         <div className="mt-5 pt-4 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-0.5">
             <span className="text-[11px] font-bold text-slate-500 block">مشروعات النطاق المفلتر</span>
@@ -1284,6 +1238,127 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             <span className="text-[10px] text-sky-600 block font-semibold">قيد التنفيذ ضمن المهلة</span>
           </div>
         </div>
+      ) : (
+        /* Operator KPI Cards */
+        <div className="mt-5 pt-4 border-t border-slate-100">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-0.5">
+              <span className="text-[11px] font-bold text-slate-500 block">إجمالي عدد المواقع</span>
+              <span className="text-lg sm:text-xl font-black text-slate-900 font-mono">
+                {operatorRollout.latestWeek.totalSites}
+              </span>
+              <span className="text-[10px] text-slate-400 block font-semibold">موقع محمول في الخطة</span>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200 text-center space-y-0.5">
+              <span className="text-[11px] font-bold text-sky-800 block">المعدل المطلوب (W2-Nov)</span>
+              <span className="text-lg sm:text-xl font-black text-sky-700 font-mono">
+                {operatorRollout.latestWeek.targetRate}
+              </span>
+              <span className="text-[10px] text-sky-600 block font-semibold">موقع مطلوب تسليمه</span>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-center space-y-0.5">
+              <span className="text-[11px] font-bold text-emerald-800 block">ما تم تسليمه فعلياً</span>
+              <span className="text-lg sm:text-xl font-black text-emerald-700 font-mono">
+                {operatorRollout.latestWeek.delivered}
+              </span>
+              <span className="text-[10px] text-emerald-600 block font-semibold">موقع مسلم بالكامل</span>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-center space-y-0.5">
+              <span className="text-[11px] font-bold text-indigo-800 block">نسبة تحقيق المطلوب</span>
+              <span className="text-lg sm:text-xl font-black text-indigo-700 font-mono">
+                {operatorRollout.latestWeek.achievementPercent}%
+              </span>
+              <span className="text-[10px] text-indigo-600 block font-semibold">
+                {operatorRollout.latestWeek.gap >= 0 ? `فائض: +${operatorRollout.latestWeek.gap}` : `عجز: ${operatorRollout.latestWeek.gap}`} موقع
+              </span>
+            </div>
+          </div>
+
+          {/* ── General Departments Breakdown Grid (Interactive) ── */}
+          <div className="bg-slate-50/70 border border-slate-200/90 rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-indigo-600" />
+                <h4 className="text-xs sm:text-sm font-black text-slate-800">
+                  تفصيل الإدارات العامة لتنفيذ الشبكات (حتى الأسبوع الثاني - نوفمبر 2026)
+                </h4>
+              </div>
+              <span className="text-[11px] text-slate-500 font-medium">
+                اضغط على أي إدارة لتصفية الرسم البياني
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
+              {operatorRollout.departmentSummaries.map((dept) => {
+                const isSelected = selectedDeptFilter === dept.canonicalAdmin;
+                return (
+                  <div
+                    key={dept.rawAdmin}
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedDeptFilter(null);
+                      } else {
+                        setSelectedDeptFilter(dept.canonicalAdmin);
+                      }
+                    }}
+                    className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-indigo-50/90 border-indigo-400 ring-2 ring-indigo-200 shadow-sm'
+                        : 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-2xs'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <span className="text-xs font-bold text-slate-800 leading-tight">
+                        {dept.canonicalAdmin}
+                      </span>
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-black ${
+                        dept.achievementPercent >= 100
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : dept.achievementPercent >= 70
+                          ? 'bg-sky-100 text-sky-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {dept.achievementPercent}%
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-2">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          dept.achievementPercent >= 100
+                            ? 'bg-emerald-500'
+                            : dept.achievementPercent >= 70
+                            ? 'bg-sky-500'
+                            : 'bg-amber-500'
+                        }`}
+                        style={{ width: `${Math.min(100, dept.achievementPercent)}%` }}
+                      ></div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1 text-[11px] text-center font-mono">
+                      <div className="bg-slate-50 rounded py-1">
+                        <span className="text-[9px] text-slate-400 block font-sans">المواقع</span>
+                        <span className="font-bold text-slate-700">{dept.totalSites}</span>
+                      </div>
+                      <div className="bg-sky-50/70 rounded py-1">
+                        <span className="text-[9px] text-sky-600 block font-sans">المطلوب</span>
+                        <span className="font-bold text-sky-800">{dept.targetRate}</span>
+                      </div>
+                      <div className="bg-emerald-50/70 rounded py-1">
+                        <span className="text-[9px] text-emerald-600 block font-sans">المسلم</span>
+                        <span className="font-bold text-emerald-800">{dept.delivered}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Footer Information Note ── */}
@@ -1293,11 +1368,11 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
           <span>
             {isAvailability
               ? 'يتم احتساب التارجت آلياً بإضافة 3 أشهر لتاريخ السداد والبدء في التنفيذ، وتحدد حالة التسليم أسبوعياً بناءً على تاريخ التسليم المعتمد.'
-              : 'الرسم البياني ديناميكي بالكامل ويتغير تلقائياً بحسب التصفية العليا المختارة (القطاع، الإدارة، السنترال، والمشغل).'}
+              : 'البيانات المعروضة تتضمن تتبع التسليم المعتمد والمعدل المطلوب تسليمه لكافة أسابيع أكتوبر ونوفمبر 2026 لمواقع المحمول.'}
           </span>
         </div>
         <span className="font-mono text-[11px] text-slate-400">
-          إجمالي الأسابيع المعروضة: {totalWeeksDisplayed} أسبوعاً • سنة 2026
+          {isAvailability ? `إجمالي الأسابيع المعروضة: ${totalSteps} أسبوعاً • سنة 2026` : '6 أسابيع (أكتوبر ونوفمبر 2026)'}
         </span>
       </div>
     </div>
