@@ -1286,6 +1286,11 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
         dataToSave['Exc Sectores'] = user.sector;
       }
 
+      if (!dataToSave['المسئولية'] && !dataToSave['مسئولية التنفيذ']) {
+        dataToSave['المسئولية'] = 'المصرية للاتصالات';
+        dataToSave['مسئولية التنفيذ'] = 'المصرية للاتصالات';
+      }
+
       const result = await saveRecord(dataToSave, forceUpdate, isEdit);
 
       if (result.success && result.record) {
@@ -2771,26 +2776,6 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                             {['New', 'Existing', 'Modernization', 'Upgrade', 'Relocation'].map((t) => (
                               <option key={t} value={t}>
                                 {t}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* 8. المسئولية (Responsibility) */}
-                        <div className="flex flex-col">
-                          <label className="text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
-                            <span className="flex items-center gap-1">المسئولية (Responsibility)</span>
-                          </label>
-                          <select
-                            name="المسئولية"
-                            id="field-responsibility"
-                            value={formData['المسئولية'] || 'المصرية للاتصالات'}
-                            onChange={(e) => handleFieldChange('المسئولية', e.target.value)}
-                            className="border border-blue-200 bg-white text-slate-800 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 font-medium cursor-pointer"
-                          >
-                            {['المصرية للاتصالات', 'فودافون', 'أورنج', 'إي آند'].map((resp) => (
-                              <option key={resp} value={resp}>
-                                {resp}
                               </option>
                             ))}
                           </select>
