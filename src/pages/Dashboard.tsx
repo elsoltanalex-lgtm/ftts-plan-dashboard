@@ -601,7 +601,7 @@ export const Dashboard: React.FC = () => {
       if (filters.company !== 'All') {
         if (activeScope === 'FTTS') {
           if (site.company !== filters.company) return false;
-        } else if (activeScope === 'ETAHA') {
+        } else if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
           // Filter by client category or classification
           const sName = String(site.siteName || '');
           const sCls = String(site.classification || '');
@@ -772,7 +772,7 @@ export const Dashboard: React.FC = () => {
       if (filters.company !== 'All') {
         if (activeScope === 'FTTS') {
           if (site.company !== filters.company) return false;
-        } else if (activeScope === 'ETAHA') {
+        } else if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
           const sName = String(site.siteName || '');
           const sCls = String(site.classification || '');
           if (filters.company === 'التعليم' && !sName.includes('التربية والتعليم') && !sCls.includes('تعليم')) return false;
@@ -2235,6 +2235,7 @@ export const Dashboard: React.FC = () => {
           onSave={async (record) => {
             const res = await saveEtahaRecord(record);
             if (res.success) {
+              await refetchEtahaRecords();
               setToastMessage(`تم حفظ وتحديث بيانات مشروع الإتاحة (${record['Code'] || record['siteCode'] || ''}) بنجاح ✅`);
             } else {
               setToastMessage(`حدث خطأ أثناء حفظ بيانات الإتاحة: ${res.error || ''}`);

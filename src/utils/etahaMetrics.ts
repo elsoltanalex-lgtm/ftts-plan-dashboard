@@ -30,12 +30,12 @@ export function isEtahaInternalDone(site: any): boolean {
   const raw = site.rawRecord || site;
   const val =
     site.internalPath ||
+    raw.internalPath ||
+    raw.internal_path ||
     raw['المسار الداخلي'] ||
     raw['المسار الداخلى'] ||
     raw['المسار_الداخلي'] ||
     raw['المسار_الداخلى'] ||
-    raw['موقف اللحامات'] ||
-    raw['موقف_اللحامات'] ||
     '';
   const norm = normalizeArabicText(val);
   if (!norm || norm.includes('لم يتم') || norm.includes('لم ينته') || norm.includes('معوق') || norm.includes('تعذر')) {
@@ -51,16 +51,35 @@ export function isEtahaInternalDone(site: any): boolean {
 export function isEtahaExternalDone(site: any): boolean {
   if (!site) return false;
   const raw = site.rawRecord || site;
-  const ext = site.externalPath || raw['المسار الخارجي'] || raw['المسار_الخارجي'] || '';
-  const cls = site.excelStatus || site.classification || raw['التصنيف'] || '';
+  const ext =
+    site.externalPath ||
+    raw.externalPath ||
+    raw.external_path ||
+    raw['المسار الخارجي'] ||
+    raw['المسار_الخارجي'] ||
+    '';
+  const cls =
+    site.excelStatus ||
+    site.classification ||
+    raw.classification ||
+    raw['التصنيف'] ||
+    '';
   const normExt = normalizeArabicText(ext);
   const normCls = normalizeArabicText(cls);
-  const isExtCompleted = !normExt.includes('لم يتم') && (normExt.includes('تم الانتهاء') || normExt === 'منتهي');
-  return (
-    isExtCompleted ||
-    normCls.includes('تم الانتهاء') ||
-    normCls.includes('تم خارجي')
-  );
+
+  const isExtCompleted =
+    !normExt.includes('لم يتم') &&
+    !normExt.includes('معوق') &&
+    !normExt.includes('تعذر') &&
+    (normExt.includes('تم الانتهاء') || normExt === 'منتهي' || normExt === 'تم');
+
+  const isClsCompleted =
+    !normCls.includes('لم يتم') &&
+    !normCls.includes('معوق') &&
+    !normCls.includes('تعذر') &&
+    (normCls.includes('تم الانتهاء') || normCls.includes('تم خارجي'));
+
+  return isExtCompleted || isClsCompleted;
 }
 
 /**
@@ -70,15 +89,48 @@ export function isEtahaExternalDone(site: any): boolean {
 export function isEtahaDelivered(site: any): boolean {
   if (!site) return false;
   const raw = site.rawRecord || site;
-  const del = site.deliveryStatus || site.deliveryArea || raw['موقف التسليم'] || raw['موقف_التسليم'] || '';
-  const cls = site.excelStatus || site.classification || raw['التصنيف'] || '';
+  const del =
+    site.deliveryStatus ||
+    site.deliveryArea ||
+    raw.deliveryStatus ||
+    raw.delivery_status ||
+    raw['موقف التسليم'] ||
+    raw['موقف_التسليم'] ||
+    '';
+  const cls =
+    site.excelStatus ||
+    site.classification ||
+    raw.classification ||
+    raw['التصنيف'] ||
+    '';
   const normDel = normalizeArabicText(del);
   const normCls = normalizeArabicText(cls);
-  return (
-    normDel.includes('تم التسليم') ||
-    normDel === 'مسلم' ||
-    normCls.includes('التسليم')
-  );
+
+  // Check delivery status field with negative guards
+  if (
+    !normDel.includes('لم يتم') &&
+    !normDel.includes('لم ينته') &&
+    !normDel.includes('معوق') &&
+    !normDel.includes('تعذر') &&
+    !normDel.includes('مؤجل') &&
+    !normDel.includes('منتظر') &&
+    (normDel.includes('تم التسليم') || normDel === 'مسلم' || normDel === 'تم')
+  ) {
+    return true;
+  }
+
+  // Check classification field with negative guards
+  if (
+    !normCls.includes('لم يتم') &&
+    !normCls.includes('معوق') &&
+    !normCls.includes('تعذر') &&
+    !normCls.includes('مؤجل') &&
+    (normCls.includes('تم الانتهاء والتسليم') || normCls.includes('تم التسليم') || normCls === 'تسليم')
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /**

@@ -8,6 +8,7 @@ import type { SiteRecord } from '../types/dashboard';
 import { useAuth } from '../context/AuthContext';
 import { uploadAttachment } from '../lib/supabase';
 import { parseToDateInputValue } from '../utils/filterUtils';
+import { normalizeArabicText } from '../utils/etahaMetrics';
 import {
   X,
   PlusCircle,
@@ -71,9 +72,11 @@ const APPROVED_SECTORS = [
 
 const APPROVED_INTERNAL_PATHS = [
   'تم الانتهاء بالكامل',
+  'تم الانتهاء',
   'لم يتم',
   'لم يتم الانتهاء من المسار الخارجي',
   'مسار خارجي متعذرات او معوقات',
+  'جاري العمل',
 ];
 
 const APPROVED_EXTERNAL_PATHS = [
@@ -96,6 +99,13 @@ const APPROVED_SPLICING_STATUSES = [
   'مسار خارجي متعذرات او معوقات',
   'جاري اللحام',
   'لم يتم البدء',
+];
+
+const APPROVED_DELIVERY_STATUSES = [
+  'تم التسليم',
+  'لم يتم',
+  'منتظر التسليم',
+  'مؤجل من العميل',
 ];
 
 const APPROVED_CLASSIFICATIONS = [
@@ -473,14 +483,17 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
   };
 
   // Check if both internal and external routes are completed
-  const internalRoute = String(formData['المسار الداخلى'] || '').trim();
-  const externalRoute = String(formData['المسار الخارجي'] || '').trim();
-  const isInternalDone = internalRoute === 'تم الانتهاء بالكامل' || internalRoute === 'تم الانتهاء';
-  const isExternalDone = externalRoute === 'تم الانتهاء';
+  const internalRoute = String(formData['المسار الداخلى'] || formData['المسار الداخلي'] || formData.internalPath || '').trim();
+  const externalRoute = String(formData['المسار الخارجي'] || formData.externalPath || '').trim();
+  const normInt = normalizeArabicText(internalRoute);
+  const normExt = normalizeArabicText(externalRoute);
+  const isInternalDone = !normInt.includes('لم يتم') && !normInt.includes('لم ينته') && !normInt.includes('معوق') && !normInt.includes('تعذر') && (normInt.includes('تم الانتهاء') || normInt === 'منتهي' || normInt === 'تم');
+  const isExternalDone = !normExt.includes('لم يتم') && !normExt.includes('معوق') && !normExt.includes('تعذر') && (normExt.includes('تم الانتهاء') || normExt === 'منتهي' || normExt === 'تم');
   const isBothPathsCompleted = isInternalDone && isExternalDone;
 
-  const currentClassification = String(formData['التصنيف'] || '').trim();
-  const isDeliverySelected = currentClassification === 'تم الانتهاء والتسليم' || currentClassification === 'تم التسليم';
+  const currentClassification = String(formData['التصنيف'] || formData.classification || '').trim();
+  const currentDelivery = String(formData['موقف التسليم'] || formData.deliveryStatus || '').trim();
+  const isDeliverySelected = currentClassification === 'تم الانتهاء والتسليم' || currentClassification === 'تم التسليم' || currentDelivery === 'تم التسليم';
   const isBlockedObstacles = currentClassification === 'معوقات' || currentClassification.includes('معوق');
   const isStalled = currentClassification === 'متعذرات' || currentClassification === 'متعذر' || currentClassification.includes('تعذر');
 
@@ -501,11 +514,17 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
         'قطاع التنفيذ': '',
         'الادارة العامة المنفذة': '',
         'ادارة التنفيذ': '',
+        'المسار الداخلي': 'لم يتم',
         'المسار الداخلى': 'لم يتم',
+        internalPath: 'لم يتم',
         'المسار الخارجي': 'جاري استخراج تصاريح',
+        externalPath: 'جاري استخراج تصاريح',
         'موقف اللحامات': 'لم يتم البدء',
+        splicingStatus: 'لم يتم البدء',
         'التصنيف': 'جاري العمل',
+        classification: 'جاري العمل',
         'موقف التسليم': 'لم يتم',
+        deliveryStatus: 'لم يتم',
         'تاريخ السداد والبدء في التنفيذ': '',
         'تاريخ السداد و البدء فى التنفيذ': '',
         'سبب المعوق او التعذر': '',
@@ -534,8 +553,25 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
           initialRecord['سبيشال تارجت'] ||
           initialRecord['سبيشال_تارجت']
         );
+        const intVal = String(initialRecord['المسار الداخلي'] || initialRecord['المسار الداخلى'] || initialRecord.internalPath || 'لم يتم').trim();
+        const extVal = String(initialRecord['المسار الخارجي'] || initialRecord.externalPath || 'جاري استخراج تصاريح').trim();
+        const spliceVal = String(initialRecord['موقف اللحامات'] || initialRecord.splicingStatus || 'لم يتم البدء').trim();
+        const delVal = String(initialRecord['موقف التسليم'] || initialRecord.deliveryStatus || 'لم يتم').trim();
+        const clsVal = String(initialRecord['التصنيف'] || initialRecord.classification || 'جاري العمل').trim();
+
         setFormData({
           ...initialRecord,
+          'المسار الداخلي': intVal,
+          'المسار الداخلى': intVal,
+          internalPath: intVal,
+          'المسار الخارجي': extVal,
+          externalPath: extVal,
+          'موقف اللحامات': spliceVal,
+          splicingStatus: spliceVal,
+          'موقف التسليم': delVal,
+          deliveryStatus: delVal,
+          'التصنيف': clsVal,
+          classification: clsVal,
           'تاريخ السداد والبدء في التنفيذ': pDate,
           'تاريخ السداد و البدء فى التنفيذ': pDate,
           specialTarget: isSpecial,
@@ -581,8 +617,25 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
         raw['سبيشال_تارجت'] ||
         site?.specialTarget
       );
+      const intVal = String(raw['المسار الداخلي'] || raw['المسار الداخلى'] || raw.internalPath || site?.internalPath || 'لم يتم').trim();
+      const extVal = String(raw['المسار الخارجي'] || raw.externalPath || site?.externalPath || 'جاري استخراج تصاريح').trim();
+      const spliceVal = String(raw['موقف اللحامات'] || raw.splicingStatus || 'لم يتم البدء').trim();
+      const delVal = String(raw['موقف التسليم'] || raw.deliveryStatus || site?.deliveryStatus || site?.deliveryArea || 'لم يتم').trim();
+      const clsVal = String(raw['التصنيف'] || raw.classification || site?.classification || 'جاري العمل').trim();
+
       setFormData({
         ...raw,
+        'المسار الداخلي': intVal,
+        'المسار الداخلى': intVal,
+        internalPath: intVal,
+        'المسار الخارجي': extVal,
+        externalPath: extVal,
+        'موقف اللحامات': spliceVal,
+        splicingStatus: spliceVal,
+        'موقف التسليم': delVal,
+        deliveryStatus: delVal,
+        'التصنيف': clsVal,
+        classification: clsVal,
         'تاريخ السداد والبدء في التنفيذ': pDate,
         'تاريخ السداد و البدء فى التنفيذ': pDate,
         specialTarget: isSpecial,
@@ -600,6 +653,12 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
         site?.rawRecord?.specialTarget ||
         site?.rawRecord?.['سبيشال تارجت']
       );
+      const intVal = String(site?.rawRecord?.['المسار الداخلى'] || site?.rawRecord?.['المسار الداخلي'] || site?.internalPath || 'لم يتم').trim();
+      const extVal = String(site?.rawRecord?.['المسار الخارجي'] || site?.externalPath || 'جاري العمل مدني').trim();
+      const spliceVal = String(site?.rawRecord?.['موقف اللحامات'] || 'لم يتم البدء').trim();
+      const delVal = String(site?.deliveryStatus || site?.deliveryArea || site?.rawRecord?.['موقف التسليم'] || 'لم يتم').trim();
+      const clsVal = String(site?.classification || 'جاري العمل').trim();
+
       setFormData((prev) => ({
         ...prev,
         Code: code,
@@ -614,10 +673,17 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
         'الادارة العامة المنفذة': site?.generalAdmin || '',
         'ادارة التنفيذ': site?.competentAdmin || '',
         المحافظة: site?.governorate || 'الغربية',
-        'المسار الداخلى': site?.rawRecord?.['المسار الداخلى'] || site?.rawRecord?.['المسار الداخلي'] || site?.internalPath || 'لم يتم',
-        'المسار الخارجي': site?.rawRecord?.['المسار الخارجي'] || 'جاري العمل مدني',
-        'موقف اللحامات': site?.rawRecord?.['موقف اللحامات'] || 'لم يتم البدء',
-        'التصنيف': site?.classification || 'جاري العمل',
+        'المسار الداخلي': intVal,
+        'المسار الداخلى': intVal,
+        internalPath: intVal,
+        'المسار الخارجي': extVal,
+        externalPath: extVal,
+        'موقف اللحامات': spliceVal,
+        splicingStatus: spliceVal,
+        'موقف التسليم': delVal,
+        deliveryStatus: delVal,
+        'التصنيف': clsVal,
+        classification: clsVal,
         'تاريخ السداد والبدء في التنفيذ': pDate,
         'تاريخ السداد و البدء فى التنفيذ': pDate,
       }));
@@ -626,16 +692,51 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
   };
 
   const handleInputChange = (field: keyof EtahaRecord, value: any) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setFormData((prev) => {
+      const updated = {
+        ...prev,
+        [field]: value,
+      };
+
+      if (field === 'المسار الداخلى' || field === 'المسار الداخلي' || field === 'internalPath') {
+        updated['المسار الداخلى'] = value;
+        updated['المسار الداخلي'] = value;
+        updated.internalPath = value;
+      }
+      if (field === 'المسار الخارجي' || field === 'externalPath') {
+        updated['المسار الخارجي'] = value;
+        updated.externalPath = value;
+      }
+      if (field === 'موقف اللحامات' || field === 'splicingStatus') {
+        updated['موقف اللحامات'] = value;
+        updated.splicingStatus = value;
+      }
+      if (field === 'موقف التسليم' || field === 'deliveryStatus') {
+        updated['موقف التسليم'] = value;
+        updated.deliveryStatus = value;
+      }
+      if (field === 'التصنيف' || field === 'classification') {
+        updated['التصنيف'] = value;
+        updated.classification = value;
+      }
+
+      return updated;
+    });
+
     if (errors[field as string]) {
       setErrors((prev) => {
         const next = { ...prev };
         delete next[field as string];
         return next;
       });
+    }
+  };
+
+  // Handler for delivery status changes
+  const handleDeliveryChange = (newDel: string) => {
+    handleInputChange('موقف التسليم', newDel);
+    if (newDel === 'تم التسليم' && isBothPathsCompleted) {
+      handleInputChange('التصنيف', 'تم الانتهاء والتسليم');
     }
   };
 
@@ -755,8 +856,25 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
         formData['سبيشال_تارجت']
       );
 
+      const intVal = String(formData['المسار الداخلى'] || formData['المسار الداخلي'] || formData.internalPath || 'لم يتم').trim();
+      const extVal = String(formData['المسار الخارجي'] || formData.externalPath || 'لم يتم البدء').trim();
+      const spliceVal = String(formData['موقف اللحامات'] || formData.splicingStatus || 'لم يتم البدء').trim();
+      const delVal = String(formData['موقف التسليم'] || formData.deliveryStatus || 'لم يتم').trim();
+      const clsVal = String(formData['التصنيف'] || formData.classification || 'جاري العمل').trim();
+
       const payload: EtahaRecord = {
         ...cleanedData,
+        'المسار الداخلى': intVal,
+        'المسار الداخلي': intVal,
+        internalPath: intVal,
+        'المسار الخارجي': extVal,
+        externalPath: extVal,
+        'موقف اللحامات': spliceVal,
+        splicingStatus: spliceVal,
+        'موقف التسليم': delVal,
+        deliveryStatus: delVal,
+        'التصنيف': clsVal,
+        classification: clsVal,
         specialTarget: isSpecial,
         'سبيشال تارجت': isSpecial,
         'سبيشال_تارجت': isSpecial,
@@ -1641,14 +1759,14 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                     </h4>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
                     {/* المسار الداخلي */}
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
                         المسار الداخلي
                       </label>
                       <select
-                        value={formData['المسار الداخلى'] || 'لم يتم البدء'}
+                        value={formData['المسار الداخلى'] || formData['المسار الداخلي'] || 'لم يتم'}
                         onChange={(e) => handleInputChange('المسار الداخلى', e.target.value)}
                         className={`w-full px-3 py-2 border rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer ${isInternalDone
                           ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
@@ -1695,6 +1813,28 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer"
                       >
                         {APPROVED_SPLICING_STATUSES.map((item) => (
+                          <option key={item} value={item}>
+                            {item}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* موقف التسليم */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        موقف التسليم
+                      </label>
+                      <select
+                        value={formData['موقف التسليم'] || 'لم يتم'}
+                        onChange={(e) => handleDeliveryChange(e.target.value)}
+                        className={`w-full px-3 py-2 border rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer ${
+                          formData['موقف التسليم'] === 'تم التسليم'
+                            ? 'bg-purple-50 border-purple-300 text-purple-900 font-black'
+                            : 'bg-slate-50 border-slate-300 text-slate-800'
+                        }`}
+                      >
+                        {APPROVED_DELIVERY_STATUSES.map((item) => (
                           <option key={item} value={item}>
                             {item}
                           </option>

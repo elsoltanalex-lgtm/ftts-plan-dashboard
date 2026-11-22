@@ -43,16 +43,33 @@ export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecor
   const clientName = String(r['اسم العميل'] || '').trim();
   const branchName = String(r['اسم الفرع'] || '').trim();
   const address = String(r['العنوان'] || '').trim();
-  const rawStatus = String(r['التصنيف'] || '').trim();
+  const rawStatus = String(r['التصنيف'] || r.classification || '').trim();
+  const internalPath = String(r['المسار الداخلي'] || r['المسار الداخلى'] || r['المسار_الداخلى'] || r['المسار_الداخلي'] || r.internalPath || '').trim();
+  const externalPath = String(r['المسار الخارجي'] || r['المسار_الخارجي'] || r.externalPath || '').trim();
+  const deliveryStatus = String(r['موقف التسليم'] || r['موقف_التسليم'] || r.deliveryStatus || '').trim();
+  const splicingStatus = String(r['موقف اللحامات'] || r['موقف_اللحامات'] || r.splicingStatus || '').trim();
 
   let status = 'جاري المعاينة';
   let executionCategory: 'Completed' | 'In Progress' | 'Blocked / On Hold' | 'Planned' = 'In Progress';
   let progressPercent = 25;
 
-  if (rawStatus === 'تم الانتهاء والتسليم' || rawStatus === 'تم التسليم' || rawStatus.includes('تسليم')) {
+  if (
+    deliveryStatus === 'تم التسليم' ||
+    deliveryStatus.includes('تم التسليم') ||
+    rawStatus === 'تم الانتهاء والتسليم' ||
+    rawStatus === 'تم التسليم' ||
+    rawStatus.includes('تسليم')
+  ) {
     status = 'تم الانتهاء';
     executionCategory = 'Completed';
     progressPercent = 100;
+  } else if (
+    (internalPath === 'تم الانتهاء' || internalPath === 'تم الانتهاء بالكامل') &&
+    externalPath === 'تم الانتهاء'
+  ) {
+    status = 'تم الانتهاء';
+    executionCategory = 'Completed';
+    progressPercent = 95;
   } else if (rawStatus.includes('تم خارجي') || rawStatus.includes('متوقف علي العميل')) {
     status = 'تم الانتهاء';
     executionCategory = 'Completed';
@@ -225,11 +242,39 @@ export function useEtahaAPI() {
       let updated: EtahaRecord[];
 
       const now = new Date().toISOString();
+      const intVal = String(record['المسار الداخلي'] || record['المسار الداخلى'] || record.internalPath || '').trim();
+      const extVal = String(record['المسار الخارجي'] || record.externalPath || '').trim();
+      const spliceVal = String(record['موقف اللحامات'] || record.splicingStatus || '').trim();
+      const delVal = String(record['موقف التسليم'] || record.deliveryStatus || '').trim();
+      const clsVal = String(record['التصنيف'] || record.classification || '').trim();
+
       const enriched: EtahaRecord = {
         ...record,
         Code: code,
         _updatedAt: now,
       };
+
+      if (intVal) {
+        enriched['المسار الداخلي'] = intVal;
+        enriched['المسار الداخلى'] = intVal;
+        enriched.internalPath = intVal;
+      }
+      if (extVal) {
+        enriched['المسار الخارجي'] = extVal;
+        enriched.externalPath = extVal;
+      }
+      if (spliceVal) {
+        enriched['موقف اللحامات'] = spliceVal;
+        enriched.splicingStatus = spliceVal;
+      }
+      if (delVal) {
+        enriched['موقف التسليم'] = delVal;
+        enriched.deliveryStatus = delVal;
+      }
+      if (clsVal) {
+        enriched['التصنيف'] = clsVal;
+        enriched.classification = clsVal;
+      }
 
       if (idx >= 0) {
         updated = [...current];
@@ -255,8 +300,13 @@ export function useEtahaAPI() {
               code: code,
               Code: code,
               'المشروع': enriched['المشروع'] || enriched.project || 'اتاحة',
-              'التصنيف': enriched['موقف التسليم'] || enriched.classification || '',
-              'الجهة': enriched['الجهة'] || '',
+              'التصنيف': clsVal || enriched['التصنيف'] || enriched.classification || '',
+              'موقف التسليم': delVal || enriched['موقف التسليم'] || enriched.deliveryStatus || '',
+              'المسار الداخلي': intVal || enriched['المسار الداخلي'] || enriched['المسار الداخلى'] || '',
+              'المسار الداخلى': intVal || enriched['المسار الداخلي'] || enriched['المسار الداخلى'] || '',
+              'المسار الخارجي': extVal || enriched['المسار الخارجي'] || enriched.externalPath || '',
+              'موقف اللحامات': spliceVal || enriched['موقف اللحامات'] || enriched.splicingStatus || '',
+              'الجهة': enriched['الجهة'] || enriched['اسم العميل'] || '',
               'السنترال': enriched['سنترال الربط'] || enriched.central || '',
               'القطاع': enriched['القطاعات'] || enriched['رئاسة قطاعات التنفيذ'] || enriched.sector || '',
               'المحافظة': enriched['المحافظه'] || enriched['المحافظة'] || enriched.governorate || '',
