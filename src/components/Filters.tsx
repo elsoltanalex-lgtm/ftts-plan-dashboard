@@ -232,8 +232,8 @@ const MultiFilterDropdown: React.FC<MultiFilterDropdownProps> = ({
       {/* Dropdown Menu Modal */}
       {isOpen && !disabled && (
         <div className={`absolute z-50 mt-1 w-full sm:w-72 max-w-[92vw] bg-white border border-slate-200 rounded-xl shadow-2xl p-2.5 animate-in fade-in zoom-in-95 duration-150 ${id === 'filter-obstacle-reason' || id === 'filter-etaha-delivery-status' || id === 'filter-orange-area'
-            ? 'right-0 lg:right-auto lg:left-0'
-            : 'right-0'
+          ? 'right-0 lg:right-auto lg:left-0'
+          : 'right-0'
           }`}>
           {/* Search box inside dropdown */}
           <div className="relative mb-2">

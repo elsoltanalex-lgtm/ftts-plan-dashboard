@@ -1487,7 +1487,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                       />
                     </div>
 
-                    {/* سبيشال تارجت (Special Target Checkbox) */}
+                    {/* Special Target Checkbox */}
                     <div className="sm:col-span-3">
                       <label className="flex items-center gap-2.5 p-3 bg-amber-50/80 hover:bg-amber-100/70 border-2 border-amber-300/80 rounded-xl cursor-pointer transition select-none">
                         <input
@@ -1503,7 +1503,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-xs font-black text-amber-950 flex items-center gap-1">
                             <span>⭐</span>
-                            <span>سبيشال تارجت (Special Target)</span>
+                            <span>Special Target</span>
                           </span>
                           <span className="text-[11px] text-amber-700 font-semibold">
                             - تحديد هذا المشروع كهدف ذو أولوية خاصة واستراتيجية

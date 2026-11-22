@@ -1516,7 +1516,7 @@ export const Dashboard: React.FC = () => {
                     onDelete={() => setIsQuickDeleteModalOpen(true)}
                   />
 
-                  {/* زر فلترة سبيشال تارجت السريع */}
+                  {/* زر فلترة Special Target السريع */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1529,10 +1529,10 @@ export const Dashboard: React.FC = () => {
                         ? 'bg-amber-500 text-white border-amber-600 shadow-sm ring-2 ring-amber-300'
                         : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
                       }`}
-                    title="تصفية وعرض مشروعات الإتاحة المصنفة كسبيشال تارجت فقط"
+                    title="تصفية وعرض مشروعات الإتاحة المصنفة كـ Special Target فقط"
                   >
                     <span>⭐</span>
-                    <span>سبيشال تارجت {filters.specialTarget ? '(مفعل)' : ''}</span>
+                    <span>Special Target {filters.specialTarget ? '(مفعل)' : ''}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${filters.specialTarget ? 'bg-white/30 text-white' : 'bg-amber-200/80 text-amber-900 font-bold'
                       }`}>
                       {authorizedScopeData.filter((s) => Boolean(s.specialTarget || s.rawRecord?.specialTarget || s.rawRecord?.['سبيشال تارجت'] || s.rawRecord?.['سبيشال_تارجت'])).length}

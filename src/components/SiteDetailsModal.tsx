@@ -426,8 +426,8 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span>{site.siteCode}</span>
                             {(site.specialTarget || site.rawRecord?.specialTarget || site.rawRecord?.['سبيشال تارجت'] || site.rawRecord?.['سبيشال_تارجت']) && (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs" title="مشروع سبيشال تارجت">
-                                ⭐ سبيشال تارجت
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs" title="Special Target Project">
+                                ⭐ Special Target
                               </span>
                             )}
                           </div>
@@ -711,9 +711,9 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                                     <div><strong className="text-slate-600">أمر الخدمة (Order Service):</strong> <span className="font-mono font-bold">{raw['  Order Service'] || raw.orderService || 'N/A'}</span></div>
                                     <div><strong className="text-slate-600">تاريخ التسليم:</strong> {raw['تاريخ التسليم '] || raw['تاريخ التسليم'] || 'لم يتم'}</div>
                                     <div>
-                                      <strong className="text-slate-600">سبيشال تارجت:</strong>{' '}
+                                      <strong className="text-slate-600">Special Target:</strong>{' '}
                                       {(site.specialTarget || raw.specialTarget || raw['سبيشال تارجت']) ? (
-                                        <span className="font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-300">⭐ نعم (Special Target)</span>
+                                        <span className="font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-300">⭐ Special Target</span>
                                       ) : (
                                         <span className="text-slate-500">لا</span>
                                       )}
