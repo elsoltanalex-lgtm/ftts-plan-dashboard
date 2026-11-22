@@ -23,38 +23,62 @@ export const STORAGE_BUCKETS = {
 } as const;
 
 /**
- * Upload a document or image to Supabase Storage
+ * Upload a document or image to Supabase Storage with resilient fallback
  */
 export async function uploadAttachment(
   file: File,
   folder = 'documents',
   bucket: string = STORAGE_BUCKETS.ATTACHMENTS
-): Promise<{ success: boolean; url?: string; path?: string; error?: string }> {
+): Promise<{ success: boolean; url?: string; path?: string; fileName?: string; fileSize?: number; error?: string }> {
   const timestamp = Date.now();
   const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const filePath = `${folder}/${timestamp}_${sanitizedName}`;
 
-  for (const client of [supabase, supabaseFallback]) {
-    try {
-      const { data, error } = await client.storage
-        .from(bucket)
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: true,
-        });
+  // 1. Attempt upload to Supabase Storage across clients and common bucket names
+  const candidateBuckets = [bucket, 'site-attachments', 'documents', 'attachments', 'public'];
+  for (const client of [supabaseFallback, supabase]) {
+    for (const b of candidateBuckets) {
+      try {
+        const { data, error } = await client.storage
+          .from(b)
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: true,
+          });
 
-      if (!error && data) {
-        const { data: publicData } = client.storage.from(bucket).getPublicUrl(data.path);
-        return {
-          success: true,
-          url: publicData?.publicUrl || '',
-          path: data.path,
-        };
+        if (!error && data) {
+          const { data: publicData } = client.storage.from(b).getPublicUrl(data.path);
+          return {
+            success: true,
+            url: publicData?.publicUrl || '',
+            path: data.path,
+            fileName: file.name,
+            fileSize: file.size,
+          };
+        }
+      } catch {
+        // try next bucket/client
       }
-    } catch {
-      // try fallback client
     }
   }
 
-  return { success: false, error: 'Failed to upload attachment to storage' };
+  // 2. Resilient Fallback: Read file as Base64 Data URL so it is persistently stored in JSONB & readable offline/cloud
+  try {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    return {
+      success: true,
+      url: dataUrl,
+      path: filePath,
+      fileName: file.name,
+      fileSize: file.size,
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'فشل في حفظ وقراءة المستند' };
+  }
 }

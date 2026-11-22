@@ -28,6 +28,9 @@ export interface APIResponse<T> {
 export function normalizeRecord(row: Record<string, any>): WeRecord {
   const base = (row.data && typeof row.data === 'object') ? row.data : {};
   const siteCode = base['site code'] || row['site code'] || row.site_code || row['Site code'] || '';
+  const docUrl = base.documentUrl || row.documentUrl || base.attachmentUrl || row.attachmentUrl || '';
+  const docName = base['المستند'] || row['المستند'] || (docUrl ? `Doc-${siteCode}.pdf` : '');
+
   return {
     ...base,
     ...row,
@@ -37,6 +40,9 @@ export function normalizeRecord(row: Record<string, any>): WeRecord {
     _createdAt: row.created_at || row._createdAt || base._createdAt || '',
     _updatedAt: row.updated_at || row._updatedAt || base._updatedAt || '',
     _createdBy: row.created_by || row._createdBy || base._createdBy || 'user',
+    documentUrl: docUrl,
+    attachmentUrl: docUrl,
+    'المستند': docName,
   } as WeRecord;
 }
 
@@ -711,29 +717,45 @@ export async function deleteRecord(idOrCode: string): Promise<{ success: boolean
     const clean = (idOrCode || '').trim();
     if (!clean) return { success: false, error: 'معرف أو كود الموقع مطلوب' };
 
-    // 1. Delete from local persistent storage immediately
     const cleanNorm = clean.toUpperCase();
+
+    // 1. Delete from local persistent storage immediately
     const stored = loadStoredWeRecords();
     const remaining = stored.filter((r) => {
       const c = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
       const id = String(r._id || (r as any).id || '').trim().toUpperCase();
-      return c !== cleanNorm && id !== cleanNorm;
+      return c !== cleanNorm && id !== cleanNorm && c !== clean && id !== clean;
     });
     saveStoredWeRecords(remaining);
 
-    // 2. Delete from Supabase candidate tables
-    for (const table of WE_TABLE_CANDIDATES) {
-      try {
-        await supabase
-          .from(table)
-          .delete()
-          .or(`id.eq."${clean}",site_code.eq."${clean}",site code.eq."${clean}"`);
+    // 2. Delete from all active Supabase clients and candidate tables
+    let anySuccess = false;
+    for (const client of supabaseClients) {
+      for (const table of WE_TABLE_CANDIDATES) {
+        try {
+          const { error: err1 } = await client.from(table).delete().eq('site_code', cleanNorm);
+          const { error: err2 } = await client.from(table).delete().eq('site code', cleanNorm);
+          const { error: err3 } = await client.from(table).delete().eq('id', clean);
+          if (!err1 || !err2 || !err3) {
+            anySuccess = true;
+          }
+        } catch { }
+      }
+    }
 
-        await supabase.from(table).delete().eq('id', clean);
+    // 3. Update memory/browser deleted cache
+    if (typeof window !== 'undefined') {
+      try {
+        const key = 'we_deleted_codes_cache';
+        const raw = localStorage.getItem(key);
+        const set = new Set(raw ? JSON.parse(raw) : []);
+        set.add(cleanNorm);
+        set.add(clean);
+        localStorage.setItem(key, JSON.stringify(Array.from(set)));
       } catch { }
     }
 
-    // 3. Also attempt cleanup on local server fallback
+    // 4. Also attempt cleanup on local server fallback
     try {
       await fetch(`${LOCAL_API_BASE}/records/${encodeURIComponent(clean)}`, { method: 'DELETE' });
     } catch { }
@@ -751,8 +773,11 @@ export async function deleteRecordsBulk(idsOrCodes: string[]): Promise<{ success
     const cleanList = idsOrCodes.map((s) => String(s || '').trim()).filter(Boolean);
     if (cleanList.length === 0) return { success: true, count: 0 };
 
+    const cleanNormList = cleanList.map((c) => c.toUpperCase());
+    const cleanNormSet = new Set(cleanNormList);
+    cleanList.forEach((c) => cleanNormSet.add(c));
+
     // 1. Delete from local persistent storage immediately
-    const cleanNormSet = new Set(cleanList.map((c) => c.toUpperCase()));
     const stored = loadStoredWeRecords();
     const remaining = stored.filter((r) => {
       const c = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
@@ -761,19 +786,21 @@ export async function deleteRecordsBulk(idsOrCodes: string[]): Promise<{ success
     });
     saveStoredWeRecords(remaining);
 
-    const batchSize = 60;
-    for (let i = 0; i < cleanList.length; i += batchSize) {
-      const batch = cleanList.slice(i, i + batchSize);
+    // 2. Delete across all active Supabase clients in batches
+    const batchSize = 50;
+    const combinedList = Array.from(new Set([...cleanList, ...cleanNormList]));
 
-      for (const table of WE_TABLE_CANDIDATES) {
-        try {
-          // Delete matching by id
-          await supabase.from(table).delete().in('id', batch);
-          // Delete matching by site_code
-          await supabase.from(table).delete().in('site_code', batch);
-          // Delete matching by "site code"
-          await supabase.from(table).delete().in('site code', batch);
-        } catch { }
+    for (let i = 0; i < combinedList.length; i += batchSize) {
+      const batch = combinedList.slice(i, i + batchSize);
+
+      for (const client of supabaseClients) {
+        for (const table of WE_TABLE_CANDIDATES) {
+          try {
+            await client.from(table).delete().in('site_code', batch);
+            await client.from(table).delete().in('site code', batch);
+            await client.from(table).delete().in('id', batch);
+          } catch { }
+        }
       }
 
       // Also call local server if running
@@ -783,6 +810,17 @@ export async function deleteRecordsBulk(idsOrCodes: string[]): Promise<{ success
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ids: batch }),
         });
+      } catch { }
+    }
+
+    // 3. Update memory/browser deleted cache
+    if (typeof window !== 'undefined') {
+      try {
+        const key = 'we_deleted_codes_cache';
+        const raw = localStorage.getItem(key);
+        const set = new Set(raw ? JSON.parse(raw) : []);
+        combinedList.forEach((c) => set.add(c));
+        localStorage.setItem(key, JSON.stringify(Array.from(set)));
       } catch { }
     }
 

@@ -183,20 +183,49 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
     setIsDeleting(true);
 
     try {
-      if (deleteConfirm.ids.length === 1) {
-        const res = await deleteRecord(deleteConfirm.ids[0]);
+      const targetIds = deleteConfirm.ids;
+      // Gather both IDs and Site Codes from authorizedRecords to ensure matching in Supabase
+      const identifierSet = new Set<string>();
+      targetIds.forEach((id) => identifierSet.add(id));
+
+      authorizedRecords.forEach((r) => {
+        const rId = String(r._id || (r as any).id || '').trim();
+        const rCode = String(r['site code'] || (r as any).site_code || '').trim();
+        if (targetIds.includes(rId) || (rCode && targetIds.includes(rCode))) {
+          if (rId) identifierSet.add(rId);
+          if (rCode) {
+            identifierSet.add(rCode);
+            identifierSet.add(rCode.toUpperCase());
+          }
+        }
+      });
+
+      const allIdentifiers = Array.from(identifierSet).filter(Boolean);
+
+      if (targetIds.length === 1) {
+        const res = await deleteRecord(allIdentifiers[0] || targetIds[0]);
         if (res.success) {
           showToast('تم حذف السجل بنجاح من قاعدة البيانات السحابية');
-          setSelectedIds((prev) => prev.filter((id) => id !== deleteConfirm.ids[0]));
+          setSelectedIds((prev) => prev.filter((id) => !identifierSet.has(id)));
+          setAuthorizedRecords((prev) => prev.filter((r) => {
+            const rId = String(r._id || (r as any).id || '').trim();
+            const rCode = String(r['site code'] || (r as any).site_code || '').trim();
+            return !identifierSet.has(rId) && !identifierSet.has(rCode) && !identifierSet.has(rCode.toUpperCase());
+          }));
           await onRefresh();
         } else {
           showToast(res.error || 'فشل في حذف السجل', 'error');
         }
       } else {
-        const res = await deleteRecordsBulk(deleteConfirm.ids);
+        const res = await deleteRecordsBulk(allIdentifiers);
         if (res.success) {
-          showToast(`تم حذف ${res.count || deleteConfirm.ids.length} سجل بنجاح`);
+          showToast(`تم حذف (${targetIds.length}) سجل بنجاح من قاعدة البيانات السحابية ✅`);
           setSelectedIds([]);
+          setAuthorizedRecords((prev) => prev.filter((r) => {
+            const rId = String(r._id || (r as any).id || '').trim();
+            const rCode = String(r['site code'] || (r as any).site_code || '').trim();
+            return !identifierSet.has(rId) && !identifierSet.has(rCode) && !identifierSet.has(rCode.toUpperCase());
+          }));
           await onRefresh();
         } else {
           showToast(res.error || 'فشل في حذف السجلات', 'error');

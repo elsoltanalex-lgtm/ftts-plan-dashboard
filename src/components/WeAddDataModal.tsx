@@ -52,6 +52,7 @@ import {
   Navigation,
   Radio,
   FileSpreadsheet,
+  ExternalLink,
 } from 'lucide-react';
 
 export interface WeAddDataModalProps {
@@ -437,6 +438,54 @@ export const WE_GEN_TO_COMP_ADMINS: Record<string, string[]> = {
   ],
 };
 
+// Distinct Reference Options for WE Site Edit Form
+export const WE_ZONE_SECTOR_OPTIONS = [
+  'اسكندريه',
+  'الساحل الشمالى',
+  'غرب الدلتا',
+  'وسط الدلتا',
+  'شرق الدلتا 1',
+  'شرق الدلتا 2',
+  'الإسماعيلية',
+  'السويس',
+  'شرق القاهره',
+  'غرب القاهره',
+  'القاهره الجديده',
+  'شمال الصعيد',
+  'وسط الصعيد',
+  'جنوب الصعيد',
+  'Mansoura 1',
+  'Mansoura 6',
+  'Mansoura 7',
+  'MOD',
+];
+
+export const WE_EXECUTION_SECTOR_OPTIONS = [
+  'قطاع الإسكندرية والساحل',
+  'قطاع الغربية',
+  'قطاع الشرقية',
+  'القاهرة الكبرى والجيزة',
+  'المنطقة الجنوبية',
+];
+
+export const WE_TYPE_OPTIONS = [
+  'New',
+  'Existing',
+  'Existing Not LE',
+  'Sharing',
+  'Sharing (VDF)',
+  'Sharing (ORG)',
+  'Sharing (ETS)',
+  'Indoor',
+  'COW',
+  'ACUD',
+  'MOD',
+  'MOI',
+  'C-MOI',
+  'CDMA',
+  'GD',
+];
+
 export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
   isOpen,
   onClose,
@@ -549,17 +598,18 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     return isDocumentRequired(currentClassification);
   }, [currentClassification]);
 
-  // Document file upload handler
+  // Document file upload handler (with automatic cloud upload & Base64 Data URL fallback)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const fileName = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
     handleFieldChange('المستند', fileName);
-    // Background upload to Supabase Storage
+    // Background upload to Supabase Storage (with fallback to resilient Base64 Data URL)
     uploadAttachment(file, 'documents')
       .then((res) => {
         if (res.success && res.url) {
           handleFieldChange('documentUrl', res.url);
+          handleFieldChange('attachmentUrl', res.url);
         }
       })
       .catch((err) => console.warn('Supabase attachment upload:', err));
@@ -567,6 +617,8 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
   const handleRemoveDocument = () => {
     handleFieldChange('المستند', '');
+    handleFieldChange('documentUrl', '');
+    handleFieldChange('attachmentUrl', '');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -868,6 +920,208 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     });
   };
 
+  // ── Edit Mode Dropdown Reference Options & Cascading Handlers ──
+  const availableZoneSectorOptions = useMemo(() => {
+    const set = new Set(WE_ZONE_SECTOR_OPTIONS);
+    const cur = String(formData['قطاع المناطق'] || formData['Zone'] || masterRecord?.['قطاع المناطق'] || masterRecord?.['Zone'] || '').trim();
+    if (cur && cur !== '-' && cur !== '0') set.add(cur);
+    return Array.from(set);
+  }, [formData['قطاع المناطق'], formData['Zone'], masterRecord]);
+
+  const availableExecSectorOptions = useMemo(() => {
+    const set = new Set(WE_EXECUTION_SECTOR_OPTIONS);
+    const cur = String(formData['Exc sector'] || formData['قطاع التنفيذ'] || formData['Sectores'] || masterRecord?.['Exc sector'] || masterRecord?.['قطاع التنفيذ'] || '').trim();
+    if (cur && cur !== '-' && cur !== '0') set.add(cur);
+    return Array.from(set);
+  }, [formData['Exc sector'], formData['قطاع التنفيذ'], formData['Sectores'], masterRecord]);
+
+  const availableTypeOptions = useMemo(() => {
+    const set = new Set(WE_TYPE_OPTIONS);
+    const cur = String(formData['Type'] || formData['النوع'] || masterRecord?.['Type'] || masterRecord?.['النوع'] || '').trim();
+    if (cur && cur !== '-' && cur !== '0') set.add(cur);
+    return Array.from(set);
+  }, [formData['Type'], formData['النوع'], masterRecord]);
+
+  const editCurrentSector = useMemo(() => {
+    return String(formData['Exc sector'] || formData['قطاع التنفيذ'] || masterRecord?.['Exc sector'] || masterRecord?.['قطاع التنفيذ'] || '').trim();
+  }, [formData['Exc sector'], formData['قطاع التنفيذ'], masterRecord]);
+
+  const editGenAdminOptions = useMemo(() => {
+    let list: string[] = [];
+    if (editCurrentSector.includes('الإسكندرية') || editCurrentSector.includes('اسكندر') || editCurrentSector.includes('الساحل')) {
+      list = ['تنفيذ شبكات الاسكندريه', 'تنفيذ شبكات الساحل'];
+    } else if (editCurrentSector.includes('الغربية') || editCurrentSector.includes('غرب') || editCurrentSector.includes('وسط')) {
+      list = ['الادارة العامة لتنفيذ شبكات غرب الدلتا', 'الادارة العامة لتنفيذ شبكات وسط الدلتا'];
+    } else if (editCurrentSector.includes('الشرقية') || editCurrentSector.includes('شرق') || editCurrentSector.includes('القناة')) {
+      list = ['الاداة العامة لتنفيذ شرق الدلتا 1', 'الادارة العامة لتنفيذ شرق الدلتا 2', 'الادارة العامة لتنفيذ مدن القناة وسيناء'];
+    } else if (editCurrentSector.includes('القاهرة') || editCurrentSector.includes('الجيزة')) {
+      list = [
+        'الإداره العامه الأولي القاهره الكبري',
+        'الإداره العامه الثانية القاهره الكبري',
+        'الادارة العامة لتنفيذ شرق الدلتا 2',
+        'السلام',
+        'القاهره الجديده',
+      ];
+    } else if (editCurrentSector.includes('الجنوبية') || editCurrentSector.includes('قبلي') || editCurrentSector.includes('الصعيد')) {
+      list = [
+        'الادارة العامة الاولي تنفيذ قبلي',
+        'الادارة العامة الثانية تنفيذ قبلي',
+        'الادارة العامة الثالثة تنفيذ قبلي',
+      ];
+    } else {
+      list = Object.keys(WE_GEN_TO_COMP_ADMINS);
+    }
+
+    if (Array.isArray(sitesData)) {
+      const set = new Set(list);
+      sitesData.forEach((s) => {
+        const sec = String(s['قطاع التنفيذ'] || s['Exc sector'] || s['Sectores'] || s.sector || '').trim();
+        const gen = String(s['الادارة العامة لتنفيذ الشبكات'] || s['الادارة العامة للمنطقة'] || s['الادارة العامة'] || s.generalAdmin || '').trim();
+        if (sec === editCurrentSector && gen && gen !== '-' && gen !== '0') {
+          set.add(gen);
+        }
+      });
+      list = Array.from(set);
+    }
+
+    const cur = String(formData['الادارة العامة لتنفيذ الشبكات'] || formData['الادارة العامة للمنطقة'] || masterRecord?.['الادارة العامة لتنفيذ الشبكات'] || '').trim();
+    const set = new Set(list);
+    if (cur && cur !== '-' && cur !== '0') set.add(cur);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [editCurrentSector, formData['الادارة العامة لتنفيذ الشبكات'], formData['الادارة العامة للمنطقة'], masterRecord, sitesData]);
+
+  const editCurrentGenAdmin = useMemo(() => {
+    return String(formData['الادارة العامة لتنفيذ الشبكات'] || formData['الادارة العامة للمنطقة'] || masterRecord?.['الادارة العامة لتنفيذ الشبكات'] || '').trim();
+  }, [formData['الادارة العامة لتنفيذ الشبكات'], formData['الادارة العامة للمنطقة'], masterRecord]);
+
+  const editCompAdminOptions = useMemo(() => {
+    let list: string[] = [];
+    if (editCurrentGenAdmin && WE_GEN_TO_COMP_ADMINS[editCurrentGenAdmin]) {
+      list = [...WE_GEN_TO_COMP_ADMINS[editCurrentGenAdmin]];
+    } else if (editCurrentSector) {
+      if (editCurrentSector.includes('الإسكندرية') || editCurrentSector.includes('اسكندر') || editCurrentSector.includes('الساحل')) {
+        list = [
+          'ادارة تنفيذ اسكندرية الاولى',
+          'ادارة تنفيذ اسكندرية الثانية',
+          'ادارة تنفيذ اسكندرية الثالثة',
+          'ادارة تنفيذ الساحل الاولى',
+          'ادارة تنفيذ الساحل الثانية',
+          'ادارة تنفيذ الساحل الثالثة',
+        ];
+      } else if (editCurrentSector.includes('الغربية') || editCurrentSector.includes('غرب') || editCurrentSector.includes('وسط')) {
+        list = [
+          'إدارة تنفيذ شبكات المنوفية',
+          'ادارة تنفيذ البحيرة الاولى',
+          'ادارة تنفيذ البحيرة الثانية',
+          'الغربية الأولى',
+          'الغربية الثانية',
+          'المنوفية',
+          'تنفيذ كفر الشيخ',
+        ];
+      } else if (editCurrentSector.includes('الشرقية') || editCurrentSector.includes('شرق') || editCurrentSector.includes('القناة')) {
+        list = [
+          'اداره تنفيذ الاسماعيليه وبورسعيد وشمال سيناء',
+          'اداره تنفيذ البحر الاحمر',
+          'اداره تنفيذ الدقهليه الاولى',
+          'اداره تنفيذ الدقهليه الثانيه',
+          'اداره تنفيذ السويس وجنوب سيناء',
+          'اداره تنفيذ الشرقيه الاولى',
+          'اداره تنفيذ الشرقيه الثانيه',
+          'اداره تنفيذ القليوبيه',
+          'اداره تنفيذ دمياط',
+        ];
+      } else if (editCurrentSector.includes('القاهرة') || editCurrentSector.includes('الجيزة')) {
+        list = [
+          'ادارة تنفيذ شرق الإولي',
+          'ادارة تنفيذ شرق الثانية',
+          'ادارة تنفيذ غرب الإولي',
+          'ادارة تنفيذ غرب الثانية',
+          'ادارة تنقيذ القاهرة الجديدة الأولي',
+          'ادارة تنقيذ القاهرة الجديدة الثانية',
+          'ادارة تنقيذ القاهرة الجديدة الثالثة',
+          'مدير اداره تنفيذ القليوبيه',
+        ];
+      } else if (editCurrentSector.includes('الجنوبية') || editCurrentSector.includes('قبلي') || editCurrentSector.includes('الصعيد')) {
+        list = [
+          'ادارة تنفيذ اسوان',
+          'ادارة تنفيذ اسيوط',
+          'ادارة تنفيذ الاقصر',
+          'ادارة تنفيذ الفيوم',
+          'ادارة تنفيذ المنيا',
+          'ادارة تنفيذ الوادى الجديد',
+          'ادارة تنفيذ بنى سويف',
+          'ادارة تنفيذ سوهاج',
+          'ادارة تنفيذ قنا',
+        ];
+      }
+    }
+
+    if (Array.isArray(sitesData)) {
+      const set = new Set(list);
+      sitesData.forEach((s) => {
+        const sec = String(s['قطاع التنفيذ'] || s['Exc sector'] || s['Sectores'] || s.sector || '').trim();
+        const comp = String(s['ادارة التنفيذ الفرعية'] || s['اداره التنفيذ المختصه'] || s['إدارة التنفيذ المختصة'] || s.competentAdmin || '').trim();
+        if (sec === editCurrentSector && comp && comp !== '-' && comp !== '0') {
+          set.add(comp);
+        }
+      });
+      list = Array.from(set);
+    }
+
+    const cur = String(formData['ادارة التنفيذ الفرعية'] || formData['اداره التنفيذ المختصه'] || formData['إدارة التنفيذ المختصة'] || masterRecord?.['ادارة التنفيذ الفرعية'] || masterRecord?.['اداره التنفيذ المختصه'] || '').trim();
+    const set = new Set(list);
+    if (cur && cur !== '-' && cur !== '0') set.add(cur);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [editCurrentGenAdmin, editCurrentSector, formData['ادارة التنفيذ الفرعية'], formData['اداره التنفيذ المختصه'], formData['إدارة التنفيذ المختصة'], masterRecord, sitesData]);
+
+  // Edit Mode Specific Cascading Handlers
+  const handleEditZoneSectorChange = (newZone: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      'قطاع المناطق': newZone,
+      'Zone': newZone,
+    }));
+  };
+
+  const handleEditExecSectorChange = (newSec: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      'Exc sector': newSec,
+      'قطاع التنفيذ': newSec,
+      'Sectores': newSec,
+      'Sectore': newSec,
+      // reset cascading children when sector changes
+      'الادارة العامة لتنفيذ الشبكات': '',
+      'الادارة العامة للمنطقة': '',
+      'Exc Zone': '',
+      'ادارة التنفيذ الفرعية': '',
+      'اداره التنفيذ المختصه': '',
+      'إدارة التنفيذ المختصة': '',
+    }));
+  };
+
+  const handleEditGenAdminChange = (newGen: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      'الادارة العامة لتنفيذ الشبكات': newGen,
+      'الادارة العامة للمنطقة': newGen,
+      'Exc Zone': newGen,
+      // reset sub execution department when general admin changes
+      'ادارة التنفيذ الفرعية': '',
+      'اداره التنفيذ المختصه': '',
+      'إدارة التنفيذ المختصة': '',
+    }));
+  };
+
+  const handleEditCompAdminChange = (newComp: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      'ادارة التنفيذ الفرعية': newComp,
+      'اداره التنفيذ المختصه': newComp,
+      'إدارة التنفيذ المختصة': newComp,
+    }));
+  };
+
   // Sector permission evaluation for the selected record
   const permissionInfo = useMemo(() => {
     if (activeMode === 'add') {
@@ -937,6 +1191,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
     const blank: WeRecord = {
       'site code': customCode.trim().toUpperCase(),
+      site_code: customCode.trim().toUpperCase(),
       'Exc Sectores': 'المنطقة الشرقية والغربية',
       'رئاسة قطاعات التنفيذ': 'المنطقة الشرقية والغربية',
       'رئاسة القطاعات': 'المنطقة الشرقية والغربية',
@@ -944,8 +1199,9 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       'قطاع التنفيذ': 'قطاع الإسكندرية والساحل',
       'Sectores': 'قطاع الإسكندرية والساحل',
       'Sectore': 'قطاع الإسكندرية والساحل',
-      'Exc Zone': 'تنفيذ شبكات الإسكندرية',
+      'Exc Zone': 'تنفيذ شبكات الاسكندريه',
       'Zone': 'الإسكندرية والساحل',
+      'قطاع المناطق': 'الإسكندرية والساحل',
       'الادارة العامة لتنفيذ الشبكات': 'تنفيذ شبكات الاسكندريه',
       'الادارة العامة للمنطقة': 'تنفيذ شبكات الاسكندريه',
       'الادارة العامة': 'تنفيذ شبكات الاسكندريه',
@@ -954,7 +1210,6 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       'ادارة التنفيذ الفرعية': 'ادارة تنفيذ اسكندرية الاولى',
       'السنترال': 'سنترال رئيسي',
       'Type': 'New',
-      'المسئولية': 'المصرية للاتصالات',
       'Site Status': 'ON AIR',
       'التصنيف': 'جاري مدني',
       'اسباب التعذر': 'لا يوجد تعذر',
@@ -993,10 +1248,43 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
         setMasterRecord(record);
         setActiveMode('edit');
 
+        const zoneVal = record['قطاع المناطق'] || record['Zone'] || inMemorySite?.zone || '';
+        const execSecVal = record['قطاع التنفيذ'] || record['Exc sector'] || record['Sectores'] || inMemorySite?.sector || '';
+        const genAdminVal = record['الادارة العامة لتنفيذ الشبكات'] || record['الادارة العامة للمنطقة'] || record['Exc Zone'] || inMemorySite?.generalAdmin || '';
+        const compAdminVal = record['ادارة التنفيذ الفرعية'] || record['اداره التنفيذ المختصه'] || record['إدارة التنفيذ المختصة'] || inMemorySite?.competentAdmin || '';
+        const typeVal = record['Type'] || record['النوع'] || inMemorySite?.classification || 'New';
+        const planVal = record['خطة'] || record['Plan'] || inMemorySite?.plan || new Date().getFullYear().toString();
+        const centralVal = record['السنترال'] || inMemorySite?.central || '';
+        const docUrlVal = record.documentUrl || record.attachmentUrl || inMemorySite?.documentUrl || '';
+        const docVal = record['المستند'] || inMemorySite?.documentRef || (docUrlVal ? `Doc-${normCode}.pdf` : '');
+
         const initial: WeRecord = {
           ...record,
           _id: record._id || (record as any).id || '',
+          'site code': normCode,
+          site_code: normCode,
+          'قطاع المناطق': zoneVal,
+          'Zone': zoneVal,
+          'قطاع التنفيذ': execSecVal,
+          'Exc sector': execSecVal,
+          'Sectores': execSecVal,
+          'Sectore': execSecVal,
+          'الادارة العامة لتنفيذ الشبكات': genAdminVal,
+          'الادارة العامة للمنطقة': genAdminVal,
+          'Exc Zone': genAdminVal,
+          'ادارة التنفيذ الفرعية': compAdminVal,
+          'اداره التنفيذ المختصه': compAdminVal,
+          'إدارة التنفيذ المختصة': compAdminVal,
+          'Type': typeVal,
+          'خطة': planVal,
+          'السنترال': centralVal,
+          documentUrl: docUrlVal,
+          attachmentUrl: docUrlVal,
         };
+        if (docVal) {
+          initial['المستند'] = docVal;
+        }
+
         sortedFields.forEach((f) => {
           if (initial[f.csvColumn] === undefined) {
             initial[f.csvColumn] = record[f.csvColumn] || '';
@@ -1039,15 +1327,20 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
         const fallback: WeRecord = {
           'site code': inMemorySite.siteCode,
+          site_code: inMemorySite.siteCode,
           'Exc sector': inMemorySite.sector || userDefaultSector,
+          'قطاع التنفيذ': inMemorySite.sector || userDefaultSector,
           'Sectores': inMemorySite.sector || userDefaultSector,
           'Sectore': inMemorySite.sector || userDefaultSector,
-          'السنترال': inMemorySite.central || '',
-          'الادارة العامة لتنفيذ الشبكات': inMemorySite.generalAdmin || '',
-          'اداره التنفيذ المختصه': inMemorySite.competentAdmin || '',
-          'Zone': inMemorySite.competentAdmin || '',
+          'قطاع المناطق': inMemorySite.zone || inMemorySite.sector || userDefaultSector,
+          'Zone': inMemorySite.zone || inMemorySite.competentAdmin || '',
           'Exc Zone': inMemorySite.generalAdmin || '',
-          'المسئولية': inMemorySite.civilContractor || '',
+          'الادارة العامة لتنفيذ الشبكات': inMemorySite.generalAdmin || '',
+          'الادارة العامة للمنطقة': inMemorySite.generalAdmin || '',
+          'اداره التنفيذ المختصه': inMemorySite.competentAdmin || '',
+          'إدارة التنفيذ المختصة': inMemorySite.competentAdmin || '',
+          'ادارة التنفيذ الفرعية': inMemorySite.competentAdmin || '',
+          'السنترال': inMemorySite.central || '',
           'Type': inMemorySite.classification || 'FTTS',
           'Site Status': cleanSiteStatus,
           'التصنيف': normalizeClassification(inMemorySite.classification || 'جاري مدني'),
@@ -1055,6 +1348,10 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
           'نسبة الإنجاز %': String(inMemorySite.progressPercent || 0),
           'التاريخ المتوقع للانتهاء': inMemorySite.expectedDate || '',
           'الملاحظات': inMemorySite.notes || '',
+          'خطة': inMemorySite.plan || new Date().getFullYear().toString(),
+          documentUrl: inMemorySite.documentUrl || '',
+          attachmentUrl: inMemorySite.documentUrl || '',
+          'المستند': inMemorySite.documentRef || (inMemorySite.documentUrl ? `Doc-${normCode}.pdf` : ''),
           _id: inMemorySite.id || '',
         };
         setMasterRecord(fallback);
@@ -1092,22 +1389,55 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       setMasterRecord(initialRecord);
       setActiveMode('edit');
 
+      const normCode = String(initialRecord['site code'] || initialRecord.site_code || '').trim();
       const inMemorySite = sitesData?.find(
-        (s) => String(s?.siteCode || '').toUpperCase() === String(initialRecord['site code'] || '').toUpperCase()
+        (s) => String(s?.siteCode || '').toUpperCase() === normCode.toUpperCase()
       );
       const recordedTasneef =
         initialRecord['التصنيف'] ||
         inMemorySite?.classification ||
         'جاري مدني';
 
+      const zoneVal = initialRecord['قطاع المناطق'] || initialRecord['Zone'] || inMemorySite?.zone || '';
+      const execSecVal = initialRecord['قطاع التنفيذ'] || initialRecord['Exc sector'] || initialRecord['Sectores'] || inMemorySite?.sector || '';
+      const genAdminVal = initialRecord['الادارة العامة لتنفيذ الشبكات'] || initialRecord['الادارة العامة للمنطقة'] || initialRecord['Exc Zone'] || inMemorySite?.generalAdmin || '';
+      const compAdminVal = initialRecord['ادارة التنفيذ الفرعية'] || initialRecord['اداره التنفيذ المختصه'] || initialRecord['إدارة التنفيذ المختصة'] || inMemorySite?.competentAdmin || '';
+      const typeVal = initialRecord['Type'] || initialRecord['النوع'] || inMemorySite?.classification || 'New';
+      const planVal = initialRecord['خطة'] || initialRecord['Plan'] || inMemorySite?.plan || new Date().getFullYear().toString();
+      const centralVal = initialRecord['السنترال'] || inMemorySite?.central || '';
+      const docUrlVal = initialRecord.documentUrl || initialRecord.attachmentUrl || inMemorySite?.documentUrl || '';
+      const docVal = initialRecord['المستند'] || inMemorySite?.documentRef || (docUrlVal ? `Doc-${normCode}.pdf` : '');
+
       const normRecord = {
         ...initialRecord,
         _id: initialRecord._id || (initialRecord as any).id || '',
+        'site code': normCode,
+        site_code: normCode,
+        'قطاع المناطق': zoneVal,
+        'Zone': zoneVal,
+        'قطاع التنفيذ': execSecVal,
+        'Exc sector': execSecVal,
+        'Sectores': execSecVal,
+        'Sectore': execSecVal,
+        'الادارة العامة لتنفيذ الشبكات': genAdminVal,
+        'الادارة العامة للمنطقة': genAdminVal,
+        'Exc Zone': genAdminVal,
+        'ادارة التنفيذ الفرعية': compAdminVal,
+        'اداره التنفيذ المختصه': compAdminVal,
+        'إدارة التنفيذ المختصة': compAdminVal,
+        'Type': typeVal,
+        'خطة': planVal,
+        'السنترال': centralVal,
+        documentUrl: docUrlVal,
+        attachmentUrl: docUrlVal,
         'التصنيف': normalizeClassification(recordedTasneef),
         'اسباب التعذر': initialRecord['اسباب التعذر'] || inMemorySite?.obstacleReason || '',
         'الملاحظات': initialRecord['الملاحظات'] || inMemorySite?.notes || '',
         'التاريخ المتوقع للانتهاء': initialRecord['التاريخ المتوقع للانتهاء'] || inMemorySite?.expectedDate || '',
       };
+      if (docVal) {
+        normRecord['المستند'] = docVal;
+      }
       setFormData(normRecord);
       setStep('fill-form');
       setErrors({});
@@ -1132,12 +1462,6 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
   // Handle Field Change
   const handleFieldChange = (csvColumn: string, value: string) => {
     if (isReadOnly) return;
-
-    // Strict immutability check for Sector users in edit mode:
-    // Notice: 'التصنيف' is NOT immutable here because the user selects it in Line 2 to drive conditional fields
-    if (activeMode === 'edit' && !isAdmin && isFieldImmutableForSector(csvColumn)) {
-      return;
-    }
 
     setFormData((prev) => ({
       ...prev,
@@ -1266,29 +1590,35 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       const isEdit = activeMode === 'edit';
       const dataToSave = { ...formData };
 
-      // Strictly preserve immutable baseline fields for Sector users:
-      // Site Status in Line 1 is also locked for sector officer as requested
-      if (isEdit && !isAdmin && masterRecord) {
-        IMMUTABLE_FIELDS_FOR_SECTOR.forEach((col) => {
-          if (masterRecord[col] !== undefined && masterRecord[col] !== '') {
-            dataToSave[col] = masterRecord[col];
-          }
-        });
-        // Ensure the chosen Classification from Line 2 is preserved
-        if (formData['التصنيف']) {
-          dataToSave['التصنيف'] = formData['التصنيف'];
-        }
+      // Ensure consistent aliases for sector, zone, and administrations
+      if (dataToSave['قطاع التنفيذ']) {
+        dataToSave['Exc sector'] = dataToSave['قطاع التنفيذ'];
+        dataToSave['Sectores'] = dataToSave['قطاع التنفيذ'];
+        dataToSave['Sectore'] = dataToSave['قطاع التنفيذ'];
       }
+      if (dataToSave['قطاع المناطق']) {
+        dataToSave['Zone'] = dataToSave['قطاع المناطق'];
+      }
+      if (dataToSave['الادارة العامة لتنفيذ الشبكات']) {
+        dataToSave['الادارة العامة للمنطقة'] = dataToSave['الادارة العامة لتنفيذ الشبكات'];
+        dataToSave['Exc Zone'] = dataToSave['الادارة العامة لتنفيذ الشبكات'];
+      }
+      if (dataToSave['ادارة التنفيذ الفرعية']) {
+        dataToSave['اداره التنفيذ المختصه'] = dataToSave['ادارة التنفيذ الفرعية'];
+        dataToSave['إدارة التنفيذ المختصة'] = dataToSave['ادارة التنفيذ الفرعية'];
+      }
+
+      // Clean up legacy responsibility fields completely
+      delete (dataToSave as any)['المسئولية'];
+      delete (dataToSave as any)['مسئولية التنفيذ'];
+      delete (dataToSave as any)['مسؤولية التنفيذ'];
+      delete (dataToSave as any)['مسؤول التنفيذ'];
+      delete (dataToSave as any)['مسئول التنفيذ'];
 
       if (user && user.role !== 'admin' && user.sector && user.sector !== 'ALL') {
         dataToSave['Exc sector'] = user.sector;
         dataToSave['Sectores'] = user.sector;
         dataToSave['Exc Sectores'] = user.sector;
-      }
-
-      if (!dataToSave['المسئولية'] && !dataToSave['مسئولية التنفيذ']) {
-        dataToSave['المسئولية'] = 'المصرية للاتصالات';
-        dataToSave['مسئولية التنفيذ'] = 'المصرية للاتصالات';
       }
 
       const result = await saveRecord(dataToSave, forceUpdate, isEdit);
@@ -1727,102 +2057,154 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                       )}
                     </div>
 
-                    {isAdmin && adminFullEditMode ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs bg-purple-50/50 p-3 rounded-xl border border-purple-200">
-                        <div>
-                          <label className="text-[11px] text-purple-900 block font-bold mb-1">كود الموقع (Site Code)</label>
-                          <input
-                            type="text"
-                            value={formData['site code'] || masterRecord?.['site code'] || ''}
-                            onChange={(e) => handleFieldChange('site code', e.target.value)}
-                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-blue-700 focus:outline-none focus:ring-1 focus:ring-purple-400"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] text-purple-900 block font-bold mb-1">قطاع التنفيذ</label>
-                          <input
-                            type="text"
-                            value={formData['Exc sector'] || formData['Sectores'] || masterRecord?.['Exc sector'] || ''}
-                            onChange={(e) => handleFieldChange('Exc sector', e.target.value)}
-                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-400"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] text-purple-900 block font-bold mb-1">قطاع المناطق</label>
-                          <input
-                            type="text"
-                            value={formData['Zone'] || formData['قطاع المناطق'] || masterRecord?.['Zone'] || ''}
-                            onChange={(e) => handleFieldChange('Zone', e.target.value)}
-                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-400"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] text-purple-900 block font-bold mb-1">إدارة الشبكات</label>
-                          <input
-                            type="text"
-                            value={formData['Exc Zone'] || formData['اداره التنفيذ المختصه'] || masterRecord?.['Exc Zone'] || ''}
-                            onChange={(e) => handleFieldChange('Exc Zone', e.target.value)}
-                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-400"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] text-purple-900 block font-bold mb-1">مسؤولية التنفيذ</label>
-                          <input
-                            type="text"
-                            value={formData['المسئولية'] || formData['مسئولية التنفيذ'] || masterRecord?.['المسئولية'] || ''}
-                            onChange={(e) => handleFieldChange('المسئولية', e.target.value)}
-                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-400"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] text-purple-900 block font-bold mb-1">النوع (Type)</label>
-                          <input
-                            type="text"
-                            value={formData['Type'] || formData['النوع'] || masterRecord?.['Type'] || ''}
-                            onChange={(e) => handleFieldChange('Type', e.target.value)}
-                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-400"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] text-purple-900 block font-bold mb-1">الخطة (Plan)</label>
-                          <input
-                            type="text"
-                            value={formData['خطة'] || formData['Plan'] || masterRecord?.['خطة'] || ''}
-                            onChange={(e) => handleFieldChange('خطة', e.target.value)}
-                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-400"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] text-purple-900 block font-bold mb-1">السنترال</label>
-                          <input
-                            type="text"
-                            value={formData['السنترال'] || masterRecord?.['السنترال'] || ''}
-                            onChange={(e) => handleFieldChange('السنترال', e.target.value)}
-                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-400"
-                          />
-                        </div>
+                    {/* ── نموذج تعديل بيانات الموقع الأساسية ── */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs bg-slate-50/70 p-3.5 rounded-xl border border-slate-200">
+                      {/* 1. كود الموقع */}
+                      <div>
+                        <label className="text-[11px] text-slate-800 block font-bold mb-1 flex items-center justify-between">
+                          <span>كود الموقع (Site Code)</span>
+                          <span className="text-[10px] text-blue-600 font-mono">* إلزامي</span>
+                        </label>
+                        <input
+                          type="text"
+                          disabled={isReadOnly}
+                          value={formData['site code'] || masterRecord?.['site code'] || ''}
+                          onChange={(e) => handleFieldChange('site code', e.target.value.toUpperCase())}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-blue-700 uppercase focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-100 disabled:text-slate-500 shadow-2xs"
+                          placeholder="Site Code"
+                        />
                       </div>
-                    ) : (
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
-                        {[
-                          { label: 'كود الموقع', val: formData['site code'] || masterRecord?.['site code'] || '—', isCode: true },
-                          { label: 'قطاع التنفيذ', val: formData['Exc sector'] || formData['Sectores'] || masterRecord?.['Exc sector'] || '—' },
-                          { label: 'قطاع المناطق', val: formData['Zone'] || formData['قطاع المناطق'] || masterRecord?.['Zone'] || '—' },
-                          { label: 'إدارة الشبكات', val: formData['Exc Zone'] || formData['اداره التنفيذ المختصه'] || masterRecord?.['Exc Zone'] || '—' },
-                          { label: 'مسؤولية التنفيذ', val: formData['المسئولية'] || formData['مسئولية التنفيذ'] || masterRecord?.['المسئولية'] || '—' },
-                          { label: 'النوع', val: formData['Type'] || formData['النوع'] || masterRecord?.['Type'] || '—' },
-                          { label: 'الخطة', val: formData['خطة'] || formData['Plan'] || masterRecord?.['خطة'] || '—' },
-                          { label: 'السنترال', val: formData['السنترال'] || masterRecord?.['السنترال'] || '—' },
-                        ].map((item, i) => (
-                          <div key={i} className="bg-white border border-slate-200 rounded-xl p-2.5 shadow-2xs hover:border-blue-200 transition">
-                            <span className="text-[10px] text-slate-400 block font-semibold mb-0.5">{item.label}</span>
-                            <span className={`font-bold text-slate-900 text-xs sm:text-sm truncate block ${item.isCode ? 'font-mono text-blue-700' : ''}`} title={item.val}>
-                              {item.val}
-                            </span>
-                          </div>
-                        ))}
+
+                      {/* 2. قطاع المناطق (Independent Dropdown) */}
+                      <div>
+                        <label className="text-[11px] text-slate-800 block font-bold mb-1 flex items-center justify-between">
+                          <span>قطاع المناطق</span>
+                          <span className="text-[10px] text-slate-400">مستقل</span>
+                        </label>
+                        <select
+                          disabled={isReadOnly}
+                          value={formData['قطاع المناطق'] || formData['Zone'] || masterRecord?.['قطاع المناطق'] || masterRecord?.['Zone'] || ''}
+                          onChange={(e) => handleEditZoneSectorChange(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-100 disabled:text-slate-500 shadow-2xs cursor-pointer"
+                        >
+                          <option value="">-- اختر قطاع المناطق --</option>
+                          {availableZoneSectorOptions.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                    )}
+
+                      {/* 3. قطاع التنفيذ (Independent Dropdown) */}
+                      <div>
+                        <label className="text-[11px] text-slate-800 block font-bold mb-1 flex items-center justify-between">
+                          <span>قطاع التنفيذ</span>
+                          <span className="text-[10px] text-slate-400">مرجعي</span>
+                        </label>
+                        <select
+                          disabled={isReadOnly}
+                          value={formData['قطاع التنفيذ'] || formData['Exc sector'] || formData['Sectores'] || masterRecord?.['قطاع التنفيذ'] || masterRecord?.['Exc sector'] || ''}
+                          onChange={(e) => handleEditExecSectorChange(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-100 disabled:text-slate-500 shadow-2xs cursor-pointer"
+                        >
+                          <option value="">-- اختر قطاع التنفيذ --</option>
+                          {availableExecSectorOptions.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* 4. الإدارة العامة لتنفيذ الشبكات (Cascading Dropdown filtered by قطاع التنفيذ) */}
+                      <div>
+                        <label className="text-[11px] text-slate-800 block font-bold mb-1 flex items-center justify-between">
+                          <span>الإدارة العامة لتنفيذ الشبكات</span>
+                          <span className="text-[10px] text-indigo-600 font-semibold">تابعة للقطاع</span>
+                        </label>
+                        <select
+                          disabled={isReadOnly}
+                          value={formData['الادارة العامة لتنفيذ الشبكات'] || formData['الادارة العامة للمنطقة'] || masterRecord?.['الادارة العامة لتنفيذ الشبكات'] || ''}
+                          onChange={(e) => handleEditGenAdminChange(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-100 disabled:text-slate-500 shadow-2xs cursor-pointer"
+                        >
+                          <option value="">-- اختر الإدارة العامة --</option>
+                          {editGenAdminOptions.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* 5. إدارة التنفيذ الفرعية (Cascading Dropdown filtered by الإدارة العامة) */}
+                      <div>
+                        <label className="text-[11px] text-slate-800 block font-bold mb-1 flex items-center justify-between">
+                          <span>إدارة التنفيذ الفرعية</span>
+                          <span className="text-[10px] text-indigo-600 font-semibold">تابعة للإدارة</span>
+                        </label>
+                        <select
+                          disabled={isReadOnly}
+                          value={formData['ادارة التنفيذ الفرعية'] || formData['اداره التنفيذ المختصه'] || formData['إدارة التنفيذ المختصة'] || masterRecord?.['ادارة التنفيذ الفرعية'] || ''}
+                          onChange={(e) => handleEditCompAdminChange(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-100 disabled:text-slate-500 shadow-2xs cursor-pointer"
+                        >
+                          <option value="">-- اختر إدارة التنفيذ الفرعية --</option>
+                          {editCompAdminOptions.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* 6. النوع / Type (Dropdown from WE_TYPE_OPTIONS) */}
+                      <div>
+                        <label className="text-[11px] text-slate-800 block font-bold mb-1 flex items-center justify-between">
+                          <span>النوع (Type)</span>
+                          <span className="text-[10px] text-slate-400">قائمة الأنواع</span>
+                        </label>
+                        <select
+                          disabled={isReadOnly}
+                          value={formData['Type'] || formData['النوع'] || masterRecord?.['Type'] || 'New'}
+                          onChange={(e) => handleFieldChange('Type', e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-100 disabled:text-slate-500 shadow-2xs cursor-pointer"
+                        >
+                          {availableTypeOptions.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* 7. الخطة (Plan) */}
+                      <div>
+                        <label className="text-[11px] text-slate-800 block font-bold mb-1">الخطة (Plan)</label>
+                        <input
+                          type="text"
+                          disabled={isReadOnly}
+                          value={formData['خطة'] || formData['Plan'] || masterRecord?.['خطة'] || ''}
+                          onChange={(e) => handleFieldChange('خطة', e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-100 disabled:text-slate-500 shadow-2xs"
+                          placeholder="مثال: 2024"
+                        />
+                      </div>
+
+                      {/* 8. السنترال (Central) */}
+                      <div>
+                        <label className="text-[11px] text-slate-800 block font-bold mb-1">السنترال (Exchange)</label>
+                        <input
+                          type="text"
+                          disabled={isReadOnly}
+                          value={formData['السنترال'] || masterRecord?.['السنترال'] || ''}
+                          onChange={(e) => handleFieldChange('السنترال', e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-100 disabled:text-slate-500 shadow-2xs"
+                          placeholder="اسم السنترال"
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   {/* ═══════════════════════════════════════════════════════════════════════════════════ */}
@@ -2561,16 +2943,30 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                               {formData['المستند'] || 'لم يتم إرفاق مستند حتى الآن (يرجى الضغط على زر رفع مستند الإثبات)'}
                             </span>
                           </div>
-                          {formData['المستند'] && (
-                            <button
-                              type="button"
-                              onClick={handleRemoveDocument}
-                              className="text-rose-600 hover:text-rose-800 font-bold mr-2 text-xs cursor-pointer px-2 py-0.5 rounded hover:bg-rose-50"
-                              title="إزالة المستند"
-                            >
-                              ✕ حذف
-                            </button>
-                          )}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {Boolean(formData['documentUrl'] || formData['attachmentUrl'] || masterRecord?.['documentUrl'] || masterRecord?.['attachmentUrl']) && (
+                              <a
+                                href={formData['documentUrl'] || formData['attachmentUrl'] || masterRecord?.['documentUrl'] || masterRecord?.['attachmentUrl']}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 font-bold px-2.5 py-1 rounded text-xs transition"
+                                title="معاينة أو تنزيل المستند المرفق"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                <span>معاينة / تنزيل</span>
+                              </a>
+                            )}
+                            {formData['المستند'] && (
+                              <button
+                                type="button"
+                                onClick={handleRemoveDocument}
+                                className="text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer px-2 py-1 rounded hover:bg-rose-50 transition"
+                                title="إزالة المستند"
+                              >
+                                ✕ حذف
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -2963,16 +3359,30 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                               {formData['المستند'] || 'لم يتم إرفاق مستند حتى الآن (يرجى الضغط على زر رفع مستند الإثبات)'}
                             </span>
                           </div>
-                          {formData['المستند'] && (
-                            <button
-                              type="button"
-                              onClick={handleRemoveDocument}
-                              className="text-rose-600 hover:text-rose-800 font-bold mr-2 text-xs cursor-pointer px-2 py-0.5 rounded hover:bg-rose-50"
-                              title="إزالة المستند"
-                            >
-                              ✕ حذف
-                            </button>
-                          )}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {Boolean(formData['documentUrl'] || formData['attachmentUrl'] || masterRecord?.['documentUrl'] || masterRecord?.['attachmentUrl']) && (
+                              <a
+                                href={formData['documentUrl'] || formData['attachmentUrl'] || masterRecord?.['documentUrl'] || masterRecord?.['attachmentUrl']}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 font-bold px-2.5 py-1 rounded text-xs transition"
+                                title="معاينة أو تنزيل المستند المرفق"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                <span>معاينة / تنزيل</span>
+                              </a>
+                            )}
+                            {formData['المستند'] && (
+                              <button
+                                type="button"
+                                onClick={handleRemoveDocument}
+                                className="text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer px-2 py-1 rounded hover:bg-rose-50 transition"
+                                title="إزالة المستند"
+                              >
+                                ✕ حذف
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
 
