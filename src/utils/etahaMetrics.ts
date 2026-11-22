@@ -30,14 +30,17 @@ export function isEtahaInternalDone(site: any): boolean {
   const raw = site.rawRecord || site;
   const val =
     site.internalPath ||
-    raw['المسار الداخلى'] ||
     raw['المسار الداخلي'] ||
-    raw['المسار_الداخلى'] ||
+    raw['المسار الداخلى'] ||
     raw['المسار_الداخلي'] ||
+    raw['المسار_الداخلى'] ||
     raw['موقف اللحامات'] ||
     raw['موقف_اللحامات'] ||
     '';
   const norm = normalizeArabicText(val);
+  if (!norm || norm.includes('لم يتم') || norm.includes('لم ينته') || norm.includes('معوق') || norm.includes('تعذر')) {
+    return false;
+  }
   return norm.includes('تم الانتهاء') || norm === 'منتهي' || norm === 'تم';
 }
 
@@ -52,9 +55,9 @@ export function isEtahaExternalDone(site: any): boolean {
   const cls = site.excelStatus || site.classification || raw['التصنيف'] || '';
   const normExt = normalizeArabicText(ext);
   const normCls = normalizeArabicText(cls);
+  const isExtCompleted = !normExt.includes('لم يتم') && (normExt.includes('تم الانتهاء') || normExt === 'منتهي');
   return (
-    normExt.includes('تم الانتهاء') ||
-    normExt === 'منتهي' ||
+    isExtCompleted ||
     normCls.includes('تم الانتهاء') ||
     normCls.includes('تم خارجي')
   );

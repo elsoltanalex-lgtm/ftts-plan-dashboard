@@ -566,7 +566,7 @@ export const Filters: React.FC<FiltersProps> = ({
           .filter(Boolean)
       )
     );
-    const order = ['تم الانتهاء', 'تم الانتهاء بالكامل', 'لم يتم البدء', 'جاري العمل'];
+    const order = ['تم الانتهاء بالكامل', 'لم يتم', 'لم يتم الانتهاء من المسار الخارجي', 'مسار خارجي متعذرات او معوقات', 'تم الانتهاء'];
     return list.sort((a, b) => {
       const idxA = order.indexOf(a);
       const idxB = order.indexOf(b);

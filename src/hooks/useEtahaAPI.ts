@@ -7,7 +7,7 @@ import { ETAHA_RAW_RECORDS, type EtahaRecord } from '../data/etahaSites';
 import { supabase, supabaseClients } from '../lib/supabase';
 import { parseToDateInputValue } from '../utils/filterUtils';
 
-const STORAGE_KEY = 'availability_etaha_records_v6_368';
+const STORAGE_KEY = 'availability_etaha_records_v7_368';
 
 let inMemoryEtahaRecords: EtahaRecord[] = [];
 
@@ -135,7 +135,7 @@ export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecor
     progressPercent,
     notes: [r['ملحوظه في حاله عدم الانتهاء'], r['اسم ورقم تليفون مدير الادارة']].filter(Boolean).join(' | '),
     externalPath: String(r['المسار الخارجي'] || r['المسار_الخارجي'] || '').trim(),
-    internalPath: String(r['المسار الداخلى'] || r['المسار_الداخلى'] || r['موقف اللحامات'] || r['موقف_اللحامات'] || '').trim(),
+    internalPath: String(r['المسار الداخلي'] || r['المسار الداخلى'] || r['المسار_الداخلى'] || r['المسار_الداخلي'] || r['موقف اللحامات'] || r['موقف_اللحامات'] || '').trim(),
     deliveryStatus: String(r['موقف التسليم'] || r['موقف_التسليم'] || '').trim(),
     excelStatus: rawStatus || 'إتاحة',
     paymentAndStartDate: parseToDateInputValue(

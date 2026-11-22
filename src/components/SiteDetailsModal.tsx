@@ -733,7 +733,7 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                                   <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
                                     <span className="text-[11px] font-bold text-slate-500 block">موقف المسارات والتسليم</span>
                                     <div><strong className="text-slate-600">المسار الخارجي:</strong> <span className="font-semibold text-teal-800">{raw['المسار الخارجي'] || site.externalPath || 'غير محدد'}</span></div>
-                                    <div><strong className="text-slate-600">المسار الداخلي:</strong> <span className="font-semibold text-teal-800">{raw['المسار الداخلى'] || site.internalPath || 'غير محدد'}</span></div>
+                                    <div><strong className="text-slate-600">المسار الداخلي:</strong> <span className="font-semibold text-teal-800">{raw['المسار الداخلي'] || raw['المسار الداخلى'] || site.internalPath || 'غير محدد'}</span></div>
                                     <div><strong className="text-slate-600">موقف اللحامات:</strong> {raw['موقف اللحامات'] || 'لم يتم'}</div>
                                     <div><strong className="text-slate-600">موقف التسليم:</strong> {raw['موقف التسليم'] || site.deliveryStatus || 'لم يتم'}</div>
                                   </div>

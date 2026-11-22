@@ -70,11 +70,10 @@ const APPROVED_SECTORS = [
 ];
 
 const APPROVED_INTERNAL_PATHS = [
-  'تم الانتهاء',
-  'جاري العمل',
-  'لم يتم البدء',
-  'متوقف علي العميل',
-  'لا يوجد مسار داخلي',
+  'تم الانتهاء بالكامل',
+  'لم يتم',
+  'لم يتم الانتهاء من المسار الخارجي',
+  'مسار خارجي متعذرات او معوقات',
 ];
 
 const APPROVED_EXTERNAL_PATHS = [
@@ -208,7 +207,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
     'قطاع التنفيذ': '',
     'الادارة العامة المنفذة': '',
     'ادارة التنفيذ': '',
-    'المسار الداخلى': 'لم يتم البدء',
+    'المسار الداخلى': 'لم يتم',
     'المسار الخارجي': 'جاري استخراج تصاريح',
     'موقف اللحامات': 'لم يتم البدء',
     'التصنيف': 'جاري العمل',
@@ -476,7 +475,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
   // Check if both internal and external routes are completed
   const internalRoute = String(formData['المسار الداخلى'] || '').trim();
   const externalRoute = String(formData['المسار الخارجي'] || '').trim();
-  const isInternalDone = internalRoute === 'تم الانتهاء';
+  const isInternalDone = internalRoute === 'تم الانتهاء بالكامل' || internalRoute === 'تم الانتهاء';
   const isExternalDone = externalRoute === 'تم الانتهاء';
   const isBothPathsCompleted = isInternalDone && isExternalDone;
 
@@ -502,7 +501,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
         'قطاع التنفيذ': '',
         'الادارة العامة المنفذة': '',
         'ادارة التنفيذ': '',
-        'المسار الداخلى': 'لم يتم البدء',
+        'المسار الداخلى': 'لم يتم',
         'المسار الخارجي': 'جاري استخراج تصاريح',
         'موقف اللحامات': 'لم يتم البدء',
         'التصنيف': 'جاري العمل',
@@ -615,7 +614,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
         'الادارة العامة المنفذة': site?.generalAdmin || '',
         'ادارة التنفيذ': site?.competentAdmin || '',
         المحافظة: site?.governorate || 'الغربية',
-        'المسار الداخلى': site?.rawRecord?.['المسار الداخلى'] || 'لم يتم البدء',
+        'المسار الداخلى': site?.rawRecord?.['المسار الداخلى'] || site?.rawRecord?.['المسار الداخلي'] || site?.internalPath || 'لم يتم',
         'المسار الخارجي': site?.rawRecord?.['المسار الخارجي'] || 'جاري العمل مدني',
         'موقف اللحامات': site?.rawRecord?.['موقف اللحامات'] || 'لم يتم البدء',
         'التصنيف': site?.classification || 'جاري العمل',
