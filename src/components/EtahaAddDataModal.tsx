@@ -55,17 +55,18 @@ export interface EtahaAddDataModalProps {
 
 // Approved Standard Values matching Availability Dataset & Requirements
 const APPROVED_SECTORS = [
+  'المناطق الشرقية',
+  'المناطق الغربية',
+  'قطاعات الشرقية والغربيه',
+  'قطاعات الإسكندرية والساحل',
   'قطاعات المنطقة الشرقية',
   'قطاعات المنطقة الغربية',
   'قطاعات مناطق القاهرة الكبرى',
   'قطاعات المناطق الجنوبية',
-  'قطاعات الإسكندرية والساحل',
-  'قطاع عام',
-  'المناطق الغربية',
-  'المناطق الشرقية',
   'القاهرة الكبرى',
   'المناطق الجنوبية',
   'الإسكندرية والساحل',
+  'قطاع عام',
 ];
 
 const APPROVED_INTERNAL_PATHS = [
@@ -78,27 +79,36 @@ const APPROVED_INTERNAL_PATHS = [
 
 const APPROVED_EXTERNAL_PATHS = [
   'تم الانتهاء',
+  'جاري العمل',
   'جاري استخراج تصاريح',
+  'معوقات',
+  'متعذرات',
+  'متعذر',
   'جاري العمل مدني',
   'جاري السحب واللحام',
-  'معوقات',
-  'متعذر',
   'لم يتم البدء',
 ];
 
 const APPROVED_SPLICING_STATUSES = [
+  'تم الانتهاء بالكامل',
   'تم الانتهاء',
+  'لم يتم',
+  'لم يتم الانتهاء من المسار الخارجي',
+  'مسار خارجي متعذرات او معوقات',
   'جاري اللحام',
   'لم يتم البدء',
 ];
 
 const APPROVED_CLASSIFICATIONS = [
   'تم الانتهاء والتسليم',
-  'جاري العمل',
+  'تم خارجي -متوقف علي العميل',
   'تصاريح',
   'معوقات',
+  'تعذر',
   'متعذرات',
   'متعذر',
+  'جاري خارجي',
+  'جاري العمل',
   'متوقف علي العميل',
   'جاري المعاينة',
 ];
@@ -267,17 +277,28 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
     return list;
   }, [sitesData, cleanStr]);
 
-  // 1. قطاع التنفيذ (Execution Sectors) - Extracted from actual Excel / Supabase records
+  // 1. قطاع التنفيذ (Execution Sectors) - Filtered by selected القطاعات
   const availableExecSectors = useMemo(() => {
+    const selectedSec = cleanStr(formData['القطاعات']);
     const rawOptions: string[] = [];
     for (const item of combinedEtahaHierarchy) {
-      if (item.execSector) rawOptions.push(item.execSector);
+      const matchSec = !selectedSec || !item.sector || item.sector === selectedSec ||
+        item.sector.includes(selectedSec) || selectedSec.includes(item.sector);
+      if (matchSec && item.execSector) {
+        rawOptions.push(item.execSector);
+      }
+    }
+    // Fallback if none matched
+    if (rawOptions.length === 0) {
+      for (const item of combinedEtahaHierarchy) {
+        if (item.execSector) rawOptions.push(item.execSector);
+      }
     }
     const cur = cleanStr(formData['قطاع التنفيذ']);
     if (cur) rawOptions.push(cur);
 
     return deduplicateOptions(rawOptions);
-  }, [combinedEtahaHierarchy, formData['قطاع التنفيذ'], cleanStr]);
+  }, [combinedEtahaHierarchy, formData['القطاعات'], formData['قطاع التنفيذ'], cleanStr]);
 
   // 2. الإدارة العامة للتنفيذ (General Administrations) - Filtered automatically by selected قطاع التنفيذ
   const availableGeneralAdmins = useMemo(() => {
@@ -326,6 +347,27 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
   }, [combinedEtahaHierarchy, formData['قطاع التنفيذ'], formData['الادارة العامة المنفذة'], formData['ادارة التنفيذ'], cleanStr]);
 
   // Cascading Handlers:
+  // When القطاعات changes, validate/reset dependent execution sector, GA and CA
+  const handleSectorChange = (newSec: string) => {
+    const cleanedSec = cleanStr(newSec);
+    const validEs = new Set(
+      combinedEtahaHierarchy
+        .filter((item) => !cleanedSec || !item.sector || item.sector === cleanedSec ||
+          item.sector.includes(cleanedSec) || cleanedSec.includes(item.sector))
+        .map((item) => cleanStr(item.execSector))
+        .filter(Boolean)
+    );
+    const currentEs = cleanStr(formData['قطاع التنفيذ']);
+    const nextEs = validEs.has(currentEs) ? currentEs : '';
+
+    setFormData((prev) => ({
+      ...prev,
+      القطاعات: cleanedSec,
+      'قطاع التنفيذ': nextEs,
+      ...(nextEs ? {} : { 'الادارة العامة المنفذة': '', 'ادارة التنفيذ': '' }),
+    }));
+  };
+
   // When قطاع التنفيذ changes, update and reset dependent GA and CA
   const handleExecSectorChange = (newEs: string) => {
     const cleanedEs = cleanStr(newEs);
@@ -475,6 +517,9 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
         المستند: '',
         'مستند الإثبات': '',
         documentUrl: '',
+        specialTarget: false,
+        'سبيشال تارجت': false,
+        'سبيشال_تارجت': false,
       });
     } else {
       if (initialRecord) {
@@ -485,10 +530,18 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
           initialRecord.paymentAndStartDate ||
           initialRecord.payment_and_start_date
         );
+        const isSpecial = Boolean(
+          initialRecord.specialTarget ||
+          initialRecord['سبيشال تارجت'] ||
+          initialRecord['سبيشال_تارجت']
+        );
         setFormData({
           ...initialRecord,
           'تاريخ السداد والبدء في التنفيذ': pDate,
           'تاريخ السداد و البدء فى التنفيذ': pDate,
+          specialTarget: isSpecial,
+          'سبيشال تارجت': isSpecial,
+          'سبيشال_تارجت': isSpecial,
         });
         setStep('fill-form');
       } else if (initialSiteCode) {
@@ -523,16 +576,30 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
         raw.payment_and_start_date ||
         site?.paymentAndStartDate
       );
+      const isSpecial = Boolean(
+        raw.specialTarget ||
+        raw['سبيشال تارجت'] ||
+        raw['سبيشال_تارجت'] ||
+        site?.specialTarget
+      );
       setFormData({
         ...raw,
         'تاريخ السداد والبدء في التنفيذ': pDate,
         'تاريخ السداد و البدء فى التنفيذ': pDate,
+        specialTarget: isSpecial,
+        'سبيشال تارجت': isSpecial,
+        'سبيشال_تارجت': isSpecial,
       });
     } else {
       const pDate = parseToDateInputValue(
         site?.paymentAndStartDate ||
         site?.rawRecord?.['تاريخ السداد والبدء في التنفيذ'] ||
         site?.rawRecord?.['تاريخ السداد و البدء فى التنفيذ']
+      );
+      const isSpecial = Boolean(
+        site?.specialTarget ||
+        site?.rawRecord?.specialTarget ||
+        site?.rawRecord?.['سبيشال تارجت']
       );
       setFormData((prev) => ({
         ...prev,
@@ -541,6 +608,9 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
         'اسم الفرع': site?.branchName || '',
         العنوان: site?.address || '',
         القطاعات: site?.sector || 'قطاعات المنطقة الغربية',
+        specialTarget: isSpecial,
+        'سبيشال تارجت': isSpecial,
+        'سبيشال_تارجت': isSpecial,
         'قطاع التنفيذ': site?.subSector || '',
         'الادارة العامة المنفذة': site?.generalAdmin || '',
         'ادارة التنفيذ': site?.competentAdmin || '',
@@ -680,9 +750,17 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
         formData['تاريخ السداد و البدء فى التنفيذ'] ||
         ''
       ).trim();
+      const isSpecial = Boolean(
+        formData.specialTarget ||
+        formData['سبيشال تارجت'] ||
+        formData['سبيشال_تارجت']
+      );
 
       const payload: EtahaRecord = {
         ...cleanedData,
+        specialTarget: isSpecial,
+        'سبيشال تارجت': isSpecial,
+        'سبيشال_تارجت': isSpecial,
         'تاريخ السداد والبدء في التنفيذ': paymentDate,
         'تاريخ السداد و البدء فى التنفيذ': paymentDate,
         paymentAndStartDate: paymentDate,
@@ -874,8 +952,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                     setMasterRecord(null);
                   }}
                   className={`px-3 py-1 text-xs font-bold rounded-lg transition ${activeMode === 'add'
-                      ? 'bg-teal-500 text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white'
+                    ? 'bg-teal-500 text-white shadow-sm'
+                    : 'text-slate-300 hover:text-white'
                     }`}
                 >
                   إضافة جديد
@@ -887,8 +965,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                     setStep('select-site');
                   }}
                   className={`px-3 py-1 text-xs font-bold rounded-lg transition ${activeMode === 'edit'
-                      ? 'bg-teal-500 text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white'
+                    ? 'bg-teal-500 text-white shadow-sm'
+                    : 'text-slate-300 hover:text-white'
                     }`}
                 >
                   تعديل مشروع
@@ -912,8 +990,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
               type="button"
               onClick={() => setEntryType('single')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${entryType === 'single'
-                  ? 'text-white bg-teal-700 border border-teal-600 shadow-sm ring-2 ring-teal-500/20'
-                  : 'text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-300'
+                ? 'text-white bg-teal-700 border border-teal-600 shadow-sm ring-2 ring-teal-500/20'
+                : 'text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-300'
                 }`}
             >
               <span>✍️ الخيار الأول: إدخال مشروع فردي (Manual Entry)</span>
@@ -928,8 +1006,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
               type="button"
               onClick={() => setEntryType('bulk')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 group ${entryType === 'bulk'
-                  ? 'text-white bg-teal-700 border border-teal-600 shadow-sm ring-2 ring-teal-500/20 font-black'
-                  : 'text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-300'
+                ? 'text-white bg-teal-700 border border-teal-600 shadow-sm ring-2 ring-teal-500/20 font-black'
+                : 'text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-300'
                 }`}
             >
               <FileSpreadsheet className={`w-3.5 h-3.5 ${entryType === 'bulk' ? 'text-teal-200' : 'text-teal-600 group-hover:scale-110'} transition-transform`} />
@@ -1128,8 +1206,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                       type="button"
                       onClick={() => setBulkFilterStatus('all')}
                       className={`px-3 py-1 rounded-lg transition ${bulkFilterStatus === 'all'
-                          ? 'bg-white text-slate-900 shadow-2xs font-black'
-                          : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-white text-slate-900 shadow-2xs font-black'
+                        : 'text-slate-600 hover:text-slate-900'
                         }`}
                     >
                       الكل ({bulkReport.totalRows})
@@ -1138,8 +1216,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                       type="button"
                       onClick={() => setBulkFilterStatus('valid')}
                       className={`px-3 py-1 rounded-lg transition ${bulkFilterStatus === 'valid'
-                          ? 'bg-emerald-600 text-white shadow-2xs font-black'
-                          : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-emerald-600 text-white shadow-2xs font-black'
+                        : 'text-slate-600 hover:text-slate-900'
                         }`}
                     >
                       الجاهز فقط ({bulkReport.validRows})
@@ -1149,8 +1227,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                         type="button"
                         onClick={() => setBulkFilterStatus('errors')}
                         className={`px-3 py-1 rounded-lg transition ${bulkFilterStatus === 'errors'
-                            ? 'bg-red-600 text-white shadow-2xs font-black'
-                            : 'text-slate-600 hover:text-slate-900'
+                          ? 'bg-red-600 text-white shadow-2xs font-black'
+                          : 'text-slate-600 hover:text-slate-900'
                           }`}
                       >
                         الأخطاء ({bulkReport.invalidRows})
@@ -1409,6 +1487,31 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                       />
                     </div>
+
+                    {/* سبيشال تارجت (Special Target Checkbox) */}
+                    <div className="sm:col-span-3">
+                      <label className="flex items-center gap-2.5 p-3 bg-amber-50/80 hover:bg-amber-100/70 border-2 border-amber-300/80 rounded-xl cursor-pointer transition select-none">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(formData.specialTarget || formData['سبيشال تارجت'] || formData['سبيشال_تارجت'])}
+                          onChange={(e) => {
+                            handleInputChange('specialTarget', e.target.checked);
+                            handleInputChange('سبيشال تارجت', e.target.checked);
+                            handleInputChange('سبيشال_تارجت', e.target.checked);
+                          }}
+                          className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
+                        />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-black text-amber-950 flex items-center gap-1">
+                            <span>⭐</span>
+                            <span>سبيشال تارجت (Special Target)</span>
+                          </span>
+                          <span className="text-[11px] text-amber-700 font-semibold">
+                            - تحديد هذا المشروع كهدف ذو أولوية خاصة واستراتيجية
+                          </span>
+                        </div>
+                      </label>
+                    </div>
                   </div>
                 </div>
 
@@ -1432,11 +1535,11 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                     {/* 1. القطاعات */}
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
-                        1) القطاعات (مثل قطاعات المنطقة الشرقية / قطاعات المنطقة الغربية) <span className="text-rose-500">*</span>
+                        1) رئاسة القطاعات / القطاعات <span className="text-rose-500">*</span>
                       </label>
                       <select
-                        value={formData.القطاعات || 'قطاعات المنطقة الغربية'}
-                        onChange={(e) => handleInputChange('القطاعات', e.target.value)}
+                        value={formData.القطاعات || 'المناطق الشرقية'}
+                        onChange={(e) => handleSectorChange(e.target.value)}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer"
                       >
                         {APPROVED_SECTORS.map((sec) => (
@@ -1549,8 +1652,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                         value={formData['المسار الداخلى'] || 'لم يتم البدء'}
                         onChange={(e) => handleInputChange('المسار الداخلى', e.target.value)}
                         className={`w-full px-3 py-2 border rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer ${isInternalDone
-                            ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                            : 'bg-slate-50 border-slate-300 text-slate-800'
+                          ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                          : 'bg-slate-50 border-slate-300 text-slate-800'
                           }`}
                       >
                         {APPROVED_INTERNAL_PATHS.map((item) => (
@@ -1570,8 +1673,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                         value={formData['المسار الخارجي'] || 'لم يتم البدء'}
                         onChange={(e) => handleInputChange('المسار الخارجي', e.target.value)}
                         className={`w-full px-3 py-2 border rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer ${isExternalDone
-                            ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                            : 'bg-slate-50 border-slate-300 text-slate-800'
+                          ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                          : 'bg-slate-50 border-slate-300 text-slate-800'
                           }`}
                       >
                         {APPROVED_EXTERNAL_PATHS.map((item) => (
@@ -1609,12 +1712,12 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                         value={formData['التصنيف'] || 'جاري العمل'}
                         onChange={(e) => handleClassificationChange(e.target.value)}
                         className={`w-full px-3 py-2 border rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer ${isDeliverySelected
-                            ? 'bg-emerald-50 border-emerald-400 text-emerald-900'
-                            : isBlockedObstacles
-                              ? 'bg-amber-50 border-amber-400 text-amber-900'
-                              : isStalled
-                                ? 'bg-rose-50 border-rose-400 text-rose-900'
-                                : 'bg-indigo-50 border-indigo-300 text-indigo-900'
+                          ? 'bg-emerald-50 border-emerald-400 text-emerald-900'
+                          : isBlockedObstacles
+                            ? 'bg-amber-50 border-amber-400 text-amber-900'
+                            : isStalled
+                              ? 'bg-rose-50 border-rose-400 text-rose-900'
+                              : 'bg-indigo-50 border-indigo-300 text-indigo-900'
                           }`}
                       >
                         {APPROVED_CLASSIFICATIONS.map((item) => (
@@ -1651,8 +1754,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                             <div
                               className={`p-3 rounded-xl border flex items-center justify-between ${isInternalDone
-                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-bold'
-                                  : 'bg-rose-50 border-rose-300 text-rose-800 font-bold'
+                                ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-bold'
+                                : 'bg-rose-50 border-rose-300 text-rose-800 font-bold'
                                 }`}
                             >
                               <span>المسار الداخلي:</span>
@@ -1661,8 +1764,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                             </div>
                             <div
                               className={`p-3 rounded-xl border flex items-center justify-between ${isExternalDone
-                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-bold'
-                                  : 'bg-rose-50 border-rose-300 text-rose-800 font-bold'
+                                ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-bold'
+                                : 'bg-rose-50 border-rose-300 text-rose-800 font-bold'
                                 }`}
                             >
                               <span>المسار الخارجي:</span>

@@ -4,10 +4,10 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { SiteRecord } from '../types/dashboard';
 import { ETAHA_RAW_RECORDS, type EtahaRecord } from '../data/etahaSites';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseClients } from '../lib/supabase';
 import { parseToDateInputValue } from '../utils/filterUtils';
 
-const STORAGE_KEY = 'availability_etaha_records_v4_360';
+const STORAGE_KEY = 'availability_etaha_records_v6_368';
 
 let inMemoryEtahaRecords: EtahaRecord[] = [];
 
@@ -144,6 +144,7 @@ export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecor
       r.paymentAndStartDate ||
       r.payment_and_start_date
     ),
+    specialTarget: Boolean(r.specialTarget || r['سبيشال تارجت'] || r['سبيشال_تارجت']),
     rawRecord: r,
   };
 }
@@ -156,30 +157,32 @@ export function useEtahaAPI() {
   const refetchEtahaRecords = useCallback(async () => {
     setLoading(true);
     try {
-      // Attempt live fetch from Supabase availability tables
-      for (const table of ['etaha_records', 'etaha', 'availability']) {
-        try {
-          const { data, error: sbError } = await supabase.from(table).select('*').limit(5000);
-          if (!sbError && data && data.length > 0) {
-            const baseMap = new Map<string, EtahaRecord>();
-            loadStoredEtahaRecords().forEach((r) => {
-              const c = String(r.Code || r.code || '').trim().toUpperCase();
-              if (c) baseMap.set(c, r);
-            });
-            data.forEach((row: any) => {
-              const rowData = row.data && typeof row.data === 'object' ? row.data : row;
-              const code = String(row.Code || row.code || row.id || rowData.Code || rowData.code || '').trim().toUpperCase();
-              if (code) {
-                const prev = baseMap.get(code) || {};
-                baseMap.set(code, { ...prev, ...rowData, ...row, Code: code });
-              }
-            });
-            const merged = Array.from(baseMap.values());
-            saveStoredEtahaRecords(merged);
-            setEtahaRecords(merged);
-            return;
-          }
-        } catch { }
+      // Attempt live fetch from Supabase availability tables across all clients
+      for (const client of supabaseClients) {
+        for (const table of ['etaha_records', 'etaha', 'availability']) {
+          try {
+            const { data, error: sbError } = await client.from(table).select('*').limit(5000);
+            if (!sbError && data && data.length > 0) {
+              const baseMap = new Map<string, EtahaRecord>();
+              loadStoredEtahaRecords().forEach((r) => {
+                const c = String(r.Code || r.code || '').trim().toUpperCase();
+                if (c) baseMap.set(c, r);
+              });
+              data.forEach((row: any) => {
+                const rowData = row.data && typeof row.data === 'object' ? row.data : row;
+                const code = String(row.Code || row.code || row.id || rowData.Code || rowData.code || '').trim().toUpperCase();
+                if (code) {
+                  const prev = baseMap.get(code) || {};
+                  baseMap.set(code, { ...prev, ...rowData, ...row, Code: code });
+                }
+              });
+              const merged = Array.from(baseMap.values());
+              saveStoredEtahaRecords(merged);
+              setEtahaRecords(merged);
+              return;
+            }
+          } catch { }
+        }
       }
 
       const records = loadStoredEtahaRecords();
@@ -241,44 +244,51 @@ export function useEtahaAPI() {
 
       const paymentDate = enriched['تاريخ السداد والبدء في التنفيذ'] || enriched['تاريخ السداد و البدء فى التنفيذ'] || enriched.paymentAndStartDate || enriched.payment_and_start_date || '';
 
+      const isSpecial = Boolean(enriched.specialTarget || enriched['سبيشال تارجت'] || enriched['سبيشال_تارجت']);
+
       // Persist directly into Supabase availability / etaha tables
-      for (const table of ['etaha_records', 'etaha', 'availability']) {
-        try {
-          const payload: any = {
-            id: code,
-            code: code,
-            Code: code,
-            'المشروع': enriched['المشروع'] || enriched.project || 'اتاحة',
-            'التصنيف': enriched['موقف التسليم'] || enriched.classification || '',
-            'الجهة': enriched['الجهة'] || '',
-            'السنترال': enriched['سنترال الربط'] || enriched.central || '',
-            'القطاع': enriched['رئاسة قطاعات التنفيذ'] || enriched.sector || '',
-            'المحافظة': enriched['المحافظه'] || enriched.governorate || '',
-            'الملاحظات': enriched['الملاحظات'] || enriched.notes || '',
-            'تاريخ السداد والبدء في التنفيذ': paymentDate,
-            'تاريخ السداد و البدء فى التنفيذ': paymentDate,
-            payment_and_start_date: paymentDate,
-            data: enriched,
-            updated_at: now,
-          };
+      for (const client of supabaseClients) {
+        for (const table of ['etaha_records', 'etaha', 'availability']) {
+          try {
+            const payload: any = {
+              id: code,
+              code: code,
+              Code: code,
+              'المشروع': enriched['المشروع'] || enriched.project || 'اتاحة',
+              'التصنيف': enriched['موقف التسليم'] || enriched.classification || '',
+              'الجهة': enriched['الجهة'] || '',
+              'السنترال': enriched['سنترال الربط'] || enriched.central || '',
+              'القطاع': enriched['القطاعات'] || enriched['رئاسة قطاعات التنفيذ'] || enriched.sector || '',
+              'المحافظة': enriched['المحافظه'] || enriched['المحافظة'] || enriched.governorate || '',
+              'الملاحظات': enriched['الملاحظات'] || enriched.notes || '',
+              'تاريخ السداد والبدء في التنفيذ': paymentDate,
+              'تاريخ السداد و البدء فى التنفيذ': paymentDate,
+              payment_and_start_date: paymentDate,
+              specialTarget: isSpecial,
+              'سبيشال تارجت': isSpecial,
+              'سبيشال_تارجت': isSpecial,
+              data: enriched,
+              updated_at: now,
+            };
 
-          if (idx >= 0) {
-            const { data: updateData, error: updateErr } = await supabase
+            if (idx >= 0) {
+              const { data: updateData, error: updateErr } = await client
+                .from(table)
+                .update(payload)
+                .or(`Code.eq."${code}",code.eq."${code}",id.eq."${code}"`)
+                .select();
+              if (!updateErr && updateData && updateData.length > 0) break;
+            }
+
+            const { data: insertData, error: insertErr } = await client
               .from(table)
-              .update(payload)
-              .or(`Code.eq."${code}",code.eq."${code}",id.eq."${code}"`)
+              .insert([payload])
               .select();
-            if (!updateErr && updateData && updateData.length > 0) break;
-          }
+            if (!insertErr && insertData && insertData.length > 0) break;
 
-          const { data: insertData, error: insertErr } = await supabase
-            .from(table)
-            .insert([payload])
-            .select();
-          if (!insertErr && insertData && insertData.length > 0) break;
-
-          await supabase.from(table).upsert(payload, { onConflict: 'id' });
-        } catch { }
+            await client.from(table).upsert(payload, { onConflict: 'id' });
+          } catch { }
+        }
       }
 
       return { success: true };
@@ -295,11 +305,13 @@ export function useEtahaAPI() {
       saveStoredEtahaRecords(filtered);
       setEtahaRecords(filtered);
 
-      // Attempt deletion in Supabase if etaha table exists
-      for (const table of ['etaha', 'etaha_records', 'availability']) {
-        try {
-          await supabase.from(table).delete().or(`Code.eq."${norm}",code.eq."${norm}",id.eq."${norm}"`);
-        } catch { }
+      // Attempt deletion in Supabase if etaha table exists across all clients
+      for (const client of supabaseClients) {
+        for (const table of ['etaha', 'etaha_records', 'availability']) {
+          try {
+            await client.from(table).delete().or(`Code.eq."${norm}",code.eq."${norm}",id.eq."${norm}"`);
+          } catch { }
+        }
       }
 
       return { success: true };
@@ -320,13 +332,15 @@ export function useEtahaAPI() {
       saveStoredEtahaRecords(filtered);
       setEtahaRecords(filtered);
 
-      // Attempt batch deletion in Supabase
+      // Attempt batch deletion in Supabase across all clients
       const codeArray = Array.from(codeSet);
-      for (const table of ['etaha', 'etaha_records', 'availability']) {
-        try {
-          await supabase.from(table).delete().in('Code', codeArray);
-          await supabase.from(table).delete().in('code', codeArray);
-        } catch { }
+      for (const client of supabaseClients) {
+        for (const table of ['etaha', 'etaha_records', 'availability']) {
+          try {
+            await client.from(table).delete().in('Code', codeArray);
+            await client.from(table).delete().in('code', codeArray);
+          } catch { }
+        }
       }
 
       return { success: true, count: current.length - filtered.length };

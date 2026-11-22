@@ -63,6 +63,7 @@ export interface SiteRecord {
   deliveryStatus?: string;
   excelStatus?: string;
   paymentAndStartDate?: string;
+  specialTarget?: boolean;
   rawRecord?: any;
 }
 
@@ -94,6 +95,7 @@ export interface FilterState {
   internalPath?: string | string[];   // المسار الداخلي
   excelStatus?: string | string[];    // موقف الإكسيل (legacy)
   deliveryStatus?: string | string[]; // موقف التسليم
+  specialTarget?: boolean | string;   // سبيشال تارجت
 }
 
 export interface KpiData {

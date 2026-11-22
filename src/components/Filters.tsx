@@ -371,6 +371,7 @@ export const Filters: React.FC<FiltersProps> = ({
       if (toFilterArray(filters.externalPath).length > 0) count += toFilterArray(filters.externalPath).length;
       if (toFilterArray(filters.internalPath).length > 0) count += toFilterArray(filters.internalPath).length;
       if (toFilterArray(filters.deliveryStatus).length > 0) count += toFilterArray(filters.deliveryStatus).length;
+      if (filters.specialTarget) count += 1;
       if (filters.searchQuery) count += 1;
       return count;
     }
