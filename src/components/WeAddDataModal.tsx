@@ -269,6 +269,174 @@ export function getObstaclesSubReason(reasonRaw?: string): ObstaclesSubReason {
   return 'other';
 }
 
+// Canonical WE Sector Hierarchy & Administration Mapping
+export const WE_SECTOR_HIERARCHY: Record<
+  string,
+  Record<
+    string,
+    {
+      genAdmins: string[];
+      compAdmins: string[];
+    }
+  >
+> = {
+  'المنطقة الشرقية والغربية': {
+    'قطاع الإسكندرية والساحل': {
+      genAdmins: ['تنفيذ شبكات الاسكندريه', 'تنفيذ شبكات الساحل'],
+      compAdmins: [
+        'ادارة تنفيذ اسكندرية الاولى',
+        'ادارة تنفيذ اسكندرية الثانية',
+        'ادارة تنفيذ اسكندرية الثالثة',
+        'ادارة تنفيذ الساحل الاولى',
+        'ادارة تنفيذ الساحل الثانية',
+        'ادارة تنفيذ الساحل الثالثة',
+      ],
+    },
+    'قطاع الغربية': {
+      genAdmins: [
+        'الادارة العامة لتنفيذ شبكات غرب الدلتا',
+        'الادارة العامة لتنفيذ شبكات وسط الدلتا',
+      ],
+      compAdmins: [
+        'إدارة تنفيذ شبكات المنوفية',
+        'ادارة تنفيذ البحيرة الاولى',
+        'ادارة تنفيذ البحيرة الثانية',
+        'الغربية الأولى',
+        'الغربية الثانية',
+        'المنوفية',
+        'تنفيذ كفر الشيخ',
+      ],
+    },
+    'قطاع الشرقية': {
+      genAdmins: [
+        'الاداة العامة لتنفيذ شرق الدلتا 1',
+        'الادارة العامة لتنفيذ شرق الدلتا 2',
+        'الادارة العامة لتنفيذ مدن القناة وسيناء',
+      ],
+      compAdmins: [
+        'اداره تنفيذ الاسماعيليه وبورسعيد وشمال سيناء',
+        'اداره تنفيذ البحر الاحمر',
+        'اداره تنفيذ الدقهليه الاولى',
+        'اداره تنفيذ الدقهليه الثانيه',
+        'اداره تنفيذ السويس وجنوب سيناء',
+        'اداره تنفيذ الشرقيه الاولى',
+        'اداره تنفيذ الشرقيه الثانيه',
+        'اداره تنفيذ القليوبيه',
+        'اداره تنفيذ دمياط',
+      ],
+    },
+  },
+  'القاهرة الكبرى والجيزة': {
+    'القاهرة الكبرى والجيزة': {
+      genAdmins: [
+        'الإداره العامه الأولي القاهره الكبري',
+        'الإداره العامه الثانية القاهره الكبري',
+        'الادارة العامة لتنفيذ شرق الدلتا 2',
+        'السلام',
+        'القاهره الجديده',
+      ],
+      compAdmins: [
+        'ادارة تنفيذ شرق الإولي',
+        'ادارة تنفيذ شرق الثانية',
+        'ادارة تنفيذ غرب الإولي',
+        'ادارة تنفيذ غرب الثانية',
+        'ادارة تنقيذ القاهرة الجديدة الأولي',
+        'ادارة تنقيذ القاهرة الجديدة الثانية',
+        'ادارة تنقيذ القاهرة الجديدة الثالثة',
+        'مدير اداره تنفيذ القليوبيه',
+      ],
+    },
+  },
+  'المنطقة الجنوبية': {
+    'المنطقة الجنوبية': {
+      genAdmins: [
+        'الادارة العامة الاولي تنفيذ قبلي',
+        'الادارة العامة الثانية تنفيذ قبلي',
+        'الادارة العامة الثالثة تنفيذ قبلي',
+      ],
+      compAdmins: [
+        'ادارة تنفيذ اسوان',
+        'ادارة تنفيذ اسيوط',
+        'ادارة تنفيذ الاقصر',
+        'ادارة تنفيذ الفيوم',
+        'ادارة تنفيذ المنيا',
+        'ادارة تنفيذ الوادى الجديد',
+        'ادارة تنفيذ بنى سويف',
+        'ادارة تنفيذ سوهاج',
+        'ادارة تنفيذ قنا',
+      ],
+    },
+  },
+};
+
+// General Admin -> Specific Competent Admins mapping
+export const WE_GEN_TO_COMP_ADMINS: Record<string, string[]> = {
+  'تنفيذ شبكات الاسكندريه': [
+    'ادارة تنفيذ اسكندرية الاولى',
+    'ادارة تنفيذ اسكندرية الثانية',
+    'ادارة تنفيذ اسكندرية الثالثة',
+  ],
+  'تنفيذ شبكات الساحل': [
+    'ادارة تنفيذ اسكندرية الثانية',
+    'ادارة تنفيذ الساحل الاولى',
+    'ادارة تنفيذ الساحل الثانية',
+    'ادارة تنفيذ الساحل الثالثة',
+  ],
+  'الادارة العامة لتنفيذ شبكات غرب الدلتا': [
+    'ادارة تنفيذ البحيرة الاولى',
+    'ادارة تنفيذ البحيرة الثانية',
+    'تنفيذ كفر الشيخ',
+  ],
+  'الادارة العامة لتنفيذ شبكات وسط الدلتا': [
+    'إدارة تنفيذ شبكات المنوفية',
+    'الغربية الأولى',
+    'الغربية الثانية',
+    'المنوفية',
+  ],
+  'الاداة العامة لتنفيذ شرق الدلتا 1': [
+    'اداره تنفيذ الدقهليه الاولى',
+    'اداره تنفيذ الدقهليه الثانيه',
+    'اداره تنفيذ دمياط',
+  ],
+  'الادارة العامة لتنفيذ شرق الدلتا 2': [
+    'اداره تنفيذ الشرقيه الاولى',
+    'اداره تنفيذ الشرقيه الثانيه',
+    'اداره تنفيذ القليوبيه',
+    'مدير اداره تنفيذ القليوبيه',
+  ],
+  'الادارة العامة لتنفيذ مدن القناة وسيناء': [
+    'اداره تنفيذ الاسماعيليه وبورسعيد وشمال سيناء',
+    'اداره تنفيذ البحر الاحمر',
+    'اداره تنفيذ السويس وجنوب سيناء',
+  ],
+  'الإداره العامه الأولي القاهره الكبري': [
+    'ادارة تنقيذ القاهرة الجديدة الأولي',
+    'ادارة تنقيذ القاهرة الجديدة الثانية',
+    'ادارة تنقيذ القاهرة الجديدة الثالثة',
+  ],
+  'الإداره العامه الثانية القاهره الكبري': [
+    'ادارة تنفيذ شرق الإولي',
+    'ادارة تنفيذ شرق الثانية',
+    'ادارة تنفيذ غرب الإولي',
+    'ادارة تنفيذ غرب الثانية',
+  ],
+  'الادارة العامة الاولي تنفيذ قبلي': [
+    'ادارة تنفيذ الفيوم',
+    'ادارة تنفيذ المنيا',
+    'ادارة تنفيذ بنى سويف',
+  ],
+  'الادارة العامة الثانية تنفيذ قبلي': [
+    'ادارة تنفيذ اسيوط',
+    'ادارة تنفيذ سوهاج',
+    'ادارة تنفيذ الوادى الجديد',
+  ],
+  'الادارة العامة الثالثة تنفيذ قبلي': [
+    'ادارة تنفيذ اسوان',
+    'ادارة تنفيذ الاقصر',
+    'ادارة تنفيذ قنا',
+  ],
+};
+
 export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
   isOpen,
   onClose,
@@ -412,9 +580,293 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
   // Default sector for new additions
   const userDefaultSector = useMemo(() => {
-    if (!user || user.sector === 'ALL') return 'الإسكندرية';
+    if (!user || user.sector === 'ALL') return 'الإسكندرية والساحل';
     return user.sector;
   }, [user]);
+
+  // Canonical Presidencies list
+  const canonicalPresidencies = useMemo(
+    () => ['المنطقة الشرقية والغربية', 'القاهرة الكبرى والجيزة', 'المنطقة الجنوبية'],
+    []
+  );
+
+  // Available Presidencies: canonical + any custom distinct value from loaded record/sitesData
+  const availablePresidencies = useMemo(() => {
+    const list = [...canonicalPresidencies];
+    const cur = String(formData['Exc Sectores'] || formData['رئاسة قطاعات التنفيذ'] || '').trim();
+    if (cur && !list.includes(cur)) {
+      list.push(cur);
+    }
+    return list;
+  }, [canonicalPresidencies, formData['Exc Sectores'], formData['رئاسة قطاعات التنفيذ']]);
+
+  // Current selected presidency
+  const currentPresidency = useMemo(() => {
+    const val = String(formData['Exc Sectores'] || formData['رئاسة قطاعات التنفيذ'] || '').trim();
+    if (val) return val;
+    return 'المنطقة الشرقية والغربية';
+  }, [formData['Exc Sectores'], formData['رئاسة قطاعات التنفيذ']]);
+
+  // Available Sectors cascading based on currentPresidency
+  const availableSectors = useMemo(() => {
+    if (!currentPresidency) return [];
+    if (
+      currentPresidency === 'المنطقة الشرقية والغربية' ||
+      currentPresidency.includes('الشرقية') ||
+      currentPresidency.includes('الغربية') ||
+      currentPresidency.includes('اسكندر') ||
+      currentPresidency.includes('الساحل')
+    ) {
+      return ['قطاع الإسكندرية والساحل', 'قطاع الغربية', 'قطاع الشرقية'];
+    }
+    if (
+      currentPresidency === 'القاهرة الكبرى والجيزة' ||
+      currentPresidency.includes('القاهرة') ||
+      currentPresidency.includes('الجيزة')
+    ) {
+      return ['القاهرة الكبرى والجيزة'];
+    }
+    if (
+      currentPresidency === 'المنطقة الجنوبية' ||
+      currentPresidency.includes('الجنوبية') ||
+      currentPresidency.includes('قبلي') ||
+      currentPresidency.includes('الصعيد')
+    ) {
+      return ['المنطقة الجنوبية'];
+    }
+    return ['قطاع الإسكندرية والساحل', 'قطاع الغربية', 'قطاع الشرقية'];
+  }, [currentPresidency]);
+
+  // Current selected sector
+  const currentSector = useMemo(() => {
+    const val = String(formData['Exc sector'] || formData['قطاع التنفيذ'] || formData['Sectores'] || '').trim();
+    return val;
+  }, [formData['Exc sector'], formData['قطاع التنفيذ'], formData['Sectores']]);
+
+  // Available General Administrations cascading based on currentSector
+  const availableGenAdmins = useMemo(() => {
+    if (!currentSector) return [];
+    let list: string[] = [];
+
+    if (currentSector.includes('الإسكندرية') || currentSector.includes('اسكندر') || currentSector.includes('الساحل')) {
+      list = ['تنفيذ شبكات الاسكندريه', 'تنفيذ شبكات الساحل'];
+    } else if (currentSector.includes('الغربية') || currentSector.includes('غرب') || currentSector.includes('وسط')) {
+      list = ['الادارة العامة لتنفيذ شبكات غرب الدلتا', 'الادارة العامة لتنفيذ شبكات وسط الدلتا'];
+    } else if (currentSector.includes('الشرقية') || currentSector.includes('شرق') || currentSector.includes('القناة')) {
+      list = ['الاداة العامة لتنفيذ شرق الدلتا 1', 'الادارة العامة لتنفيذ شرق الدلتا 2', 'الادارة العامة لتنفيذ مدن القناة وسيناء'];
+    } else if (currentSector.includes('القاهرة') || currentSector.includes('الجيزة')) {
+      list = [
+        'الإداره العامه الأولي القاهره الكبري',
+        'الإداره العامه الثانية القاهره الكبري',
+        'الادارة العامة لتنفيذ شرق الدلتا 2',
+        'السلام',
+        'القاهره الجديده',
+      ];
+    } else if (currentSector.includes('الجنوبية') || currentSector.includes('قبلي') || currentSector.includes('الصعيد')) {
+      list = [
+        'الادارة العامة الاولي تنفيذ قبلي',
+        'الادارة العامة الثانية تنفيذ قبلي',
+        'الادارة العامة الثالثة تنفيذ قبلي',
+      ];
+    }
+
+    // Inspect live sitesData to augment if extra gen admins exist
+    if (Array.isArray(sitesData)) {
+      const set = new Set(list);
+      sitesData.forEach((s) => {
+        const sec = String(s['قطاع التنفيذ'] || s['Exc sector'] || s['Sectores'] || s.sector || '').trim();
+        const gen = String(s['الادارة العامة لتنفيذ الشبكات'] || s['الادارة العامة للمنطقة'] || s['الادارة العامة'] || s.generalAdmin || '').trim();
+        if (sec === currentSector && gen && gen !== '-' && gen !== '0') {
+          set.add(gen);
+        }
+      });
+      list = Array.from(set);
+    }
+
+    return list.sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [currentSector, sitesData]);
+
+  // Current General Admin
+  const currentGenAdmin = useMemo(() => {
+    return String(formData['الادارة العامة لتنفيذ الشبكات'] || formData['الادارة العامة للمنطقة'] || formData['الادارة العامة'] || '').trim();
+  }, [formData['الادارة العامة لتنفيذ الشبكات'], formData['الادارة العامة للمنطقة'], formData['الادارة العامة']]);
+
+  // Available Competent Administrations cascading based on currentSector and filtered by currentGenAdmin
+  const availableCompAdmins = useMemo(() => {
+    if (!currentSector) return [];
+
+    // If a specific General Admin is chosen and has mapped competent admins, filter by it
+    if (currentGenAdmin && WE_GEN_TO_COMP_ADMINS[currentGenAdmin]) {
+      return [...WE_GEN_TO_COMP_ADMINS[currentGenAdmin]].sort((a, b) => a.localeCompare(b, 'ar'));
+    }
+
+    // Otherwise, show all competent admins belonging to currentSector
+    let list: string[] = [];
+    if (currentSector.includes('الإسكندرية') || currentSector.includes('اسكندر') || currentSector.includes('الساحل')) {
+      list = [
+        'ادارة تنفيذ اسكندرية الاولى',
+        'ادارة تنفيذ اسكندرية الثانية',
+        'ادارة تنفيذ اسكندرية الثالثة',
+        'ادارة تنفيذ الساحل الاولى',
+        'ادارة تنفيذ الساحل الثانية',
+        'ادارة تنفيذ الساحل الثالثة',
+      ];
+    } else if (currentSector.includes('الغربية') || currentSector.includes('غرب') || currentSector.includes('وسط')) {
+      list = [
+        'إدارة تنفيذ شبكات المنوفية',
+        'ادارة تنفيذ البحيرة الاولى',
+        'ادارة تنفيذ البحيرة الثانية',
+        'الغربية الأولى',
+        'الغربية الثانية',
+        'المنوفية',
+        'تنفيذ كفر الشيخ',
+      ];
+    } else if (currentSector.includes('الشرقية') || currentSector.includes('شرق') || currentSector.includes('القناة')) {
+      list = [
+        'اداره تنفيذ الاسماعيليه وبورسعيد وشمال سيناء',
+        'اداره تنفيذ البحر الاحمر',
+        'اداره تنفيذ الدقهليه الاولى',
+        'اداره تنفيذ الدقهليه الثانيه',
+        'اداره تنفيذ السويس وجنوب سيناء',
+        'اداره تنفيذ الشرقيه الاولى',
+        'اداره تنفيذ الشرقيه الثانيه',
+        'اداره تنفيذ القليوبيه',
+        'اداره تنفيذ دمياط',
+      ];
+    } else if (currentSector.includes('القاهرة') || currentSector.includes('الجيزة')) {
+      list = [
+        'ادارة تنفيذ شرق الإولي',
+        'ادارة تنفيذ شرق الثانية',
+        'ادارة تنفيذ غرب الإولي',
+        'ادارة تنفيذ غرب الثانية',
+        'ادارة تنقيذ القاهرة الجديدة الأولي',
+        'ادارة تنقيذ القاهرة الجديدة الثانية',
+        'ادارة تنقيذ القاهرة الجديدة الثالثة',
+        'مدير اداره تنفيذ القليوبيه',
+      ];
+    } else if (currentSector.includes('الجنوبية') || currentSector.includes('قبلي') || currentSector.includes('الصعيد')) {
+      list = [
+        'ادارة تنفيذ اسوان',
+        'ادارة تنفيذ اسيوط',
+        'ادارة تنفيذ الاقصر',
+        'ادارة تنفيذ الفيوم',
+        'ادارة تنفيذ المنيا',
+        'ادارة تنفيذ الوادى الجديد',
+        'ادارة تنفيذ بنى سويف',
+        'ادارة تنفيذ سوهاج',
+        'ادارة تنفيذ قنا',
+      ];
+    }
+
+    // Inspect live sitesData to augment if extra competent admins exist
+    if (Array.isArray(sitesData)) {
+      const set = new Set(list);
+      sitesData.forEach((s) => {
+        const sec = String(s['قطاع التنفيذ'] || s['Exc sector'] || s['Sectores'] || s.sector || '').trim();
+        const comp = String(s['اداره التنفيذ المختصه'] || s['إدارة التنفيذ المختصة'] || s['ادارة التنفيذ الفرعية'] || s.competentAdmin || '').trim();
+        if (sec === currentSector && comp && comp !== '-' && comp !== '0') {
+          set.add(comp);
+        }
+      });
+      list = Array.from(set);
+    }
+
+    return list.sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [currentSector, currentGenAdmin, sitesData]);
+
+  // Current Competent Admin
+  const currentCompAdmin = useMemo(() => {
+    return String(formData['اداره التنفيذ المختصه'] || formData['إدارة التنفيذ المختصة'] || formData['ادارة التنفيذ الفرعية'] || '').trim();
+  }, [formData['اداره التنفيذ المختصه'], formData['إدارة التنفيذ المختصة'], formData['ادارة التنفيذ الفرعية']]);
+
+  // Cascading Handlers: Automatically reset dependent child dropdowns
+  const handlePresidencyChange = (newPres: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      'Exc Sectores': newPres,
+      'رئاسة قطاعات التنفيذ': newPres,
+      'رئاسة القطاعات': newPres,
+      // reset execution sector & child fields
+      'Exc sector': '',
+      'قطاع التنفيذ': '',
+      'Sectores': '',
+      'Sectore': newPres, // safe default for Supabase
+      'Exc Zone': '',
+      'Zone': '',
+      'الادارة العامة لتنفيذ الشبكات': '',
+      'الادارة العامة للمنطقة': '',
+      'الادارة العامة': '',
+      'اداره التنفيذ المختصه': '',
+      'إدارة التنفيذ المختصة': '',
+      'ادارة التنفيذ الفرعية': '',
+    }));
+    setErrors((prev) => {
+      const e = { ...prev };
+      delete e['Exc Sectores'];
+      delete e['Exc sector'];
+      delete e['اداره التنفيذ المختصه'];
+      return e;
+    });
+  };
+
+  const handleSectorChange = (newSec: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      'Exc sector': newSec,
+      'قطاع التنفيذ': newSec,
+      'Sectores': newSec,
+      'Sectore': newSec, // safe fallback for Supabase
+      'Exc Zone': 'تنفيذ شبكات ' + newSec, // safe fallback for Supabase
+      'Zone': newSec, // safe fallback for Supabase
+      // reset general and competent admins
+      'الادارة العامة لتنفيذ الشبكات': '',
+      'الادارة العامة للمنطقة': '',
+      'الادارة العامة': '',
+      'اداره التنفيذ المختصه': '',
+      'إدارة التنفيذ المختصة': '',
+      'ادارة التنفيذ الفرعية': '',
+    }));
+    setErrors((prev) => {
+      const e = { ...prev };
+      delete e['Exc sector'];
+      delete e['اداره التنفيذ المختصه'];
+      return e;
+    });
+  };
+
+  const handleGenAdminChange = (newGen: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      'الادارة العامة لتنفيذ الشبكات': newGen,
+      'الادارة العامة للمنطقة': newGen,
+      'الادارة العامة': newGen,
+      'Exc Zone': newGen || prev['Exc Zone'],
+      // reset competent admin when general admin changes
+      'اداره التنفيذ المختصه': '',
+      'إدارة التنفيذ المختصة': '',
+      'ادارة التنفيذ الفرعية': '',
+    }));
+    setErrors((prev) => {
+      const e = { ...prev };
+      delete e['اداره التنفيذ المختصه'];
+      return e;
+    });
+  };
+
+  const handleCompAdminChange = (newComp: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      'اداره التنفيذ المختصه': newComp,
+      'إدارة التنفيذ المختصة': newComp,
+      'ادارة التنفيذ الفرعية': newComp,
+      'Zone': newComp || prev['Zone'],
+    }));
+    setErrors((prev) => {
+      const e = { ...prev };
+      delete e['اداره التنفيذ المختصه'];
+      return e;
+    });
+  };
 
   // Sector permission evaluation for the selected record
   const permissionInfo = useMemo(() => {
@@ -485,14 +937,22 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
     const blank: WeRecord = {
       'site code': customCode.trim().toUpperCase(),
-      'Exc sector': userDefaultSector,
-      'Sectores': userDefaultSector,
-      'Sectore': 'المنطقة الأولى',
-      'Exc Zone': 'تنفيذ شبكات ' + userDefaultSector,
-      'Zone': 'المنطقة الأولى',
+      'Exc Sectores': 'المنطقة الشرقية والغربية',
+      'رئاسة قطاعات التنفيذ': 'المنطقة الشرقية والغربية',
+      'رئاسة القطاعات': 'المنطقة الشرقية والغربية',
+      'Exc sector': 'قطاع الإسكندرية والساحل',
+      'قطاع التنفيذ': 'قطاع الإسكندرية والساحل',
+      'Sectores': 'قطاع الإسكندرية والساحل',
+      'Sectore': 'قطاع الإسكندرية والساحل',
+      'Exc Zone': 'تنفيذ شبكات الإسكندرية',
+      'Zone': 'الإسكندرية والساحل',
+      'الادارة العامة لتنفيذ الشبكات': 'تنفيذ شبكات الاسكندريه',
+      'الادارة العامة للمنطقة': 'تنفيذ شبكات الاسكندريه',
+      'الادارة العامة': 'تنفيذ شبكات الاسكندريه',
+      'اداره التنفيذ المختصه': 'ادارة تنفيذ اسكندرية الاولى',
+      'إدارة التنفيذ المختصة': 'ادارة تنفيذ اسكندرية الاولى',
+      'ادارة التنفيذ الفرعية': 'ادارة تنفيذ اسكندرية الاولى',
       'السنترال': 'سنترال رئيسي',
-      'اداره التنفيذ المختصه': 'إدارة التنفيذ المختصة',
-      'إدارة التنفيذ المختصة': 'إدارة التنفيذ المختصة',
       'Type': 'New',
       'المسئولية': 'المصرية للاتصالات',
       'Site Status': 'ON AIR',
@@ -504,7 +964,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
     setMasterRecord(blank);
     setFormData(blank);
-  }, [userDefaultSector]);
+  }, []);
 
   // Handle Selecting an Existing Site Code to Edit
   const handleSelectSiteCode = useCallback(async (code: string) => {
@@ -714,6 +1174,18 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     }
 
     if (activeMode === 'add') {
+      const pres = String(formData['Exc Sectores'] || formData['رئاسة قطاعات التنفيذ'] || '').trim();
+      if (!pres) {
+        newErrors['Exc Sectores'] = 'رئاسة القطاعات مطلوبة';
+      }
+      const sec = String(formData['Exc sector'] || formData['قطاع التنفيذ'] || '').trim();
+      if (!sec) {
+        newErrors['Exc sector'] = 'قطاع التنفيذ مطلوب';
+      }
+      const comp = String(formData['اداره التنفيذ المختصه'] || formData['إدارة التنفيذ المختصة'] || '').trim();
+      if (!comp) {
+        newErrors['اداره التنفيذ المختصه'] = 'إدارة التنفيذ المختصة مطلوبة';
+      }
       if (!String(formData['التصنيف'] || '').trim()) {
         newErrors['التصنيف'] = 'التصنيف مطلوب';
       }
@@ -2124,7 +2596,8 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                     </div>
 
                     <div className="rounded-xl p-4 bg-blue-50/60 border border-blue-200">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                        {/* 1. كود الموقع (Site Code) */}
                         <div className="flex flex-col">
                           <label className="text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
                             <span className="flex items-center gap-1">كود الموقع (Site Code)</span>
@@ -2138,61 +2611,190 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                             value={formData['site code'] || ''}
                             onChange={(e) => handleFieldChange('site code', e.target.value)}
                             placeholder="مثال: LALXN33439"
-                            className={`border rounded-lg px-3 py-2 text-sm font-mono font-bold focus:outline-none transition ${errors['site code']
-                              ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
-                              : 'border-blue-300 bg-white text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-                              }`}
+                            className={`border rounded-lg px-3 py-2 text-sm font-mono font-bold focus:outline-none transition ${
+                              errors['site code']
+                                ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
+                                : 'border-blue-300 bg-white text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                            }`}
                           />
                           {errors['site code'] && (
                             <span className="text-red-600 text-[11px] mt-1 font-semibold">{errors['site code']}</span>
                           )}
                         </div>
 
-                        {blueFields
-                          .filter((f) => f.csvColumn !== 'site code')
-                          .map((field) => {
-                            const isSectorField =
-                              field.csvColumn === 'Exc sector' ||
-                              field.csvColumn === 'Sectores' ||
-                              field.csvColumn === 'Exc Sectores';
-                            const fieldValue = formData[field.csvColumn] || '';
+                        {/* 2. رئاسة القطاعات (Sector Head / Regional Group) */}
+                        <div className="flex flex-col">
+                          <label className="text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1">رئاسة القطاعات (Sector Head)</span>
+                            <span className="text-red-500 font-bold">* مطلوب</span>
+                          </label>
+                          <select
+                            name="Exc Sectores"
+                            id="field-Exc-Sectores"
+                            value={currentPresidency}
+                            onChange={(e) => handlePresidencyChange(e.target.value)}
+                            className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition cursor-pointer font-bold ${
+                              errors['Exc Sectores']
+                                ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
+                                : 'border-blue-300 bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                            }`}
+                          >
+                            <option value="">-- اختر رئاسة القطاعات --</option>
+                            {availablePresidencies.map((pres) => (
+                              <option key={pres} value={pres}>
+                                {pres}
+                              </option>
+                            ))}
+                          </select>
+                          {errors['Exc Sectores'] && (
+                            <span className="text-red-600 text-[11px] mt-1 font-semibold">{errors['Exc Sectores']}</span>
+                          )}
+                        </div>
 
-                            return (
-                              <div key={field.csvColumn} className="flex flex-col">
-                                <label className="text-xs font-medium text-slate-800 mb-1 flex items-center justify-between">
-                                  <span className="flex items-center gap-1">
-                                    {field.label}
-                                    <span className="text-slate-500 text-[10px] mr-1">({field.labelEn})</span>
-                                  </span>
-                                </label>
-                                {isSectorField ? (
-                                  <select
-                                    name={field.csvColumn}
-                                    id={`field-${field.csvColumn}`}
-                                    value={formData[field.csvColumn] || 'الإسكندرية'}
-                                    onChange={(e) => handleFieldChange(field.csvColumn, e.target.value)}
-                                    className="border border-blue-300 bg-white text-slate-800 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 font-medium cursor-pointer"
-                                  >
-                                    {['الإسكندرية والساحل', 'شرق الدلتا', 'مناطق غرب الدلتا', 'مناطق وسط الدلتا', 'مناطق السويس', 'مناطق الإسماعيلية', 'مناطق القاهرة الكبرى', 'مناطق الجيزة وأكتوبر', 'مناطق الصعيد'].map((sec) => (
-                                      <option key={sec} value={sec}>
-                                        {sec}
-                                      </option>
-                                    ))}
-                                  </select>
-                                ) : (
-                                  <input
-                                    type="text"
-                                    name={field.csvColumn}
-                                    id={`field-${field.csvColumn}`}
-                                    value={fieldValue}
-                                    onChange={(e) => handleFieldChange(field.csvColumn, e.target.value)}
-                                    placeholder={field.label}
-                                    className="border rounded-lg px-3 py-2 text-sm border-blue-200 bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none"
-                                  />
-                                )}
-                              </div>
-                            );
-                          })}
+                        {/* 3. قطاع التنفيذ (Execution Sector) */}
+                        <div className="flex flex-col">
+                          <label className="text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1">قطاع التنفيذ (Execution Sector)</span>
+                            <span className="text-red-500 font-bold">* مطلوب</span>
+                          </label>
+                          <select
+                            name="Exc sector"
+                            id="field-Exc-sector"
+                            disabled={!currentPresidency}
+                            value={currentSector}
+                            onChange={(e) => handleSectorChange(e.target.value)}
+                            className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition cursor-pointer font-bold disabled:bg-slate-100 disabled:cursor-not-allowed ${
+                              errors['Exc sector']
+                                ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
+                                : 'border-blue-300 bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                            }`}
+                          >
+                            <option value="">
+                              {currentPresidency ? '-- اختر قطاع التنفيذ --' : '-- اختر رئاسة القطاعات أولاً --'}
+                            </option>
+                            {availableSectors.map((sec) => (
+                              <option key={sec} value={sec}>
+                                {sec}
+                              </option>
+                            ))}
+                          </select>
+                          {errors['Exc sector'] && (
+                            <span className="text-red-600 text-[11px] mt-1 font-semibold">{errors['Exc sector']}</span>
+                          )}
+                        </div>
+
+                        {/* 4. الإدارة العامة (General Administration) */}
+                        <div className="flex flex-col">
+                          <label className="text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1">الإدارة العامة (General Admin)</span>
+                            <span className="text-slate-400 text-[10px]">(اختياري)</span>
+                          </label>
+                          <select
+                            name="الادارة العامة لتنفيذ الشبكات"
+                            id="field-gen-admin"
+                            disabled={!currentSector}
+                            value={currentGenAdmin}
+                            onChange={(e) => handleGenAdminChange(e.target.value)}
+                            className="border border-blue-300 bg-white text-slate-800 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 font-medium cursor-pointer disabled:bg-slate-100 disabled:cursor-not-allowed"
+                          >
+                            <option value="">
+                              {currentSector ? '-- اختر الإدارة العامة (أو اترك فارغاً) --' : '-- اختر قطاع التنفيذ أولاً --'}
+                            </option>
+                            {availableGenAdmins.map((adm) => (
+                              <option key={adm} value={adm}>
+                                {adm}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 5. إدارة التنفيذ المختصة (Competent Admin) */}
+                        <div className="flex flex-col">
+                          <label className="text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1">إدارة التنفيذ المختصة (Competent Admin)</span>
+                            <span className="text-red-500 font-bold">* مطلوب</span>
+                          </label>
+                          <select
+                            name="اداره التنفيذ المختصه"
+                            id="field-comp-admin"
+                            disabled={!currentSector}
+                            value={currentCompAdmin}
+                            onChange={(e) => handleCompAdminChange(e.target.value)}
+                            className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition cursor-pointer font-bold disabled:bg-slate-100 disabled:cursor-not-allowed ${
+                              errors['اداره التنفيذ المختصه']
+                                ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
+                                : 'border-blue-300 bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                            }`}
+                          >
+                            <option value="">
+                              {currentSector ? '-- اختر إدارة التنفيذ المختصة --' : '-- اختر قطاع التنفيذ أولاً --'}
+                            </option>
+                            {availableCompAdmins.map((adm) => (
+                              <option key={adm} value={adm}>
+                                {adm}
+                              </option>
+                            ))}
+                          </select>
+                          {errors['اداره التنفيذ المختصه'] && (
+                            <span className="text-red-600 text-[11px] mt-1 font-semibold">{errors['اداره التنفيذ المختصه']}</span>
+                          )}
+                        </div>
+
+                        {/* 6. السنترال (Central) */}
+                        <div className="flex flex-col">
+                          <label className="text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1">السنترال (Central)</span>
+                          </label>
+                          <input
+                            type="text"
+                            name="السنترال"
+                            id="field-central"
+                            value={formData['السنترال'] || ''}
+                            onChange={(e) => handleFieldChange('السنترال', e.target.value)}
+                            placeholder="مثال: سنترال رئيسي"
+                            className="border rounded-lg px-3 py-2 text-sm border-blue-200 bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none"
+                          />
+                        </div>
+
+                        {/* 7. النوع (Type) */}
+                        <div className="flex flex-col">
+                          <label className="text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1">النوع (Type)</span>
+                          </label>
+                          <select
+                            name="Type"
+                            id="field-type"
+                            value={formData['Type'] || 'New'}
+                            onChange={(e) => handleFieldChange('Type', e.target.value)}
+                            className="border border-blue-200 bg-white text-slate-800 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 font-medium cursor-pointer"
+                          >
+                            {['New', 'Existing', 'Modernization', 'Upgrade', 'Relocation'].map((t) => (
+                              <option key={t} value={t}>
+                                {t}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 8. المسئولية (Responsibility) */}
+                        <div className="flex flex-col">
+                          <label className="text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1">المسئولية (Responsibility)</span>
+                          </label>
+                          <select
+                            name="المسئولية"
+                            id="field-responsibility"
+                            value={formData['المسئولية'] || 'المصرية للاتصالات'}
+                            onChange={(e) => handleFieldChange('المسئولية', e.target.value)}
+                            className="border border-blue-200 bg-white text-slate-800 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 font-medium cursor-pointer"
+                          >
+                            {['المصرية للاتصالات', 'فودافون', 'أورنج', 'إي آند'].map((resp) => (
+                              <option key={resp} value={resp}>
+                                {resp}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     </div>
                   </div>
