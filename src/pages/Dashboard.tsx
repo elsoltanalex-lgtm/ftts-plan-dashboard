@@ -1724,7 +1724,8 @@ export const Dashboard: React.FC = () => {
               <WeeklyPerformanceLineChart
                 sites={filteredSites}
                 filters={filters}
-                currentWeek={45}
+                currentWeek={47}
+                activeScope={activeScope}
               />
             </div>
           </>
