@@ -52,16 +52,20 @@ export interface WeeklyPerformanceLineChartProps {
 
 export interface OverdueBreakdown {
   total: number;
-  motaazer: number;          // متعذر / معوقات
+  clientHold: number;        // متوقف على العميل / تم الخروج
   permits: number;           // واقف تصاريح
-  internalStalled: number;   // واقف مسار داخلي / متوقف على العميل
-  externalStalled: number;   // واقف مسار خارجي
-  splicingStalled: number;   // واقف لحامات
+  motaazer: number;          // متعذر
+  obstacles: number;         // معوقات تنفيذية
+  externalProgress: number;  // جاري مسار خارجي
+  internalStalled: number;   // مسار داخلي آخر
+  splicingStalled: number;   // لحامات
   other: number;             // قيد الاستكمال / أخرى
-  motaazerSites?: SiteRecord[];
+  clientHoldSites?: SiteRecord[];
   permitsSites?: SiteRecord[];
+  motaazerSites?: SiteRecord[];
+  obstaclesSites?: SiteRecord[];
+  externalProgressSites?: SiteRecord[];
   internalStalledSites?: SiteRecord[];
-  externalStalledSites?: SiteRecord[];
   splicingStalledSites?: SiteRecord[];
   otherSites?: SiteRecord[];
 }
@@ -366,7 +370,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
   }, [activeScope, filters.company, sites]);
 
   // Current As-Of Date (November 2026 dataset reference)
-  const asOfDate = useMemo(() => new Date('2026-11-22T23:59:59Z'), []);
+  const asOfDate = useMemo(() => new Date('2026-11-23T23:59:59Z'), []);
 
   // ─────────────────────────────────────────────────────────────
   // 1. OPERATOR SELECTION (WE, Vodafone, Orange, All)
@@ -495,11 +499,19 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         const targetDate = new Date(pDate.getTime());
         targetDate.setMonth(targetDate.getMonth() + 3);
         const tInfo = getWeekNumber(targetDate);
-        if (tInfo.year < 2026 || tInfo.week <= 1) {
+        if (tInfo.year < 2026) {
           slaExpirationWeek = 1;
         } else if (tInfo.year === 2026) {
-          slaExpirationWeek = tInfo.week;
+          const iso = targetDate.toISOString().slice(0, 10);
+          // Reconcile boundary on Nov 23 (Week 47 / 48 cutoff):
+          // Sites that reach 3 months SLA on or before 23 November 2026 fall into week 47
+          if (iso <= '2026-11-23' && tInfo.week === 48) {
+            slaExpirationWeek = 47;
+          } else {
+            slaExpirationWeek = tInfo.week;
+          }
         } else {
+          // Expires in 2027 or later (e.g. 062-1-44 on 2027-01-07)
           slaExpirationWeek = 999;
         }
       }
@@ -527,24 +539,29 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
       const classification = String(site.classification || raw['التصنيف النهائي'] || raw['التصنيف'] || '').trim();
       const obstacle = String(site.obstacleReason || raw['سبب المعوق او التعذر'] || raw['اسباب التعذر'] || '').trim();
 
-      // Categorize obstacle / stalling reason
-      const combined = `${classification} ${extPath} ${intPath} ${obstacle}`.toLowerCase();
-      let category: 'motaazer' | 'permits' | 'internalStalled' | 'externalStalled' | 'splicingStalled' | 'other' = 'other';
+      // Categorize obstacle / stalling reason based strictly on Availability master classification
+      let category:
+        | 'clientHold'
+        | 'permits'
+        | 'motaazer'
+        | 'obstacles'
+        | 'externalProgress'
+        | 'internalStalled'
+        | 'splicingStalled'
+        | 'other' = 'other';
 
-      if (combined.includes('تعذر') || combined.includes('متعذر') || combined.includes('متعثر') || combined.includes('معوق')) {
-        category = 'motaazer';
-      } else if (combined.includes('تصاريح') || extPath.includes('تصاريح')) {
+      if (classification.includes('عميل')) {
+        category = 'clientHold';
+      } else if (classification.includes('تصاريح') || extPath.includes('تصاريح')) {
         category = 'permits';
-      } else if (
-        classification.includes('عميل') ||
-        intPath.includes('لم يتم') ||
-        intPath.includes('داخلي') ||
-        intPath.includes('تجهيزات') ||
-        combined.includes('داخلي')
-      ) {
+      } else if (classification.includes('تعذر') || classification.includes('متعذر') || classification.includes('متعثر')) {
+        category = 'motaazer';
+      } else if (classification.includes('معوق') || obstacle.includes('معوق')) {
+        category = 'obstacles';
+      } else if (classification.includes('جاري خارجي') || (extPath && !extPath.includes('تم'))) {
+        category = 'externalProgress';
+      } else if (intPath && !intPath.includes('تم')) {
         category = 'internalStalled';
-      } else if (extPath && !extPath.includes('تم')) {
-        category = 'externalStalled';
       } else if (splicing && !splicing.includes('تم')) {
         category = 'splicingStalled';
       } else {
@@ -569,25 +586,31 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
     const weeklyPoints: AvailabilityWeekDataPoint[] = [];
 
     const buildBreakdown = (items: typeof processedSites): OverdueBreakdown => {
-      const motaazerSites = items.filter((s) => s.category === 'motaazer').map((s) => s.site);
+      const clientHoldSites = items.filter((s) => s.category === 'clientHold').map((s) => s.site);
       const permitsSites = items.filter((s) => s.category === 'permits').map((s) => s.site);
+      const motaazerSites = items.filter((s) => s.category === 'motaazer').map((s) => s.site);
+      const obstaclesSites = items.filter((s) => s.category === 'obstacles').map((s) => s.site);
+      const externalProgressSites = items.filter((s) => s.category === 'externalProgress').map((s) => s.site);
       const internalStalledSites = items.filter((s) => s.category === 'internalStalled').map((s) => s.site);
-      const externalStalledSites = items.filter((s) => s.category === 'externalStalled').map((s) => s.site);
       const splicingStalledSites = items.filter((s) => s.category === 'splicingStalled').map((s) => s.site);
       const otherSites = items.filter((s) => s.category === 'other').map((s) => s.site);
 
       return {
         total: items.length,
-        motaazer: motaazerSites.length,
+        clientHold: clientHoldSites.length,
         permits: permitsSites.length,
+        motaazer: motaazerSites.length,
+        obstacles: obstaclesSites.length,
+        externalProgress: externalProgressSites.length,
         internalStalled: internalStalledSites.length,
-        externalStalled: externalStalledSites.length,
         splicingStalled: splicingStalledSites.length,
         other: otherSites.length,
-        motaazerSites,
+        clientHoldSites,
         permitsSites,
+        motaazerSites,
+        obstaclesSites,
+        externalProgressSites,
         internalStalledSites,
-        externalStalledSites,
         splicingStalledSites,
         otherSites,
       };
@@ -1496,20 +1519,20 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                           تفصيل موقف المواقع المتجاوزة (انقر للتصفح):
                         </span>
                         <div className="grid grid-cols-2 gap-1 font-mono">
-                          {hoveredAvailabilityWeek.overdueBreakdown.internalStalled > 0 && (
+                          {hoveredAvailabilityWeek.overdueBreakdown.clientHold > 0 && (
                             <div
                               onClick={() =>
                                 openInspection(
-                                  'المتجاوزة: واقف مسار داخلي / متوقف على العميل',
-                                  'المشروعات المتجاوزة 3 أشهر والمتوقفة على المسار الداخلي أو تجهيزات العميل',
+                                  'المتجاوزة: تم الخروج متوقف على العميل',
+                                  'المشروعات المتجاوزة 3 أشهر والمصنفة تم الخروج متوقف على العميل',
                                   hoveredAvailabilityWeek.week,
-                                  hoveredAvailabilityWeek.overdueBreakdown.internalStalledSites || []
+                                  hoveredAvailabilityWeek.overdueBreakdown.clientHoldSites || []
                                 )
                               }
                               className="bg-slate-900/90 px-1.5 py-1 rounded border border-amber-500/30 flex justify-between items-center text-slate-200 hover:border-amber-400 hover:bg-amber-950/40 cursor-pointer"
                             >
-                              <span className="text-amber-300 truncate font-sans">واقف داخلي/عميل:</span>
-                              <span className="text-amber-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.internalStalled}</span>
+                              <span className="text-amber-300 truncate font-sans">متوقف على العميل:</span>
+                              <span className="text-amber-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.clientHold}</span>
                             </div>
                           )}
                           {hoveredAvailabilityWeek.overdueBreakdown.permits > 0 && (
@@ -1532,32 +1555,64 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                             <div
                               onClick={() =>
                                 openInspection(
-                                  'المتجاوزة: متعذر / معوقات',
-                                  'المشروعات المتجاوزة 3 أشهر ومصنفة متعذرة بسبب معوقات ميدانية',
+                                  'المتجاوزة: متعذر ميدانياً',
+                                  'المشروعات المتجاوزة 3 أشهر ومصنفة متعذرة ميدانياً',
                                   hoveredAvailabilityWeek.week,
                                   hoveredAvailabilityWeek.overdueBreakdown.motaazerSites || []
                                 )
                               }
                               className="bg-slate-900/90 px-1.5 py-1 rounded border border-rose-500/30 flex justify-between items-center text-slate-200 hover:border-rose-400 hover:bg-rose-950/40 cursor-pointer"
                             >
-                              <span className="text-rose-300 truncate font-sans">متعذر/معوقات:</span>
+                              <span className="text-rose-300 truncate font-sans">متعذر ميدانياً:</span>
                               <span className="text-rose-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.motaazer}</span>
                             </div>
                           )}
-                          {hoveredAvailabilityWeek.overdueBreakdown.externalStalled > 0 && (
+                          {hoveredAvailabilityWeek.overdueBreakdown.obstacles > 0 && (
                             <div
                               onClick={() =>
                                 openInspection(
-                                  'المتجاوزة: واقف مسار خارجي',
-                                  'المشروعات المتجاوزة 3 أشهر والمتوقفة على أعمال المسار الخارجي والحفر',
+                                  'المتجاوزة: معوقات تنفيذية',
+                                  'المشروعات المتجاوزة 3 أشهر وتواجه معوقات في التنفيذ الميداني',
                                   hoveredAvailabilityWeek.week,
-                                  hoveredAvailabilityWeek.overdueBreakdown.externalStalledSites || []
+                                  hoveredAvailabilityWeek.overdueBreakdown.obstaclesSites || []
+                                )
+                              }
+                              className="bg-slate-900/90 px-1.5 py-1 rounded border border-orange-500/30 flex justify-between items-center text-slate-200 hover:border-orange-400 hover:bg-orange-950/40 cursor-pointer"
+                            >
+                              <span className="text-orange-300 truncate font-sans">معوقات تنفيذية:</span>
+                              <span className="text-orange-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.obstacles}</span>
+                            </div>
+                          )}
+                          {hoveredAvailabilityWeek.overdueBreakdown.externalProgress > 0 && (
+                            <div
+                              onClick={() =>
+                                openInspection(
+                                  'المتجاوزة: جاري مسار خارجي',
+                                  'المشروعات المتجاوزة 3 أشهر وجاري استكمال المسار الخارجي لها',
+                                  hoveredAvailabilityWeek.week,
+                                  hoveredAvailabilityWeek.overdueBreakdown.externalProgressSites || []
                                 )
                               }
                               className="bg-slate-900/90 px-1.5 py-1 rounded border border-purple-500/30 flex justify-between items-center text-slate-200 hover:border-purple-400 hover:bg-purple-950/40 cursor-pointer"
                             >
-                              <span className="text-purple-300 truncate font-sans">واقف مسار خارجي:</span>
-                              <span className="text-purple-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.externalStalled}</span>
+                              <span className="text-purple-300 truncate font-sans">جاري خارجي:</span>
+                              <span className="text-purple-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.externalProgress}</span>
+                            </div>
+                          )}
+                          {hoveredAvailabilityWeek.overdueBreakdown.internalStalled > 0 && (
+                            <div
+                              onClick={() =>
+                                openInspection(
+                                  'المتجاوزة: واقف مسار داخلي',
+                                  'المشروعات المتجاوزة 3 أشهر والمتوقفة على المسار الداخلي',
+                                  hoveredAvailabilityWeek.week,
+                                  hoveredAvailabilityWeek.overdueBreakdown.internalStalledSites || []
+                                )
+                              }
+                              className="bg-slate-900/90 px-1.5 py-1 rounded border border-amber-500/30 flex justify-between items-center text-slate-200 hover:border-amber-400 hover:bg-amber-950/40 cursor-pointer"
+                            >
+                              <span className="text-amber-300 truncate font-sans">واقف داخلي:</span>
+                              <span className="text-amber-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.internalStalled}</span>
                             </div>
                           )}
                           {hoveredAvailabilityWeek.overdueBreakdown.splicingStalled > 0 && (
@@ -1633,20 +1688,20 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                           توزيع المشروعات الجارية حسب الموقف (انقر للتصفح):
                         </span>
                         <div className="grid grid-cols-2 gap-1 font-mono">
-                          {hoveredAvailabilityWeek.startedBreakdown.internalStalled > 0 && (
+                          {hoveredAvailabilityWeek.startedBreakdown.clientHold > 0 && (
                             <div
                               onClick={() =>
                                 openInspection(
-                                  'الجارية: واقف مسار داخلي / متوقف على العميل',
-                                  'المشروعات الجارية المعلقة على مسار داخلي أو تجهيزات العميل',
+                                  'الجارية: تم الخروج متوقف على العميل',
+                                  'المشروعات الجارية المعلقة على تجهيزات وموافقة العميل',
                                   hoveredAvailabilityWeek.week,
-                                  hoveredAvailabilityWeek.startedBreakdown.internalStalledSites || []
+                                  hoveredAvailabilityWeek.startedBreakdown.clientHoldSites || []
                                 )
                               }
                               className="bg-slate-950/80 px-1.5 py-1 rounded border border-amber-500/30 flex justify-between items-center text-slate-200 hover:border-amber-400 hover:bg-amber-950/40 cursor-pointer"
                             >
-                              <span className="text-amber-300 truncate font-sans">داخلي/عميل:</span>
-                              <span className="text-amber-400 font-bold">{hoveredAvailabilityWeek.startedBreakdown.internalStalled}</span>
+                              <span className="text-amber-300 truncate font-sans">متوقف على العميل:</span>
+                              <span className="text-amber-400 font-bold">{hoveredAvailabilityWeek.startedBreakdown.clientHold}</span>
                             </div>
                           )}
                           {hoveredAvailabilityWeek.startedBreakdown.permits > 0 && (
@@ -1669,32 +1724,64 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                             <div
                               onClick={() =>
                                 openInspection(
-                                  'الجارية: متعذر / معوقات',
-                                  'المشروعات الجارية المصنفة متعذرة بسبب معوقات ميدانية',
+                                  'الجارية: متعذر ميدانياً',
+                                  'المشروعات الجارية المصنفة متعذرة ميدانياً',
                                   hoveredAvailabilityWeek.week,
                                   hoveredAvailabilityWeek.startedBreakdown.motaazerSites || []
                                 )
                               }
                               className="bg-slate-950/80 px-1.5 py-1 rounded border border-rose-500/30 flex justify-between items-center text-slate-200 hover:border-rose-400 hover:bg-rose-950/40 cursor-pointer"
                             >
-                              <span className="text-rose-300 truncate font-sans">متعذر:</span>
+                              <span className="text-rose-300 truncate font-sans">متعذر ميدانياً:</span>
                               <span className="text-rose-400 font-bold">{hoveredAvailabilityWeek.startedBreakdown.motaazer}</span>
                             </div>
                           )}
-                          {hoveredAvailabilityWeek.startedBreakdown.externalStalled > 0 && (
+                          {hoveredAvailabilityWeek.startedBreakdown.obstacles > 0 && (
+                            <div
+                              onClick={() =>
+                                openInspection(
+                                  'الجارية: معوقات تنفيذية',
+                                  'المشروعات الجارية التي تواجه معوقات ميدانية',
+                                  hoveredAvailabilityWeek.week,
+                                  hoveredAvailabilityWeek.startedBreakdown.obstaclesSites || []
+                                )
+                              }
+                              className="bg-slate-950/80 px-1.5 py-1 rounded border border-orange-500/30 flex justify-between items-center text-slate-200 hover:border-orange-400 hover:bg-orange-950/40 cursor-pointer"
+                            >
+                              <span className="text-orange-300 truncate font-sans">معوقات تنفيذية:</span>
+                              <span className="text-orange-400 font-bold">{hoveredAvailabilityWeek.startedBreakdown.obstacles}</span>
+                            </div>
+                          )}
+                          {hoveredAvailabilityWeek.startedBreakdown.externalProgress > 0 && (
                             <div
                               onClick={() =>
                                 openInspection(
                                   'الجارية: مسار خارجي',
                                   'المشروعات الجارية المتوقفة على المسار الخارجي',
                                   hoveredAvailabilityWeek.week,
-                                  hoveredAvailabilityWeek.startedBreakdown.externalStalledSites || []
+                                  hoveredAvailabilityWeek.startedBreakdown.externalProgressSites || []
                                 )
                               }
                               className="bg-slate-950/80 px-1.5 py-1 rounded border border-purple-500/30 flex justify-between items-center text-slate-200 hover:border-purple-400 hover:bg-purple-950/40 cursor-pointer"
                             >
                               <span className="text-purple-300 truncate font-sans">مسار خارجي:</span>
-                              <span className="text-purple-400 font-bold">{hoveredAvailabilityWeek.startedBreakdown.externalStalled}</span>
+                              <span className="text-purple-400 font-bold">{hoveredAvailabilityWeek.startedBreakdown.externalProgress}</span>
+                            </div>
+                          )}
+                          {hoveredAvailabilityWeek.startedBreakdown.internalStalled > 0 && (
+                            <div
+                              onClick={() =>
+                                openInspection(
+                                  'الجارية: واقف مسار داخلي',
+                                  'المشروعات الجارية المتوقفة على المسار الداخلي',
+                                  hoveredAvailabilityWeek.week,
+                                  hoveredAvailabilityWeek.startedBreakdown.internalStalledSites || []
+                                )
+                              }
+                              className="bg-slate-950/80 px-1.5 py-1 rounded border border-amber-500/30 flex justify-between items-center text-slate-200 hover:border-amber-400 hover:bg-amber-950/40 cursor-pointer"
+                            >
+                              <span className="text-amber-300 truncate font-sans">مسار داخلي:</span>
+                              <span className="text-amber-400 font-bold">{hoveredAvailabilityWeek.startedBreakdown.internalStalled}</span>
                             </div>
                           )}
                           {hoveredAvailabilityWeek.startedBreakdown.splicingStalled > 0 && (
@@ -2035,21 +2122,21 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                       </span>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap text-xs">
-                      {activeWeekData.overdueBreakdown.internalStalled > 0 && (
+                      {activeWeekData.overdueBreakdown.clientHold > 0 && (
                         <button
                           onClick={() =>
                             openInspection(
-                              'المتجاوزة: واقف مسار داخلي / متوقف على العميل',
-                              'المشروعات المتجاوزة 3 أشهر والمتوقفة على المسار الداخلي أو تجهيزات العميل',
+                              'المتجاوزة: تم الخروج متوقف على العميل',
+                              'المشروعات المتجاوزة 3 أشهر والمصنفة تم الخروج متوقف على العميل',
                               activeWeekData.week,
-                              activeWeekData.overdueBreakdown.internalStalledSites || []
+                              activeWeekData.overdueBreakdown.clientHoldSites || []
                             )
                           }
                           className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-300 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-amber-100 hover:border-amber-400 transition-colors"
                         >
                           <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                          <span>واقف داخلي / متوقف على العميل:</span>
-                          <strong className="font-mono text-amber-950 font-black">{activeWeekData.overdueBreakdown.internalStalled}</strong>
+                          <span>متوقف على العميل:</span>
+                          <strong className="font-mono text-amber-950 font-black">{activeWeekData.overdueBreakdown.clientHold}</strong>
                         </button>
                       )}
                       {activeWeekData.overdueBreakdown.permits > 0 && (
@@ -2073,8 +2160,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                         <button
                           onClick={() =>
                             openInspection(
-                              'المتجاوزة: متعذر / معوقات',
-                              'المشروعات المتجاوزة 3 أشهر ومصنفة متعذرة بسبب معوقات ميدانية',
+                              'المتجاوزة: متعذر ميدانياً',
+                              'المشروعات المتجاوزة 3 أشهر ومصنفة متعذرة ميدانياً',
                               activeWeekData.week,
                               activeWeekData.overdueBreakdown.motaazerSites || []
                             )
@@ -2082,25 +2169,59 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                           className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-900 border border-rose-300 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-rose-100 hover:border-rose-400 transition-colors"
                         >
                           <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                          <span>متعذر / معوقات تنفيذية:</span>
+                          <span>متعذر ميدانياً:</span>
                           <strong className="font-mono text-rose-950 font-black">{activeWeekData.overdueBreakdown.motaazer}</strong>
                         </button>
                       )}
-                      {activeWeekData.overdueBreakdown.externalStalled > 0 && (
+                      {activeWeekData.overdueBreakdown.obstacles > 0 && (
                         <button
                           onClick={() =>
                             openInspection(
-                              'المتجاوزة: واقف مسار خارجي',
-                              'المشروعات المتجاوزة 3 أشهر والمتوقفة على أعمال المسار الخارجي والحفر',
+                              'المتجاوزة: معوقات تنفيذية',
+                              'المشروعات المتجاوزة 3 أشهر وتواجه معوقات ميدانية',
                               activeWeekData.week,
-                              activeWeekData.overdueBreakdown.externalStalledSites || []
+                              activeWeekData.overdueBreakdown.obstaclesSites || []
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-orange-50 text-orange-900 border border-orange-300 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-orange-100 hover:border-orange-400 transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                          <span>معوقات تنفيذية:</span>
+                          <strong className="font-mono text-orange-950 font-black">{activeWeekData.overdueBreakdown.obstacles}</strong>
+                        </button>
+                      )}
+                      {activeWeekData.overdueBreakdown.externalProgress > 0 && (
+                        <button
+                          onClick={() =>
+                            openInspection(
+                              'المتجاوزة: مسار خارجي',
+                              'المشروعات المتجاوزة 3 أشهر والمتوقفة على أعمال المسار الخارجي',
+                              activeWeekData.week,
+                              activeWeekData.overdueBreakdown.externalProgressSites || []
                             )
                           }
                           className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-900 border border-purple-300 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-purple-100 hover:border-purple-400 transition-colors"
                         >
                           <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                          <span>واقف مسار خارجي:</span>
-                          <strong className="font-mono text-purple-950 font-black">{activeWeekData.overdueBreakdown.externalStalled}</strong>
+                          <span>مسار خارجي:</span>
+                          <strong className="font-mono text-purple-950 font-black">{activeWeekData.overdueBreakdown.externalProgress}</strong>
+                        </button>
+                      )}
+                      {activeWeekData.overdueBreakdown.internalStalled > 0 && (
+                        <button
+                          onClick={() =>
+                            openInspection(
+                              'المتجاوزة: واقف مسار داخلي',
+                              'المشروعات المتجاوزة 3 أشهر والمتوقفة على المسار الداخلي',
+                              activeWeekData.week,
+                              activeWeekData.overdueBreakdown.internalStalledSites || []
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-300 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-amber-100 hover:border-amber-400 transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                          <span>مسار داخلي:</span>
+                          <strong className="font-mono text-amber-950 font-black">{activeWeekData.overdueBreakdown.internalStalled}</strong>
                         </button>
                       )}
                       {activeWeekData.overdueBreakdown.splicingStalled > 0 && (
@@ -2116,7 +2237,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                           className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-900 border border-indigo-300 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-indigo-100 hover:border-indigo-400 transition-colors"
                         >
                           <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-                          <span>واقف لحامات وتوصيل:</span>
+                          <span>لحامات وتوصيل:</span>
                           <strong className="font-mono text-indigo-950 font-black">{activeWeekData.overdueBreakdown.splicingStalled}</strong>
                         </button>
                       )}
@@ -2154,21 +2275,21 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                       </span>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap text-xs">
-                      {activeWeekData.startedBreakdown.internalStalled > 0 && (
+                      {activeWeekData.startedBreakdown.clientHold > 0 && (
                         <button
                           onClick={() =>
                             openInspection(
-                              'الجارية: واقف مسار داخلي / متوقف على العميل',
-                              'المشروعات الجارية المعلقة على مسار داخلي أو تجهيزات العميل',
+                              'الجارية: تم الخروج متوقف على العميل',
+                              'المشروعات الجارية المعلقة على موافقة وتجهيزات العميل',
                               activeWeekData.week,
-                              activeWeekData.startedBreakdown.internalStalledSites || []
+                              activeWeekData.startedBreakdown.clientHoldSites || []
                             )
                           }
                           className="px-2.5 py-1 rounded-lg bg-amber-50/80 text-amber-900 border border-amber-200 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-amber-100 transition-colors"
                         >
                           <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                          <span>داخلي / عميل:</span>
-                          <strong className="font-mono text-amber-950 font-black">{activeWeekData.startedBreakdown.internalStalled}</strong>
+                          <span>متوقف على العميل:</span>
+                          <strong className="font-mono text-amber-950 font-black">{activeWeekData.startedBreakdown.clientHold}</strong>
                         </button>
                       )}
                       {activeWeekData.startedBreakdown.permits > 0 && (
@@ -2192,8 +2313,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                         <button
                           onClick={() =>
                             openInspection(
-                              'الجارية: متعذر / معوقات',
-                              'المشروعات الجارية المصنفة متعذرة بسبب معوقات ميدانية',
+                              'الجارية: متعذر ميدانياً',
+                              'المشروعات الجارية المصنفة متعذرة ميدانياً',
                               activeWeekData.week,
                               activeWeekData.startedBreakdown.motaazerSites || []
                             )
@@ -2201,25 +2322,59 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                           className="px-2.5 py-1 rounded-lg bg-rose-50/80 text-rose-900 border border-rose-200 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-rose-100 transition-colors"
                         >
                           <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                          <span>متعذر:</span>
+                          <span>متعذر ميدانياً:</span>
                           <strong className="font-mono text-rose-950 font-black">{activeWeekData.startedBreakdown.motaazer}</strong>
                         </button>
                       )}
-                      {activeWeekData.startedBreakdown.externalStalled > 0 && (
+                      {activeWeekData.startedBreakdown.obstacles > 0 && (
+                        <button
+                          onClick={() =>
+                            openInspection(
+                              'الجارية: معوقات تنفيذية',
+                              'المشروعات الجارية التي تواجه معوقات ميدانية',
+                              activeWeekData.week,
+                              activeWeekData.startedBreakdown.obstaclesSites || []
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-orange-50/80 text-orange-900 border border-orange-200 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-orange-100 transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                          <span>معوقات تنفيذية:</span>
+                          <strong className="font-mono text-orange-950 font-black">{activeWeekData.startedBreakdown.obstacles}</strong>
+                        </button>
+                      )}
+                      {activeWeekData.startedBreakdown.externalProgress > 0 && (
                         <button
                           onClick={() =>
                             openInspection(
                               'الجارية: مسار خارجي',
                               'المشروعات الجارية المتوقفة على المسار الخارجي',
                               activeWeekData.week,
-                              activeWeekData.startedBreakdown.externalStalledSites || []
+                              activeWeekData.startedBreakdown.externalProgressSites || []
                             )
                           }
                           className="px-2.5 py-1 rounded-lg bg-purple-50/80 text-purple-900 border border-purple-200 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-purple-100 transition-colors"
                         >
                           <span className="w-2 h-2 rounded-full bg-purple-500"></span>
                           <span>مسار خارجي:</span>
-                          <strong className="font-mono text-purple-950 font-black">{activeWeekData.startedBreakdown.externalStalled}</strong>
+                          <strong className="font-mono text-purple-950 font-black">{activeWeekData.startedBreakdown.externalProgress}</strong>
+                        </button>
+                      )}
+                      {activeWeekData.startedBreakdown.internalStalled > 0 && (
+                        <button
+                          onClick={() =>
+                            openInspection(
+                              'الجارية: واقف مسار داخلي',
+                              'المشروعات الجارية المتوقفة على المسار الداخلي',
+                              activeWeekData.week,
+                              activeWeekData.startedBreakdown.internalStalledSites || []
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-amber-50/80 text-amber-900 border border-amber-200 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-amber-100 transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                          <span>مسار داخلي:</span>
+                          <strong className="font-mono text-amber-950 font-black">{activeWeekData.startedBreakdown.internalStalled}</strong>
                         </button>
                       )}
                       {activeWeekData.startedBreakdown.splicingStalled > 0 && (
