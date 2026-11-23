@@ -26,6 +26,7 @@ import {
   getSiteClassification,
 } from '../data/dashboardData';
 import { toFilterArray } from '../utils/filterUtils';
+import { normalizeArabicText } from '../utils/etahaMetrics';
 
 interface FiltersProps {
   filters: FilterState;
@@ -90,18 +91,23 @@ const MultiFilterDropdown: React.FC<MultiFilterDropdownProps> = ({
   const getOptionCount = useCallback((optVal: string) => {
     if (!optVal) return sitesData.length;
     const target = String(optVal).trim();
+    const normTarget = normalizeArabicText(target);
     return sitesData.filter((s) => {
       if (filterKey === 'sector') {
-        const val = String(s.sector || s.rawRecord?.['رئاسة قطاعات التنفيذ'] || s.rawRecord?.['قطاع التنفيذ'] || s.rawRecord?.['القطاع'] || s.rawRecord?.['رئاسة القطاعات'] || '').trim();
-        return val === target || isRecordInSector(target, s);
+        const val = String(s.executionSector || s.rawRecord?.['قطاع التنفيذ'] || s.sector || s.rawRecord?.['رئاسة قطاعات التنفيذ'] || s.rawRecord?.['القطاع'] || s.rawRecord?.['رئاسة القطاعات'] || '').replace(/\s+/g, ' ').trim();
+        return val === target || normalizeArabicText(val) === normTarget || isRecordInSector(target, s);
       }
       if (filterKey === 'generalAdmin') {
-        const val = String(s.generalAdmin || s.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || s.rawRecord?.['الادارة العامة للتنفيذ'] || s.rawRecord?.['الادارة العامة للمنطقة'] || s.rawRecord?.['الإدارة العامة'] || s.rawRecord?.['الإدارة العامة للتنفيذ'] || '').trim();
-        return val === target;
+        const val = String(s.generalAdmin || s.rawRecord?.['الادارة العامة المنفذة'] || s.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || s.rawRecord?.['الادارة العامة للتنفيذ'] || s.rawRecord?.['الادارة العامة للمنطقة'] || s.rawRecord?.['الإدارة العامة'] || s.rawRecord?.['الإدارة العامة للتنفيذ'] || '').replace(/\s+/g, ' ').trim();
+        return val === target || normalizeArabicText(val) === normTarget;
       }
       if (filterKey === 'competentAdmin') {
-        const val = String(s.competentAdmin || s.rawRecord?.['ادارة التنفيذ الفرعية'] || s.rawRecord?.['إدارة التنفيذ المختصة'] || s.rawRecord?.['المنطقة'] || s.rawRecord?.['إدارة المنطقة'] || '').trim();
-        return val === target;
+        const val = String(s.competentAdmin || s.rawRecord?.['ادارة التنفيذ'] || s.rawRecord?.['ادارة التنفيذ الفرعية'] || s.rawRecord?.['إدارة التنفيذ المختصة'] || s.rawRecord?.['المنطقة'] || s.rawRecord?.['إدارة المنطقة'] || '').replace(/\s+/g, ' ').trim();
+        return val === target || normalizeArabicText(val) === normTarget;
+      }
+      if (filterKey === 'responsibility' || (filterKey as string) === 'executionResponsibility') {
+        const val = String(s.executionResponsibility || s.responsibility || s.rawRecord?.['مسئوليه التنفيذ'] || s.rawRecord?.['مسؤولية التنفيذ'] || '').replace(/\s+/g, ' ').trim();
+        return val === target || normalizeArabicText(val) === normTarget;
       }
       if (filterKey === 'classification') {
         const val = String(s.classification || s.rawRecord?.['التصنيف'] || s.rawRecord?.['التصنيف (مدني)'] || '').trim();
@@ -368,6 +374,7 @@ export const Filters: React.FC<FiltersProps> = ({
       if (!isSectorLocked && toFilterArray(filters.sector).length > 0) count += toFilterArray(filters.sector).length;
       if (toFilterArray(filters.generalAdmin).length > 0) count += toFilterArray(filters.generalAdmin).length;
       if (toFilterArray(filters.competentAdmin).length > 0) count += toFilterArray(filters.competentAdmin).length;
+      if (toFilterArray(filters.executionResponsibility).length > 0) count += toFilterArray(filters.executionResponsibility).length;
       if (toFilterArray(filters.externalPath).length > 0) count += toFilterArray(filters.externalPath).length;
       if (toFilterArray(filters.internalPath).length > 0) count += toFilterArray(filters.internalPath).length;
       if (toFilterArray(filters.deliveryStatus).length > 0) count += toFilterArray(filters.deliveryStatus).length;
@@ -393,30 +400,40 @@ export const Filters: React.FC<FiltersProps> = ({
     return Array.from(
       new Set(
         baseSites
-          .map((s) => String(s.sector || s.rawRecord?.['رئاسة قطاعات التنفيذ'] || s.rawRecord?.['قطاع التنفيذ'] || '').trim())
+          .map((s) => {
+            if (isEtaha) {
+              return String(s.executionSector || s.rawRecord?.['قطاع التنفيذ'] || s.sector || '').replace(/\s+/g, ' ').trim();
+            }
+            return String(s.sector || s.rawRecord?.['رئاسة قطاعات التنفيذ'] || s.rawRecord?.['قطاع التنفيذ'] || '').trim();
+          })
           .filter(Boolean)
       )
     ).sort((a, b) => a.localeCompare(b, 'ar'));
-  }, [baseSites, user, isSectorLocked]);
+  }, [baseSites, user, isSectorLocked, isEtaha]);
 
   // Level 2: Scoped by chosen Sector(s) -> Feeds General Admin
   const sectorScopedSites = useMemo(() => {
-    const activeSectors = toFilterArray(filters.sector).map((s) => String(s).trim());
+    const activeSectors = toFilterArray(filters.sector).map((s) => String(s).replace(/\s+/g, ' ').trim());
     if (activeSectors.length > 0) {
       return baseSites.filter((s) => {
+        if (isEtaha) {
+          const sec = String(s.executionSector || s.rawRecord?.['قطاع التنفيذ'] || s.sector || '').replace(/\s+/g, ' ').trim();
+          const normSec = normalizeArabicText(sec);
+          return activeSectors.some((as) => normalizeArabicText(as) === normSec || as === sec);
+        }
         const sec = String(s.sector || s.rawRecord?.['رئاسة قطاعات التنفيذ'] || s.rawRecord?.['قطاع التنفيذ'] || '').trim();
         return activeSectors.includes(sec) || activeSectors.some((as) => isRecordInSector(as, s));
       });
     }
     return baseSites;
-  }, [baseSites, filters.sector]);
+  }, [baseSites, filters.sector, isEtaha]);
 
   // Dynamic General Admins belonging strictly to chosen Sector(s)
   const dynamicGeneralAdmins = useMemo(() => {
     return Array.from(
       new Set(
         sectorScopedSites
-          .map((s) => String(s.generalAdmin || s.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || s.rawRecord?.['الادارة العامة للتنفيذ'] || s.rawRecord?.['الادارة العامة للمنطقة'] || '').trim())
+          .map((s) => String(s.generalAdmin || s.rawRecord?.['الادارة العامة المنفذة'] || s.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || s.rawRecord?.['الادارة العامة للتنفيذ'] || s.rawRecord?.['الادارة العامة للمنطقة'] || '').replace(/\s+/g, ' ').trim())
           .filter(Boolean)
       )
     ).sort((a, b) => a.localeCompare(b, 'ar'));
@@ -426,7 +443,7 @@ export const Filters: React.FC<FiltersProps> = ({
   useEffect(() => {
     const current = toFilterArray(filters.generalAdmin);
     if (current.length > 0) {
-      const valid = current.filter((g) => dynamicGeneralAdmins.includes(g));
+      const valid = current.filter((g) => dynamicGeneralAdmins.some((dga) => normalizeArabicText(dga) === normalizeArabicText(g) || dga === g));
       if (valid.length !== current.length) {
         onChangeFilter('generalAdmin', valid.length === 1 ? valid[0] : valid);
       }
@@ -435,11 +452,12 @@ export const Filters: React.FC<FiltersProps> = ({
 
   // Level 3: Scoped by Sector AND Department -> Feeds Competent Executing Admin
   const deptScopedSites = useMemo(() => {
-    const activeGAs = toFilterArray(filters.generalAdmin).map((g) => String(g).trim());
+    const activeGAs = toFilterArray(filters.generalAdmin).map((g) => String(g).replace(/\s+/g, ' ').trim());
     if (activeGAs.length > 0) {
       return sectorScopedSites.filter((s) => {
-        const ga = String(s.generalAdmin || s.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || s.rawRecord?.['الادارة العامة للتنفيذ'] || s.rawRecord?.['الادارة العامة للمنطقة'] || '').trim();
-        return activeGAs.includes(ga);
+        const ga = String(s.generalAdmin || s.rawRecord?.['الادارة العامة المنفذة'] || s.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || s.rawRecord?.['الادارة العامة للتنفيذ'] || s.rawRecord?.['الادارة العامة للمنطقة'] || '').replace(/\s+/g, ' ').trim();
+        const normGa = normalizeArabicText(ga);
+        return activeGAs.some((aga) => normalizeArabicText(aga) === normGa || aga === ga);
       });
     }
     return sectorScopedSites;
@@ -450,7 +468,7 @@ export const Filters: React.FC<FiltersProps> = ({
     return Array.from(
       new Set(
         deptScopedSites
-          .map((s) => String(s.competentAdmin || s.rawRecord?.['ادارة التنفيذ الفرعية'] || s.rawRecord?.['إدارة التنفيذ المختصة'] || s.rawRecord?.['المنطقة'] || '').trim())
+          .map((s) => String(s.competentAdmin || s.rawRecord?.['ادارة التنفيذ'] || s.rawRecord?.['ادارة التنفيذ الفرعية'] || s.rawRecord?.['إدارة التنفيذ المختصة'] || s.rawRecord?.['المنطقة'] || '').replace(/\s+/g, ' ').trim())
           .filter(Boolean)
       )
     ).sort((a, b) => a.localeCompare(b, 'ar'));
@@ -460,7 +478,7 @@ export const Filters: React.FC<FiltersProps> = ({
   useEffect(() => {
     const current = toFilterArray(filters.competentAdmin);
     if (current.length > 0) {
-      const valid = current.filter((c) => dynamicCompetentAdmins.includes(c));
+      const valid = current.filter((c) => dynamicCompetentAdmins.some((dca) => normalizeArabicText(dca) === normalizeArabicText(c) || dca === c));
       if (valid.length !== current.length) {
         onChangeFilter('competentAdmin', valid.length === 1 ? valid[0] : valid);
       }
@@ -665,12 +683,36 @@ export const Filters: React.FC<FiltersProps> = ({
     }
   }, [isEtaha, dynamicDeliveryStatuses, filters.deliveryStatus, onChangeFilter]);
 
+  // ── Etaha: Dynamic Options for مسؤولية التنفيذ strictly from base dataset ──
+  const dynamicResponsibilities = useMemo(() => {
+    if (!isEtaha) return [];
+    return Array.from(
+      new Set(
+        baseSites
+          .map((s) => String(s.executionResponsibility || s.responsibility || s.rawRecord?.['مسئوليه التنفيذ'] || s.rawRecord?.['مسؤولية التنفيذ'] || '').replace(/\s+/g, ' ').trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [baseSites, isEtaha]);
+
+  useEffect(() => {
+    if (isEtaha) {
+      const current = toFilterArray(filters.executionResponsibility);
+      if (current.length > 0 && dynamicResponsibilities.length > 0) {
+        const valid = current.filter((x) => dynamicResponsibilities.some((dr) => normalizeArabicText(dr) === normalizeArabicText(x) || dr === x));
+        if (valid.length !== current.length) {
+          onChangeFilter('executionResponsibility', valid.length === 1 ? valid[0] : valid);
+        }
+      }
+    }
+  }, [isEtaha, dynamicResponsibilities, filters.executionResponsibility, onChangeFilter]);
+
   return (
     <div className="w-full">
       {/* Slicers Controls Row */}
       {isEtaha ? (
-        /* Etaha Specific: 6 Multi-Select Slicers in a single row on wide screens */
-        <div className="flex flex-col sm:grid sm:grid-cols-2 md:grid-cols-3 xl:flex xl:flex-row items-stretch xl:items-end gap-2.5">
+        /* Etaha Specific: 7 Multi-Select Slicers in a flexible row on wide screens */
+        <div className="flex flex-col sm:grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:flex xl:flex-row items-stretch xl:items-end gap-2.5">
           {/* 1. القطاع */}
           <div className="flex-1 min-w-0">
             <MultiFilterDropdown
@@ -718,7 +760,22 @@ export const Filters: React.FC<FiltersProps> = ({
             />
           </div>
 
-          {/* 4. محور 1: المسار الخارجي */}
+          {/* 4. مسؤولية التنفيذ */}
+          <div className="flex-1 min-w-0">
+            <MultiFilterDropdown
+              id="filter-etaha-execution-responsibility"
+              label="مسؤولية التنفيذ"
+              labelEn="Execution Responsibility"
+              icon={Layers}
+              value={filters.executionResponsibility || []}
+              options={dynamicResponsibilities}
+              onChange={(val) => onChangeFilter('executionResponsibility', val)}
+              sitesData={baseSites}
+              filterKey="responsibility"
+            />
+          </div>
+
+          {/* 5. محور 1: المسار الخارجي */}
           <div className="flex-1 min-w-0">
             <MultiFilterDropdown
               id="filter-etaha-external-path"
@@ -733,7 +790,7 @@ export const Filters: React.FC<FiltersProps> = ({
             />
           </div>
 
-          {/* 5. محور 2: المسار الداخلي */}
+          {/* 6. محور 2: المسار الداخلي */}
           <div className="flex-1 min-w-0">
             <MultiFilterDropdown
               id="filter-etaha-internal-path"
@@ -748,7 +805,7 @@ export const Filters: React.FC<FiltersProps> = ({
             />
           </div>
 
-          {/* 6. محور 3: موقف التسليم */}
+          {/* 7. محور 3: موقف التسليم */}
           <div className="flex-1 min-w-0">
             <MultiFilterDropdown
               id="filter-etaha-delivery-status"

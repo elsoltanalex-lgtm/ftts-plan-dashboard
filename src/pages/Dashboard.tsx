@@ -46,6 +46,7 @@ import {
   isEtahaExternalDone,
   isEtahaDelivered,
   computeEtahaKpis,
+  normalizeArabicText,
 } from '../utils/etahaMetrics';
 import { WeExecutiveReportView } from '../components/WeExecutiveReportView';
 import { SiteActionDropdown } from '../components/SiteActionDropdown';
@@ -95,6 +96,7 @@ const initialFilters: FilterState = {
   internalPath: [],
   excelStatus: [],
   deliveryStatus: [],
+  executionResponsibility: [],
 };
 
 // Helper: Map a dynamic WeRecord from Supabase to SiteRecord format for dashboard strictly based on Excel
@@ -671,16 +673,21 @@ export const Dashboard: React.FC = () => {
 
       // 4. Sector Multi-Select Filter
       if (activeSectors.length > 0) {
-        const matchSector = activeSectors.some(
-          (sec) => isRecordInSector(sec, site) || String(site.sector || site.rawRecord?.['رئاسة قطاعات التنفيذ'] || site.rawRecord?.['قطاع التنفيذ'] || site.rawRecord?.['القطاع'] || site.rawRecord?.['رئاسة القطاعات'] || '').trim() === sec
-        );
+        const matchSector = activeSectors.some((sec) => {
+          if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+            const siteSec = String(site.executionSector || site.rawRecord?.['قطاع التنفيذ'] || site.sector || '').replace(/\s+/g, ' ').trim();
+            return normalizeArabicText(siteSec) === normalizeArabicText(sec) || siteSec === sec;
+          }
+          return isRecordInSector(sec, site) || String(site.sector || site.rawRecord?.['رئاسة قطاعات التنفيذ'] || site.rawRecord?.['قطاع التنفيذ'] || site.rawRecord?.['القطاع'] || site.rawRecord?.['رئاسة القطاعات'] || '').trim() === sec;
+        });
         if (!matchSector) return false;
       }
 
       // 5. General Admin Multi-Select Filter
       if (activeGeneralAdmins.length > 0) {
-        const ga = String(site.generalAdmin || site.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || site.rawRecord?.['الادارة العامة للتنفيذ'] || site.rawRecord?.['الادارة العامة للمنطقة'] || site.rawRecord?.['الإدارة العامة'] || site.rawRecord?.['الإدارة العامة للتنفيذ'] || '').trim();
-        if (!activeGeneralAdmins.includes(ga)) return false;
+        const ga = String(site.generalAdmin || site.rawRecord?.['الادارة العامة المنفذة'] || site.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || site.rawRecord?.['الادارة العامة للتنفيذ'] || site.rawRecord?.['الادارة العامة للمنطقة'] || site.rawRecord?.['الإدارة العامة'] || site.rawRecord?.['الإدارة العامة للتنفيذ'] || '').replace(/\s+/g, ' ').trim();
+        const normGa = normalizeArabicText(ga);
+        if (!activeGeneralAdmins.some((aga) => normalizeArabicText(aga) === normGa || aga === ga)) return false;
       }
 
       // 5.5 SubSector / الإدارة المختصة Filter (Orange Multi-Select)
@@ -691,8 +698,9 @@ export const Dashboard: React.FC = () => {
 
       // 6. Competent Admin Multi-Select Filter
       if (activeCompetentAdmins.length > 0) {
-        const ca = String(site.competentAdmin || site.rawRecord?.['ادارة التنفيذ الفرعية'] || site.rawRecord?.['إدارة التنفيذ المختصة'] || site.rawRecord?.['المنطقة'] || site.rawRecord?.['إدارة المنطقة'] || '').trim();
-        if (!activeCompetentAdmins.includes(ca)) return false;
+        const ca = String(site.competentAdmin || site.rawRecord?.['ادارة التنفيذ'] || site.rawRecord?.['ادارة التنفيذ الفرعية'] || site.rawRecord?.['إدارة التنفيذ المختصة'] || site.rawRecord?.['المنطقة'] || site.rawRecord?.['إدارة المنطقة'] || '').replace(/\s+/g, ' ').trim();
+        const normCa = normalizeArabicText(ca);
+        if (!activeCompetentAdmins.some((aca) => normalizeArabicText(aca) === normCa || aca === ca)) return false;
       }
 
       // 7. Central / Exchange Filter
@@ -734,8 +742,15 @@ export const Dashboard: React.FC = () => {
         if (!matchSearch) return false;
       }
 
-      // 11. Etaha-Specific: 3 Classification Axes (المسار الخارجي، المسار الداخلي، وموقف التسليم)
+      // 11. Etaha-Specific: 3 Classification Axes & Execution Responsibility
       if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+        const activeResponsibilities = toFilterArray(filters.executionResponsibility);
+        if (activeResponsibilities.length > 0) {
+          const resp = String(site.executionResponsibility || site.responsibility || site.rawRecord?.['مسئوليه التنفيذ'] || site.rawRecord?.['مسؤولية التنفيذ'] || '').replace(/\s+/g, ' ').trim();
+          const normResp = normalizeArabicText(resp);
+          if (!activeResponsibilities.some((ar) => normalizeArabicText(ar) === normResp || ar === resp)) return false;
+        }
+
         const activeExts = toFilterArray(filters.externalPath);
         if (activeExts.length > 0) {
           const siteExt = String(site.externalPath || site.rawRecord?.['المسار الخارجي'] || '').trim();
@@ -811,15 +826,20 @@ export const Dashboard: React.FC = () => {
       if (filters.expectedDate && site.expectedDate > filters.expectedDate) return false;
       // 3. Sector Multi-Select Filter
       if (activeSectors.length > 0) {
-        const matchSector = activeSectors.some(
-          (sec) => isRecordInSector(sec, site) || String(site.sector || site.rawRecord?.['رئاسة قطاعات التنفيذ'] || site.rawRecord?.['قطاع التنفيذ'] || site.rawRecord?.['القطاع'] || site.rawRecord?.['رئاسة القطاعات'] || '').trim() === sec
-        );
+        const matchSector = activeSectors.some((sec) => {
+          if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+            const siteSec = String(site.executionSector || site.rawRecord?.['قطاع التنفيذ'] || site.sector || '').replace(/\s+/g, ' ').trim();
+            return normalizeArabicText(siteSec) === normalizeArabicText(sec) || siteSec === sec;
+          }
+          return isRecordInSector(sec, site) || String(site.sector || site.rawRecord?.['رئاسة قطاعات التنفيذ'] || site.rawRecord?.['قطاع التنفيذ'] || site.rawRecord?.['القطاع'] || site.rawRecord?.['رئاسة القطاعات'] || '').trim() === sec;
+        });
         if (!matchSector) return false;
       }
       // 4. General Admin Multi-Select Filter
       if (activeGeneralAdmins.length > 0) {
-        const ga = String(site.generalAdmin || site.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || site.rawRecord?.['الادارة العامة للتنفيذ'] || site.rawRecord?.['الادارة العامة للمنطقة'] || site.rawRecord?.['الإدارة العامة'] || site.rawRecord?.['الإدارة العامة للتنفيذ'] || '').trim();
-        if (!activeGeneralAdmins.includes(ga)) return false;
+        const ga = String(site.generalAdmin || site.rawRecord?.['الادارة العامة المنفذة'] || site.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || site.rawRecord?.['الادارة العامة للتنفيذ'] || site.rawRecord?.['الادارة العامة للمنطقة'] || site.rawRecord?.['الإدارة العامة'] || site.rawRecord?.['الإدارة العامة للتنفيذ'] || '').replace(/\s+/g, ' ').trim();
+        const normGa = normalizeArabicText(ga);
+        if (!activeGeneralAdmins.some((aga) => normalizeArabicText(aga) === normGa || aga === ga)) return false;
       }
       // 5. SubSector Multi-Select Filter
       if (activeSubSectors.length > 0) {
@@ -828,8 +848,9 @@ export const Dashboard: React.FC = () => {
       }
       // 6. Competent Admin Multi-Select Filter
       if (activeCompetentAdmins.length > 0) {
-        const ca = String(site.competentAdmin || site.rawRecord?.['ادارة التنفيذ الفرعية'] || site.rawRecord?.['إدارة التنفيذ المختصة'] || site.rawRecord?.['المنطقة'] || site.rawRecord?.['إدارة المنطقة'] || '').trim();
-        if (!activeCompetentAdmins.includes(ca)) return false;
+        const ca = String(site.competentAdmin || site.rawRecord?.['ادارة التنفيذ'] || site.rawRecord?.['ادارة التنفيذ الفرعية'] || site.rawRecord?.['إدارة التنفيذ المختصة'] || site.rawRecord?.['المنطقة'] || site.rawRecord?.['إدارة المنطقة'] || '').replace(/\s+/g, ' ').trim();
+        const normCa = normalizeArabicText(ca);
+        if (!activeCompetentAdmins.some((aca) => normalizeArabicText(aca) === normCa || aca === ca)) return false;
       }
       // 7. Central Filter
       if (filters.central && String(site.central || '').trim() !== String(filters.central).trim()) {
@@ -851,8 +872,15 @@ export const Dashboard: React.FC = () => {
         }
       }
 
-      // 10. Etaha-Specific: 3 Classification Axes
+      // 10. Etaha-Specific: 3 Classification Axes & Execution Responsibility
       if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+        const activeResponsibilities = toFilterArray(filters.executionResponsibility);
+        if (activeResponsibilities.length > 0) {
+          const resp = String(site.executionResponsibility || site.responsibility || site.rawRecord?.['مسئوليه التنفيذ'] || site.rawRecord?.['مسؤولية التنفيذ'] || '').replace(/\s+/g, ' ').trim();
+          const normResp = normalizeArabicText(resp);
+          if (!activeResponsibilities.some((ar) => normalizeArabicText(ar) === normResp || ar === resp)) return false;
+        }
+
         const activeExts = toFilterArray(filters.externalPath);
         if (activeExts.length > 0) {
           const siteExt = String(site.externalPath || site.rawRecord?.['المسار الخارجي'] || '').trim();
@@ -886,7 +914,7 @@ export const Dashboard: React.FC = () => {
 
       return true;
     });
-  }, [authorizedScopeData, filters.company, filters.expectedDate, filters.sector, filters.generalAdmin, filters.subSector, filters.competentAdmin, filters.central, filters.obstacleReason, filters.searchQuery, filters.externalPath, filters.internalPath, filters.excelStatus, filters.deliveryStatus, filters.specialTarget, activeScope]);
+  }, [authorizedScopeData, filters.company, filters.expectedDate, filters.sector, filters.generalAdmin, filters.subSector, filters.competentAdmin, filters.central, filters.obstacleReason, filters.searchQuery, filters.externalPath, filters.internalPath, filters.excelStatus, filters.deliveryStatus, filters.executionResponsibility, filters.specialTarget, activeScope]);
 
   // Compute live KPIs reflecting the exact 8 Excel classifications dynamically
   const kpis: KpiData = useMemo(() => {

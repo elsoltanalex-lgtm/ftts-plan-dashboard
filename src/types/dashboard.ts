@@ -43,6 +43,7 @@ export interface SiteRecord {
   governorate?: string;
   address?: string;
   responsibility?: string;
+  executionResponsibility?: string;
   deliveryArea?: string;
   deliveryOrange?: string;
   deliveryNotes?: string;
@@ -96,6 +97,7 @@ export interface FilterState {
   internalPath?: string | string[];   // المسار الداخلي
   excelStatus?: string | string[];    // موقف الإكسيل (legacy)
   deliveryStatus?: string | string[]; // موقف التسليم
+  executionResponsibility?: string | string[]; // مسؤولية التنفيذ
   specialTarget?: boolean | string;   // سبيشال تارجت
 }
 

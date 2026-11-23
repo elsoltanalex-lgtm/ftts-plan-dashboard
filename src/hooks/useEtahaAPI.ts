@@ -100,14 +100,13 @@ export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecor
     progressPercent = 20;
   }
 
-  let sector = String(r['القطاعات'] || 'القاهرة الكبرى').trim();
-  if (sector.includes('القاهرة')) sector = 'قطاع مناطق القاهرة الكبرى';
-  else if (sector.includes('الشرقية')) sector = 'قطاع شرق الدلتا';
-  else if (sector.includes('الغربية')) sector = 'قطاع مناطق غرب الدلتا';
-  else if (sector.includes('الجنوبية')) sector = 'قطاع مناطق الصعيد';
+  // Drive Etaha sector strictly from قطاع التنفيذ in Excel dataset
+  const rawExecSector = String(r['قطاع التنفيذ'] || r.executionSector || '').replace(/\s+/g, ' ').trim();
+  const rawAltSector = String(r['القطاعات'] || r.sector || '').replace(/\s+/g, ' ').trim();
+  const sector = rawExecSector || rawAltSector || 'قطاع غير محدد';
 
-  const generalAdmin = String(r['الادارة العامة المنفذة'] || 'الإدارة العامة لتنفيذ الشبكات').trim();
-  const competentAdmin = String(r['ادارة التنفيذ'] || r['قطاع التنفيذ'] || 'إدارة التنفيذ المختصة').trim();
+  const generalAdmin = String(r['الادارة العامة المنفذة'] || r['الادارة العامة لتنفيذ الشبكات'] || 'الإدارة العامة لتنفيذ الشبكات').replace(/\s+/g, ' ').trim();
+  const competentAdmin = String(r['ادارة التنفيذ'] || r['إدارة التنفيذ المختصة'] || rawExecSector || 'إدارة التنفيذ المختصة').replace(/\s+/g, ' ').trim();
   const governorate = String(r['المحافظة'] || '').trim();
   const central = String(r['سنترال الربط'] || governorate || 'سنترال رئيسي').trim();
 
@@ -126,6 +125,7 @@ export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecor
 
   const obstacleReason = String(r['سبب المعوق او التعذر'] || r['ملحوظه في حاله عدم الانتهاء'] || 'لا يوجد تعذر').trim();
   const expectedDate = r['تاريخ الانتهاء'] || '2026-12-31';
+  const rawResponsibility = String(r['مسئوليه التنفيذ'] || r['مسؤولية التنفيذ'] || r['مسئولية التنفيذ'] || r.responsibility || r.executionResponsibility || 'التنفيذ').replace(/\s+/g, ' ').trim();
 
   return {
     id: `ETAH-${siteCode}`,
@@ -138,12 +138,13 @@ export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecor
     sector,
     generalAdmin,
     competentAdmin,
-    executionSector: String(r['قطاع التنفيذ'] || '').trim(),
-    subSector: String(r['ادارة التنفيذ'] || '').trim(),
+    executionSector: rawExecSector || sector,
+    subSector: competentAdmin,
     governorate,
     central,
-    civilContractor: String(r['مسئوليه التنفيذ'] || 'التنفيذ').trim(),
-    responsibility: String(r['مسئوليه التنفيذ'] || 'التنفيذ').trim(),
+    civilContractor: rawResponsibility,
+    responsibility: rawResponsibility,
+    executionResponsibility: rawResponsibility,
     classification: rawStatus || 'إتاحة',
     obstacleReason,
     obstacleType: rawStatus.includes('معوق') ? 'معوقات' : rawStatus.includes('تعذر') ? 'تعذر' : '',
