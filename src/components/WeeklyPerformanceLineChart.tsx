@@ -44,6 +44,16 @@ export interface WeeklyPerformanceLineChartProps {
   activeScope?: string;
 }
 
+export interface OverdueBreakdown {
+  total: number;
+  motaazer: number;          // متعذر / معوقات
+  permits: number;           // واقف تصاريح
+  internalStalled: number;   // واقف مسار داخلي / متوقف على العميل
+  externalStalled: number;   // واقف مسار خارجي
+  splicingStalled: number;   // واقف لحامات
+  other: number;             // قيد الاستكمال / أخرى
+}
+
 export interface AvailabilityWeekDataPoint {
   week: number;
   arabicName: string;
@@ -54,6 +64,8 @@ export interface AvailabilityWeekDataPoint {
   cumTarget: number;
   cumAchieved: number;
   cumOverdue: number;
+  deliveredLast5Weeks: number;
+  overdueBreakdown: OverdueBreakdown;
 }
 
 const ARABIC_ORDINALS: Record<number, string> = {
@@ -282,22 +294,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
     }
 
     const totalWeeks = Math.min(Math.max(currentWeek, 47), 52);
-    const weeklyBuckets: Array<{
-      targetThisWeek: number;
-      achievedThisWeek: number;
-      overdueThisWeek: number;
-    }> = Array.from({ length: totalWeeks }, () => ({
-      targetThisWeek: 0,
-      achievedThisWeek: 0,
-      overdueThisWeek: 0,
-    }));
 
-    let deliveredCount = 0;
-    let overdueCount = 0;
-    let withinSlaCount = 0;
-    let dueTargetCount = 0;
-
-    for (const site of sites) {
+    const processedSites = sites.map((site) => {
       const raw = site.rawRecord || {};
       const pVal =
         site.paymentAndStartDate ||
@@ -316,68 +314,145 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         site.status === 'تم التسليم' ||
         site.classification === 'تم الانتهاء والتسليم' ||
         raw['موقف التسليم'] === 'تم التسليم' ||
-        raw['التصنيف'] === 'تم الانتهاء والتسليم';
+        raw['التصنيف'] === 'تم الانتهاء والتسليم' ||
+        raw['التصنيف النهائي'] === 'تم التسليم';
 
-      // 3-Month Target Execution Window calculation
-      let targetDate: Date | null = null;
+      let slaExpirationWeek = 999;
+      let targetWeek = totalWeeks;
+
       if (pDate) {
-        targetDate = new Date(pDate.getTime());
+        const targetDate = new Date(pDate.getTime());
         targetDate.setMonth(targetDate.getMonth() + 3);
-      }
-
-      // Check if target falls within timeline
-      const tInfo = targetDate ? getWeekNumber(targetDate) : null;
-      const dInfo = dDate ? getWeekNumber(dDate) : null;
-
-      // 1) Target Bucket: due week
-      if (tInfo) {
-        if (tInfo.year < 2026) {
-          weeklyBuckets[0].targetThisWeek++;
-          dueTargetCount++;
-        } else if (tInfo.year === 2026 && tInfo.week <= totalWeeks) {
-          weeklyBuckets[tInfo.week - 1].targetThisWeek++;
-          dueTargetCount++;
+        const tInfo = getWeekNumber(targetDate);
+        if (tInfo.year < 2026 || tInfo.week <= 1) {
+          slaExpirationWeek = 1;
+          targetWeek = 1;
+        } else if (tInfo.year === 2026) {
+          slaExpirationWeek = tInfo.week;
+          targetWeek = tInfo.week <= totalWeeks ? tInfo.week : totalWeeks;
         } else {
-          withinSlaCount++;
+          slaExpirationWeek = 999;
+          targetWeek = totalWeeks;
         }
-      }
-
-      // 2) Achieved Bucket: delivery week
-      if (isDelivered) {
-        deliveredCount++;
-        let targetAchievedWeek = 1;
-        if (dInfo) {
-          if (dInfo.year < 2026) targetAchievedWeek = 1;
-          else if (dInfo.year === 2026 && dInfo.week <= totalWeeks) targetAchievedWeek = Math.max(1, dInfo.week);
-          else if (dInfo.year === 2026 && dInfo.week > totalWeeks) targetAchievedWeek = totalWeeks;
-        } else {
-          targetAchievedWeek = Math.min(45, totalWeeks);
-        }
-        weeklyBuckets[targetAchievedWeek - 1].achievedThisWeek++;
       } else {
-        // 3) Overdue Bucket: 3-month window passed without delivery
-        if (targetDate && targetDate <= asOfDate) {
-          overdueCount++;
-          let overWeek = 1;
-          if (tInfo && tInfo.year === 2026 && tInfo.week <= totalWeeks) {
-            overWeek = Math.max(1, tInfo.week);
+        targetWeek = totalWeeks;
+      }
+
+      let deliveryWeek: number | null = null;
+      if (isDelivered) {
+        if (dDate) {
+          const dInfo = getWeekNumber(dDate);
+          if (dInfo.year < 2026 || dInfo.week <= 1) {
+            deliveryWeek = 1;
+          } else if (dInfo.year === 2026) {
+            deliveryWeek = Math.min(dInfo.week, totalWeeks);
+          } else {
+            deliveryWeek = totalWeeks;
           }
-          weeklyBuckets[overWeek - 1].overdueThisWeek++;
+        } else {
+          deliveryWeek = Math.min(45, totalWeeks);
         }
       }
-    }
+
+      const intPath = String(raw['موقف المسار الداخلي'] || raw['المسار الداخلى'] || raw['المسار الداخلي'] || site.internalPath || '').trim();
+      const extPath = String(raw['موقف المسار الخارجي'] || raw['المسار الخارجي'] || site.externalPath || '').trim();
+      const splicing = String(raw['موقف اللحامات'] || raw['اللحامات'] || '').trim();
+      const classification = String(raw['التصنيف النهائي'] || raw['التصنيف'] || site.classification || '').trim();
+      const obstacle = String(raw['سبب المعوق او التعذر'] || raw['اسباب التعذر'] || site.obstacleReason || '').trim();
+
+      return {
+        targetWeek,
+        slaExpirationWeek,
+        isDelivered,
+        deliveryWeek,
+        intPath,
+        extPath,
+        splicing,
+        classification,
+        obstacle,
+      };
+    });
+
+    const weeklyBuckets: Array<{
+      targetThisWeek: number;
+      achievedThisWeek: number;
+    }> = Array.from({ length: totalWeeks }, () => ({
+      targetThisWeek: 0,
+      achievedThisWeek: 0,
+    }));
+
+    let totalDeliveredAll = 0;
+    processedSites.forEach((s) => {
+      if (s.targetWeek >= 1 && s.targetWeek <= totalWeeks) {
+        weeklyBuckets[s.targetWeek - 1].targetThisWeek++;
+      }
+      if (s.isDelivered) {
+        totalDeliveredAll++;
+        if (s.deliveryWeek && s.deliveryWeek >= 1 && s.deliveryWeek <= totalWeeks) {
+          weeklyBuckets[s.deliveryWeek - 1].achievedThisWeek++;
+        }
+      }
+    });
 
     let cTarget = 0;
     let cAchieved = 0;
-    let cOverdue = 0;
-
     const weeklyPoints: AvailabilityWeekDataPoint[] = [];
 
     for (let w = 1; w <= totalWeeks; w++) {
       const b = weeklyBuckets[w - 1];
       cTarget += b.targetThisWeek;
       cAchieved += b.achievedThisWeek;
-      cOverdue += b.overdueThisWeek;
+
+      // Rolling 5-week window delivered (that week and the 4 preceding weeks)
+      let deliveredLast5Weeks = 0;
+      for (let k = Math.max(1, w - 4); k <= w; k++) {
+        deliveredLast5Weeks += weeklyBuckets[k - 1].achievedThisWeek;
+      }
+
+      // Overdue sites > 3 months and undelivered as of week w
+      const overdueList = processedSites.filter(
+        (s) => s.slaExpirationWeek <= w && (!s.isDelivered || (s.deliveryWeek !== null && s.deliveryWeek > w))
+      );
+
+      let motaazer = 0;
+      let permits = 0;
+      let internalStalled = 0;
+      let externalStalled = 0;
+      let splicingStalled = 0;
+      let other = 0;
+
+      for (const s of overdueList) {
+        const combined = `${s.classification} ${s.extPath} ${s.intPath} ${s.obstacle}`.toLowerCase();
+        if (combined.includes('تعذر') || combined.includes('متعذر') || combined.includes('متعثر') || combined.includes('معوق')) {
+          motaazer++;
+        } else if (combined.includes('تصاريح') || s.extPath.includes('تصاريح')) {
+          permits++;
+        } else if (
+          s.classification.includes('عميل') ||
+          s.intPath.includes('لم يتم') ||
+          s.intPath.includes('داخلي') ||
+          s.intPath.includes('تجهيزات') ||
+          combined.includes('داخلي')
+        ) {
+          internalStalled++;
+        } else if (s.extPath && !s.extPath.includes('تم')) {
+          externalStalled++;
+        } else if (s.splicing && !s.splicing.includes('تم')) {
+          splicingStalled++;
+        } else {
+          other++;
+        }
+      }
+
+      const overdueBreakdown: OverdueBreakdown = {
+        total: overdueList.length,
+        motaazer,
+        permits,
+        internalStalled,
+        externalStalled,
+        splicingStalled,
+        other,
+      };
 
       weeklyPoints.push({
         week: w,
@@ -385,25 +460,30 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         dateRange: getWeekDateRange(w, 2026),
         targetThisWeek: b.targetThisWeek,
         achievedThisWeek: b.achievedThisWeek,
-        overdueThisWeek: b.overdueThisWeek,
+        overdueThisWeek: overdueList.length,
         cumTarget: cTarget,
         cumAchieved: cAchieved,
-        cumOverdue: cOverdue,
+        cumOverdue: overdueList.length,
+        deliveredLast5Weeks,
+        overdueBreakdown,
       });
     }
 
-    const onTimeRate = dueTargetCount > 0 ? Math.round((deliveredCount / dueTargetCount) * 100) : 100;
+    const latestPoint = weeklyPoints[weeklyPoints.length - 1];
+    const latestOverdue = latestPoint ? latestPoint.cumOverdue : 0;
+    const withinSlaCount = Math.max(0, sites.length - totalDeliveredAll - latestOverdue);
+    const onTimeRate = sites.length > 0 ? Math.round((totalDeliveredAll / sites.length) * 100) : 100;
 
     return {
       totalSites: sites.length,
-      totalTarget: dueTargetCount,
-      totalAchieved: deliveredCount,
-      totalOverdue: overdueCount,
+      totalTarget: sites.length,
+      totalAchieved: totalDeliveredAll,
+      totalOverdue: latestOverdue,
       totalWithinSla: withinSlaCount,
       onTimeRate,
       weeklyPoints,
     };
-  }, [isAvailability, sites, currentWeek, asOfDate]);
+  }, [isAvailability, sites, currentWeek]);
 
   // ─────────────────────────────────────────────────────────────
   // 3. SVG GEOMETRY AND SCALING (Origin 0,0 strictly anchored)
@@ -1081,22 +1161,28 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         {/* ── Hover Tooltip (Interactive Floating Details Card) ── */}
         {hoveredPoint && (
           <div
-            className="absolute z-20 pointer-events-none transition-all duration-75 animate-in fade-in zoom-in-95"
+            className="absolute z-30 pointer-events-none transition-all duration-75 animate-in fade-in zoom-in-95"
             style={{
               left: `${(hoveredPoint.x / svgWidth) * 100}%`,
               top: `${(hoveredPoint.y / svgHeight) * 100}%`,
-              transform: `translate(${hoveredPoint.x > svgWidth * 0.75 ? '-95%' : hoveredPoint.x < svgWidth * 0.25 ? '-5%' : '-50%'}, -110%)`,
+              transform: `translate(${
+                hoveredPoint.x > svgWidth * 0.72
+                  ? '-95%'
+                  : hoveredPoint.x < svgWidth * 0.28
+                  ? '-5%'
+                  : '-50%'
+              }, ${hoveredPoint.y < 150 ? '16px' : '-105%'})`,
             }}
           >
             <div
-              className={`text-white p-3.5 rounded-2xl shadow-2xl border text-right min-w-[280px] max-w-[340px] backdrop-blur-md ${
+              className={`text-white p-3.5 rounded-2xl shadow-2xl border text-right min-w-[300px] max-w-[360px] backdrop-blur-md ${
                 isAvailability
-                  ? 'bg-slate-950/95 border-teal-500/40 shadow-teal-950/40'
+                  ? 'bg-slate-950/95 border-teal-500/40 shadow-teal-950/50'
                   : 'bg-slate-950/95 border-sky-400/40 shadow-sky-950/40'
               }`}
             >
               {/* Header: Week number & Dates */}
-              <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-700/70 gap-2">
+              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-700/80 gap-2">
                 <span
                   className={`font-black text-xs flex items-center gap-1.5 ${
                     isAvailability ? 'text-teal-300' : 'text-sky-300'
@@ -1109,40 +1195,113 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                       : hoveredOperatorWeek?.weekDef.fullAr}
                   </span>
                 </span>
-                <span className="text-[10px] text-slate-400 font-mono">
+                <span className="text-[10px] text-slate-300 font-mono">
                   {isAvailability ? hoveredAvailabilityWeek?.dateRange : hoveredOperatorWeek?.weekDef.dateRangeAr}
                 </span>
               </div>
 
-              {/* Tooltip Content */}
+              {/* Tooltip Content for Availability */}
               {isAvailability && hoveredAvailabilityWeek ? (
-                <div className="space-y-1.5 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-slate-300">
-                      <span className="w-2 h-2 rounded-full bg-sky-400 shrink-0"></span>
-                      <span>{viewMode === 'cumulative' ? 'المستهدف التراكمي (3 أشهر):' : 'تارجت الأسبوع (3 أشهر):'}</span>
+                <div className="space-y-2 text-xs">
+                  {/* 1. المستهدف التراكمي */}
+                  <div className="flex items-center justify-between p-1.5 rounded-lg bg-slate-900/80 border border-sky-500/30">
+                    <span className="flex items-center gap-1.5 text-slate-200">
+                      <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shrink-0"></span>
+                      <span className="font-bold">المستهدف التراكمي (3 أشهر):</span>
                     </span>
-                    <span className="font-mono font-bold text-sky-400">
-                      {viewMode === 'cumulative' ? hoveredAvailabilityWeek.cumTarget : hoveredAvailabilityWeek.targetThisWeek} موقع
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-slate-300">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
-                      <span>{viewMode === 'cumulative' ? 'تم التسليم التراكمي:' : 'تم تسليمه هذا الأسبوع:'}</span>
-                    </span>
-                    <span className="font-mono font-bold text-emerald-400">
-                      {viewMode === 'cumulative' ? hoveredAvailabilityWeek.cumAchieved : hoveredAvailabilityWeek.achievedThisWeek} موقع
+                    <span className="font-mono font-black text-sky-300 text-sm">
+                      {hoveredAvailabilityWeek.cumTarget}{' '}
+                      <span className="text-[10px] font-sans font-normal text-slate-400">موقع</span>
                     </span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-slate-300">
-                      <span className="w-2 h-2 rounded-full bg-rose-400 shrink-0"></span>
-                      <span>{viewMode === 'cumulative' ? 'تجاوز المدة التراكمي:' : 'تجاوز المدة هذا الأسبوع:'}</span>
+
+                  {/* 2. المحقق التراكمي */}
+                  <div className="flex items-center justify-between p-1.5 rounded-lg bg-slate-900/80 border border-emerald-500/30">
+                    <span className="flex items-center gap-1.5 text-slate-200">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0"></span>
+                      <span className="font-bold">المحقق التراكمي (تم تسليمه):</span>
                     </span>
-                    <span className="font-mono font-bold text-rose-400">
-                      {viewMode === 'cumulative' ? hoveredAvailabilityWeek.cumOverdue : hoveredAvailabilityWeek.overdueThisWeek} موقع
+                    <span className="font-mono font-black text-emerald-300 text-sm">
+                      {hoveredAvailabilityWeek.cumAchieved}{' '}
+                      <span className="text-[10px] font-sans font-normal text-slate-400">موقع</span>
                     </span>
+                  </div>
+
+                  {/* 3. المسلمة آخر 5 أسابيع */}
+                  <div className="flex items-center justify-between p-1.5 rounded-lg bg-slate-900/80 border border-teal-500/30">
+                    <span className="flex items-center gap-1.5 text-slate-200">
+                      <Sparkles className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                      <span className="font-bold">المسلّمة آخر 5 أسابيع:</span>
+                    </span>
+                    <span className="font-mono font-black text-teal-300 text-sm">
+                      {hoveredAvailabilityWeek.deliveredLast5Weeks}{' '}
+                      <span className="text-[10px] font-sans font-normal text-slate-400">موقع</span>
+                    </span>
+                  </div>
+
+                  {/* 4. المتجاوزة 3 أشهر وغير مسلمة */}
+                  <div className="p-2 rounded-xl bg-rose-950/50 border border-rose-500/40 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-rose-200 font-bold">
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                        <span>تجاوزت 3 أشهر وغير مسلّمة:</span>
+                      </span>
+                      <span className="font-mono font-black text-rose-300 text-sm">
+                        {hoveredAvailabilityWeek.cumOverdue}{' '}
+                        <span className="text-[10px] font-sans font-normal text-rose-300/70">موقع</span>
+                      </span>
+                    </div>
+
+                    {/* تفصيل أسباب وموقف المواقع المتجاوزة */}
+                    {hoveredAvailabilityWeek.cumOverdue > 0 ? (
+                      <div className="pt-1.5 border-t border-rose-500/30 text-[10px] space-y-1">
+                        <span className="text-slate-300 font-bold block text-[10px]">
+                          تفصيل موقف المواقع المتجاوزة:
+                        </span>
+                        <div className="grid grid-cols-2 gap-1 font-mono">
+                          {hoveredAvailabilityWeek.overdueBreakdown.internalStalled > 0 && (
+                            <div className="bg-slate-900/90 px-1.5 py-1 rounded border border-amber-500/30 flex justify-between items-center text-slate-200">
+                              <span className="text-amber-300 truncate font-sans">واقف داخلي/عميل:</span>
+                              <span className="text-amber-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.internalStalled}</span>
+                            </div>
+                          )}
+                          {hoveredAvailabilityWeek.overdueBreakdown.permits > 0 && (
+                            <div className="bg-slate-900/90 px-1.5 py-1 rounded border border-blue-500/30 flex justify-between items-center text-slate-200">
+                              <span className="text-blue-300 truncate font-sans">واقف تصاريح:</span>
+                              <span className="text-blue-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.permits}</span>
+                            </div>
+                          )}
+                          {hoveredAvailabilityWeek.overdueBreakdown.motaazer > 0 && (
+                            <div className="bg-slate-900/90 px-1.5 py-1 rounded border border-rose-500/30 flex justify-between items-center text-slate-200">
+                              <span className="text-rose-300 truncate font-sans">متعذر/معوقات:</span>
+                              <span className="text-rose-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.motaazer}</span>
+                            </div>
+                          )}
+                          {hoveredAvailabilityWeek.overdueBreakdown.externalStalled > 0 && (
+                            <div className="bg-slate-900/90 px-1.5 py-1 rounded border border-purple-500/30 flex justify-between items-center text-slate-200">
+                              <span className="text-purple-300 truncate font-sans">واقف مسار خارجي:</span>
+                              <span className="text-purple-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.externalStalled}</span>
+                            </div>
+                          )}
+                          {hoveredAvailabilityWeek.overdueBreakdown.splicingStalled > 0 && (
+                            <div className="bg-slate-900/90 px-1.5 py-1 rounded border border-indigo-500/30 flex justify-between items-center text-slate-200">
+                              <span className="text-indigo-300 truncate font-sans">واقف لحامات:</span>
+                              <span className="text-indigo-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.splicingStalled}</span>
+                            </div>
+                          )}
+                          {hoveredAvailabilityWeek.overdueBreakdown.other > 0 && (
+                            <div className="bg-slate-900/90 px-1.5 py-1 rounded border border-slate-700 flex justify-between items-center text-slate-300">
+                              <span className="truncate font-sans">أخرى/قيد التنفيذ:</span>
+                              <span className="text-slate-300 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.other}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-emerald-400 font-semibold pt-0.5">
+                        ✅ التزام كامل بنافذة التسليم دون أي تأخير
+                      </p>
+                    )}
                   </div>
                 </div>
               ) : hoveredOperatorWeek ? (
@@ -1203,39 +1362,218 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         )}
       </div>
 
-      {/* ── Executive Summary KPI Cards ── */}
+      {/* ── Executive Summary KPI Cards & Interactive Weekly Breakdown ── */}
       {isAvailability ? (
-        <div className="mt-5 pt-4 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-0.5">
-            <span className="text-[11px] font-bold text-slate-500 block">مشروعات النطاق المفلتر</span>
-            <span className="text-base sm:text-lg font-black text-slate-900 font-mono">
-              {availabilityStats.totalSites}
-            </span>
-            <span className="text-[10px] text-slate-400 block font-semibold">مشروع في النطاق</span>
-          </div>
+        <div className="mt-5 pt-4 border-t border-slate-100 space-y-4">
+          {/* Active / Hovered Week Focus Card */}
+          {(() => {
+            const activeWeekData = hoveredAvailabilityWeek || availabilityStats.weeklyPoints[availabilityStats.weeklyPoints.length - 1];
+            if (!activeWeekData) return null;
+            const isHovering = hoveredAvailabilityWeek !== null;
 
-          <div className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-center space-y-0.5">
-            <span className="text-[11px] font-bold text-emerald-800 block">تم تسليمها واعتمادها</span>
-            <span className="text-base sm:text-lg font-black text-emerald-700 font-mono">
-              {availabilityStats.totalAchieved}
-            </span>
-            <span className="text-[10px] text-emerald-600 block font-semibold">موقع منتهي ومسلم</span>
-          </div>
+            return (
+              <div
+                className={`p-4 rounded-2xl border transition-all duration-200 ${
+                  isHovering
+                    ? 'bg-gradient-to-r from-teal-50/90 via-sky-50/70 to-indigo-50/80 border-teal-300 shadow-sm'
+                    : 'bg-slate-50/80 border-slate-200'
+                }`}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-3 border-b border-slate-200/80 gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-teal-600 text-white flex items-center gap-1 shadow-2xs">
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>الأسبوع {activeWeekData.arabicName} (أسبوع {activeWeekData.week})</span>
+                    </span>
+                    <span className="text-xs text-slate-600 font-mono font-semibold">
+                      {activeWeekData.dateRange}
+                    </span>
+                    {isHovering ? (
+                      <span className="text-[10px] bg-teal-100 text-teal-800 font-bold px-2 py-0.5 rounded-full animate-pulse">
+                        أسبوع محدد بالماوس
+                      </span>
+                    ) : (
+                      <span className="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full">
+                        الأسبوع الحالي (مرر المؤشر على أي أسبوع لعرض تفاصيله)
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-slate-500 font-medium">
+                    نسبة الإنجاز حتى هذا الأسبوع:{' '}
+                    <strong className="text-slate-800 font-mono">
+                      {activeWeekData.cumTarget > 0 ? Math.round((activeWeekData.cumAchieved / activeWeekData.cumTarget) * 100) : 100}%
+                    </strong>
+                  </span>
+                </div>
 
-          <div className="p-3 rounded-2xl bg-rose-50/70 border border-rose-200 text-center space-y-0.5">
-            <span className="text-[11px] font-bold text-rose-800 block">تجاوزت مدة الـ 3 أشهر</span>
-            <span className="text-base sm:text-lg font-black text-rose-700 font-mono">
-              {availabilityStats.totalOverdue}
-            </span>
-            <span className="text-[10px] text-rose-600 block font-semibold">تجاوزت نافذة التسليم</span>
-          </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {/* 1. المستهدف التراكمي */}
+                  <div className="p-3 rounded-xl bg-white border border-sky-200 shadow-2xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-sky-800 flex items-center gap-1">
+                        <Target className="w-3.5 h-3.5 text-sky-600" />
+                        <span>المستهدف التراكمي</span>
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">+{activeWeekData.targetThisWeek} أسبوعي</span>
+                    </div>
+                    <div className="text-lg sm:text-xl font-black text-sky-900 font-mono">
+                      {activeWeekData.cumTarget}{' '}
+                      <span className="text-xs font-sans font-normal text-slate-500">موقع</span>
+                    </div>
+                    <span className="text-[10px] text-sky-700 block mt-0.5">
+                      نافذة 3 أشهر حتى نهاية الأسبوع
+                    </span>
+                  </div>
 
-          <div className="p-3 rounded-2xl bg-sky-50/70 border border-sky-200 text-center space-y-0.5">
-            <span className="text-[11px] font-bold text-sky-800 block">سارية ضمن فترة الـ 3 أشهر</span>
-            <span className="text-base sm:text-lg font-black text-sky-700 font-mono">
-              {availabilityStats.totalWithinSla}
-            </span>
-            <span className="text-[10px] text-sky-600 block font-semibold">قيد التنفيذ ضمن المهلة</span>
+                  {/* 2. المحقق التراكمي */}
+                  <div className="p-3 rounded-xl bg-white border border-emerald-200 shadow-2xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-emerald-800 flex items-center gap-1">
+                        <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>المحقق التراكمي</span>
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">+{activeWeekData.achievedThisWeek} أسبوعي</span>
+                    </div>
+                    <div className="text-lg sm:text-xl font-black text-emerald-800 font-mono">
+                      {activeWeekData.cumAchieved}{' '}
+                      <span className="text-xs font-sans font-normal text-slate-500">موقع مسلّم</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-700 block mt-0.5">
+                      تم تسليمها واعتمادها حتى هذا الأسبوع
+                    </span>
+                  </div>
+
+                  {/* 3. المسلمة آخر 5 أسابيع */}
+                  <div className="p-3 rounded-xl bg-white border border-teal-200 shadow-2xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-teal-800 flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                        <span>المسلّمة آخر 5 أسابيع</span>
+                      </span>
+                      <span className="text-[10px] font-mono text-teal-600 font-bold">Rolling 5-W</span>
+                    </div>
+                    <div className="text-lg sm:text-xl font-black text-teal-800 font-mono">
+                      {activeWeekData.deliveredLast5Weeks}{' '}
+                      <span className="text-xs font-sans font-normal text-slate-500">موقع</span>
+                    </div>
+                    <span className="text-[10px] text-teal-700 block mt-0.5">
+                      معدل تسليم الأسابيع الـ 5 الأخيرة
+                    </span>
+                  </div>
+
+                  {/* 4. المتجاوزة 3 أشهر وغير مسلمة */}
+                  <div className="p-3 rounded-xl bg-white border border-rose-200 shadow-2xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-rose-800 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                        <span>تجاوزت 3 أشهر</span>
+                      </span>
+                      <span className="text-[10px] font-mono text-rose-600 font-bold">غير مسلّمة</span>
+                    </div>
+                    <div className="text-lg sm:text-xl font-black text-rose-800 font-mono">
+                      {activeWeekData.cumOverdue}{' '}
+                      <span className="text-xs font-sans font-normal text-slate-500">موقع</span>
+                    </div>
+                    <span className="text-[10px] text-rose-700 block mt-0.5">
+                      تجاوزت مهلة الـ 3 أشهر ولم تُسلّم
+                    </span>
+                  </div>
+                </div>
+
+                {/* Sub-breakdown badges for overdue sites */}
+                {activeWeekData.cumOverdue > 0 && (
+                  <div className="mt-3 pt-3 border-t border-slate-200/70">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-bold text-slate-700">
+                        تفصيل أسباب وموقف المواقع المتجاوزة (Overdue Sub-breakdown):
+                      </span>
+                      <span className="text-[11px] text-slate-500 font-mono font-bold">
+                        إجمالي: {activeWeekData.cumOverdue} موقع
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap text-xs">
+                      {activeWeekData.overdueBreakdown.internalStalled > 0 && (
+                        <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-300 font-bold flex items-center gap-1.5 shadow-2xs">
+                          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                          <span>واقف داخلي / متوقف على العميل:</span>
+                          <strong className="font-mono text-amber-950 font-black">{activeWeekData.overdueBreakdown.internalStalled}</strong>
+                        </span>
+                      )}
+                      {activeWeekData.overdueBreakdown.permits > 0 && (
+                        <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-900 border border-blue-300 font-bold flex items-center gap-1.5 shadow-2xs">
+                          <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                          <span>واقف استخراج تصاريح:</span>
+                          <strong className="font-mono text-blue-950 font-black">{activeWeekData.overdueBreakdown.permits}</strong>
+                        </span>
+                      )}
+                      {activeWeekData.overdueBreakdown.motaazer > 0 && (
+                        <span className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-900 border border-rose-300 font-bold flex items-center gap-1.5 shadow-2xs">
+                          <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                          <span>متعذر / معوقات تنفيذية:</span>
+                          <strong className="font-mono text-rose-950 font-black">{activeWeekData.overdueBreakdown.motaazer}</strong>
+                        </span>
+                      )}
+                      {activeWeekData.overdueBreakdown.externalStalled > 0 && (
+                        <span className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-900 border border-purple-300 font-bold flex items-center gap-1.5 shadow-2xs">
+                          <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                          <span>واقف مسار خارجي:</span>
+                          <strong className="font-mono text-purple-950 font-black">{activeWeekData.overdueBreakdown.externalStalled}</strong>
+                        </span>
+                      )}
+                      {activeWeekData.overdueBreakdown.splicingStalled > 0 && (
+                        <span className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-900 border border-indigo-300 font-bold flex items-center gap-1.5 shadow-2xs">
+                          <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                          <span>واقف لحامات وتوصيل:</span>
+                          <strong className="font-mono text-indigo-950 font-black">{activeWeekData.overdueBreakdown.splicingStalled}</strong>
+                        </span>
+                      )}
+                      {activeWeekData.overdueBreakdown.other > 0 && (
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 border border-slate-300 font-bold flex items-center gap-1.5 shadow-2xs">
+                          <span className="w-2 h-2 rounded-full bg-slate-500"></span>
+                          <span>أخرى / قيد الاستكمال:</span>
+                          <strong className="font-mono text-slate-900 font-black">{activeWeekData.overdueBreakdown.other}</strong>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Overall Scope KPI Summary Badges */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-0.5">
+              <span className="text-[11px] font-bold text-slate-500 block">مشروعات النطاق المفلتر</span>
+              <span className="text-base sm:text-lg font-black text-slate-900 font-mono">
+                {availabilityStats.totalSites}
+              </span>
+              <span className="text-[10px] text-slate-400 block font-semibold">مشروع في النطاق</span>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-center space-y-0.5">
+              <span className="text-[11px] font-bold text-emerald-800 block">تم تسليمها واعتمادها</span>
+              <span className="text-base sm:text-lg font-black text-emerald-700 font-mono">
+                {availabilityStats.totalAchieved}
+              </span>
+              <span className="text-[10px] text-emerald-600 block font-semibold">موقع منتهي ومسلم</span>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-rose-50/70 border border-rose-200 text-center space-y-0.5">
+              <span className="text-[11px] font-bold text-rose-800 block">تجاوزت مدة الـ 3 أشهر</span>
+              <span className="text-base sm:text-lg font-black text-rose-700 font-mono">
+                {availabilityStats.totalOverdue}
+              </span>
+              <span className="text-[10px] text-rose-600 block font-semibold">تجاوزت نافذة التسليم</span>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-sky-50/70 border border-sky-200 text-center space-y-0.5">
+              <span className="text-[11px] font-bold text-sky-800 block">سارية ضمن فترة الـ 3 أشهر</span>
+              <span className="text-base sm:text-lg font-black text-sky-700 font-mono">
+                {availabilityStats.totalWithinSla}
+              </span>
+              <span className="text-[10px] text-sky-600 block font-semibold">قيد التنفيذ ضمن المهلة</span>
+            </div>
           </div>
         </div>
       ) : (
