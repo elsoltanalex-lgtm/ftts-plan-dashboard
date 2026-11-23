@@ -1288,8 +1288,8 @@ export function getOperatorWeeklyRollout(
   const activeDepts = Array.isArray(deptFilter)
     ? deptFilter.filter(Boolean)
     : deptFilter && deptFilter !== 'All' && deptFilter !== 'ALL'
-    ? [deptFilter]
-    : [];
+      ? [deptFilter]
+      : [];
 
   // Live dynamic aggregation from in-memory sites (reactive to Add / Edit / Delete)
   const hasLiveSites = Boolean(liveSites && liveSites.length > 0);

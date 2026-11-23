@@ -4,7 +4,7 @@
 // 1. Operator FTTS Mobile Rollout Mode (WE, Vodafone, Orange - October & November Weekly Target vs Delivered Dataset)
 // 2. Availability Projects Mode (Weekly SLA / 3-Month Execution Window: Target vs Achieved vs Overdue)
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { SiteRecord, FilterState } from '../types/dashboard';
 import {
   TrendingUp,
@@ -26,7 +26,13 @@ import {
   Smartphone,
   ChevronDown,
   ArrowUpRight,
-  Filter
+  Filter,
+  Search,
+  X,
+  Download,
+  FileSpreadsheet,
+  Eye,
+  ArrowUpDown
 } from 'lucide-react';
 import {
   OPERATOR_WEEKS,
@@ -52,6 +58,12 @@ export interface OverdueBreakdown {
   externalStalled: number;   // واقف مسار خارجي
   splicingStalled: number;   // واقف لحامات
   other: number;             // قيد الاستكمال / أخرى
+  motaazerSites?: SiteRecord[];
+  permitsSites?: SiteRecord[];
+  internalStalledSites?: SiteRecord[];
+  externalStalledSites?: SiteRecord[];
+  splicingStalledSites?: SiteRecord[];
+  otherSites?: SiteRecord[];
 }
 
 export interface AvailabilityWeekDataPoint {
@@ -65,7 +77,14 @@ export interface AvailabilityWeekDataPoint {
   cumAchieved: number;
   cumOverdue: number;
   deliveredLast5Weeks: number;
+  startedUndeliveredCount: number;
+  targetSites: SiteRecord[];
+  achievedSites: SiteRecord[];
+  deliveredLast5WeeksSites: SiteRecord[];
+  overdueSites: SiteRecord[];
+  startedUndeliveredSites: SiteRecord[];
   overdueBreakdown: OverdueBreakdown;
+  startedBreakdown: OverdueBreakdown;
 }
 
 const ARABIC_ORDINALS: Record<number, string> = {
@@ -206,6 +225,127 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
   // Chart Display Mode: 'cumulative' | 'weekly'
   const [viewMode, setViewMode] = useState<'cumulative' | 'weekly'>('cumulative');
   const [hoveredWeekIndex, setHoveredWeekIndex] = useState<number | null>(null);
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState<number | null>(null);
+  const leaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Interactive Site Inspection Modal State
+  const [inspectionModal, setInspectionModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    subtitle: string;
+    weekNumber: number;
+    sites: SiteRecord[];
+  } | null>(null);
+  const [modalSearch, setModalSearch] = useState('');
+
+  const openInspection = (title: string, subtitle: string, weekNumber: number, sitesList: SiteRecord[]) => {
+    setModalSearch('');
+    setInspectionModal({
+      isOpen: true,
+      title,
+      subtitle,
+      weekNumber,
+      sites: sitesList,
+    });
+  };
+
+  const closeInspection = () => {
+    setInspectionModal(null);
+    setModalSearch('');
+  };
+
+  // Filtered sites inside the inspection modal
+  const filteredModalSites = useMemo(() => {
+    if (!inspectionModal || !inspectionModal.sites) return [];
+    if (!modalSearch.trim()) return inspectionModal.sites;
+    const q = modalSearch.trim().toLowerCase();
+    return inspectionModal.sites.filter((s) => {
+      const raw = s.rawRecord || {};
+      const text = [
+        s.id,
+        s.name,
+        s.sector,
+        s.generalAdmin,
+        s.internalPath,
+        s.externalPath,
+        (s as any).splicingStatus,
+        s.classification,
+        s.obstacleReason,
+        s.deliveryStatus,
+        raw['كود الموقع'],
+        raw['اسم الموقع'],
+        raw['موقف التسليم'],
+        raw['موقف المسار الداخلي'],
+        raw['موقف المسار الخارجي'],
+        raw['موقف اللحامات'],
+        raw['التصنيف النهائي'],
+        raw['سبب المعوق او التعذر'],
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return text.includes(q);
+    });
+  }, [inspectionModal?.sites, modalSearch]);
+
+  const exportInspectionToCSV = (sitesToExport: SiteRecord[], title: string, weekNum: number) => {
+    const headers = [
+      'كود الموقع / المشروع',
+      'اسم الموقع / العميل',
+      'القطاع',
+      'الإدارة العامة للتنفيذ',
+      'تاريخ السداد والبدء في التنفيذ',
+      'موقف التسليم',
+      'تاريخ التسليم',
+      'موقف المسار الداخلي',
+      'موقف المسار الخارجي',
+      'موقف اللحامات',
+      'التصنيف النهائي',
+      'سبب المعوق او التعذر',
+    ];
+
+    const rows = sitesToExport.map((s) => {
+      const raw = s.rawRecord || {};
+      const delStatus = String(
+        s.deliveryStatus ||
+        raw['موقف التسليم'] ||
+        raw['موقف_التسليم'] ||
+        (s.status === 'تم التسليم' ? 'تم التسليم' : 'لم يتم')
+      ).trim();
+
+      return [
+        s.id || raw['كود الموقع'] || raw['site_id'] || '',
+        s.name || raw['اسم الموقع'] || raw['اسم المشروع'] || '',
+        s.sector || raw['القطاع'] || raw['قطاع التنفيذ'] || '',
+        s.generalAdmin || raw['الإدارة العامة'] || raw['الإدارة العامة للتنفيذ'] || '',
+        s.paymentAndStartDate || raw['تاريخ السداد والبدء في التنفيذ'] || '',
+        delStatus,
+        s.deliveryDate || (s as any).delivery_date || raw['تاريخ التسليم'] || raw['تاريخ التسليم '] || '',
+        s.internalPath || raw['موقف المسار الداخلي'] || '',
+        s.externalPath || raw['موقف المسار الخارجي'] || '',
+        (s as any).splicingStatus || raw['موقف اللحامات'] || '',
+        s.classification || raw['التصنيف النهائي'] || raw['التصنيف'] || '',
+        s.obstacleReason || raw['سبب المعوق او التعذر'] || '',
+      ];
+    });
+
+    const csvContent =
+      '\uFEFF' +
+      [
+        headers.join(','),
+        ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+      ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${title.replace(/[\/\s:]+/g, '_')}_اسبوع_${weekNum}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   // Detect if current scope is Availability Projects
   const isAvailability = useMemo(() => {
@@ -301,49 +441,70 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         site.paymentAndStartDate ||
         raw['تاريخ السداد والبدء في التنفيذ'] ||
         raw['تاريخ السداد و البدء فى التنفيذ'] ||
+        raw['تاريخ السداد والبدء فى التنفيذ'] ||
+        raw['تاريخ السداد'] ||
         raw.paymentAndStartDate ||
         raw.payment_and_start_date;
-      const dVal = site.deliveryDate || (site as any).delivery_date || raw['تاريخ التسليم '] || raw['تاريخ التسليم'] || raw.deliveryDate || raw.delivery_date;
+      const dVal =
+        site.deliveryDate ||
+        (site as any).delivery_date ||
+        raw['تاريخ التسليم '] ||
+        raw['تاريخ التسليم'] ||
+        raw.deliveryDate ||
+        raw.delivery_date;
 
       const pDate = parseDateSafe(pVal);
       const dDate = parseDateSafe(dVal);
 
-      const isDelivered =
-        Boolean(dDate) ||
-        site.status === 'تم الانتهاء' ||
-        site.status === 'تم التسليم' ||
-        site.status === 'تم التشغيل فايبر' ||
-        site.executionCategory === 'Completed' ||
-        site.classification === 'تم الانتهاء والتسليم' ||
-        site.classification === 'تم التسليم' ||
-        site.deliveryStatus === 'تم التسليم' ||
-        site.deliveryArea === 'تم التسليم' ||
-        raw['موقف التسليم'] === 'تم التسليم' ||
-        raw['التصنيف'] === 'تم الانتهاء والتسليم' ||
-        raw['التصنيف النهائي'] === 'تم التسليم' ||
-        raw['التصنيف'] === 'تم التسليم';
+      // 1. Delivery Status Rule: Strictly from "موقف التسليم" column
+      // "تم التسليم" = delivered, "لم يتم" = not delivered
+      const rawDelStatus = String(
+        site.deliveryStatus ||
+        site.deliveryArea ||
+        raw['موقف التسليم'] ||
+        raw['موقف_التسليم'] ||
+        raw['موقف التسليم '] ||
+        ''
+      ).trim();
 
-      let slaExpirationWeek = 999;
-      let targetWeek = totalWeeks;
+      let isDelivered = false;
+      if (rawDelStatus === 'تم التسليم') {
+        isDelivered = true;
+      } else if (rawDelStatus === 'لم يتم') {
+        isDelivered = false;
+      } else {
+        isDelivered = site.status === 'تم التسليم' || site.status === 'تم الانتهاء والتسليم';
+      }
 
+      // 2. Start Week: Based on "تاريخ السداد والبدء في التنفيذ"
+      let startWeek: number | null = null;
+      if (pDate) {
+        const pInfo = getWeekNumber(pDate);
+        if (pInfo.year < 2026 || pInfo.week <= 1) {
+          startWeek = 1;
+        } else if (pInfo.year === 2026) {
+          startWeek = Math.min(pInfo.week, totalWeeks);
+        } else {
+          startWeek = 999;
+        }
+      }
+
+      // 3. SLA Expiration Week: 3 months from "تاريخ السداد والبدء في التنفيذ"
+      let slaExpirationWeek: number = 999;
       if (pDate) {
         const targetDate = new Date(pDate.getTime());
         targetDate.setMonth(targetDate.getMonth() + 3);
         const tInfo = getWeekNumber(targetDate);
         if (tInfo.year < 2026 || tInfo.week <= 1) {
           slaExpirationWeek = 1;
-          targetWeek = 1;
         } else if (tInfo.year === 2026) {
           slaExpirationWeek = tInfo.week;
-          targetWeek = tInfo.week <= totalWeeks ? tInfo.week : totalWeeks;
         } else {
           slaExpirationWeek = 999;
-          targetWeek = totalWeeks;
         }
-      } else {
-        targetWeek = totalWeeks;
       }
 
+      // 4. Delivery Week: Week when the site was delivered
       let deliveryWeek: number | null = null;
       if (isDelivered) {
         if (dDate) {
@@ -356,7 +517,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             deliveryWeek = totalWeeks;
           }
         } else {
-          deliveryWeek = targetWeek <= totalWeeks ? targetWeek : Math.min(currentWeek, totalWeeks);
+          deliveryWeek = startWeek !== null && startWeek <= totalWeeks ? startWeek : Math.min(currentWeek, 45);
         }
       }
 
@@ -366,8 +527,33 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
       const classification = String(site.classification || raw['التصنيف النهائي'] || raw['التصنيف'] || '').trim();
       const obstacle = String(site.obstacleReason || raw['سبب المعوق او التعذر'] || raw['اسباب التعذر'] || '').trim();
 
+      // Categorize obstacle / stalling reason
+      const combined = `${classification} ${extPath} ${intPath} ${obstacle}`.toLowerCase();
+      let category: 'motaazer' | 'permits' | 'internalStalled' | 'externalStalled' | 'splicingStalled' | 'other' = 'other';
+
+      if (combined.includes('تعذر') || combined.includes('متعذر') || combined.includes('متعثر') || combined.includes('معوق')) {
+        category = 'motaazer';
+      } else if (combined.includes('تصاريح') || extPath.includes('تصاريح')) {
+        category = 'permits';
+      } else if (
+        classification.includes('عميل') ||
+        intPath.includes('لم يتم') ||
+        intPath.includes('داخلي') ||
+        intPath.includes('تجهيزات') ||
+        combined.includes('داخلي')
+      ) {
+        category = 'internalStalled';
+      } else if (extPath && !extPath.includes('تم')) {
+        category = 'externalStalled';
+      } else if (splicing && !splicing.includes('تم')) {
+        category = 'splicingStalled';
+      } else {
+        category = 'other';
+      }
+
       return {
-        targetWeek,
+        site,
+        startWeek,
         slaExpirationWeek,
         isDelivered,
         deliveryWeek,
@@ -376,106 +562,95 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         splicing,
         classification,
         obstacle,
+        category,
       };
     });
 
-    const weeklyBuckets: Array<{
-      targetThisWeek: number;
-      achievedThisWeek: number;
-    }> = Array.from({ length: totalWeeks }, () => ({
-      targetThisWeek: 0,
-      achievedThisWeek: 0,
-    }));
-
-    let totalDeliveredAll = 0;
-    processedSites.forEach((s) => {
-      if (s.targetWeek >= 1 && s.targetWeek <= totalWeeks) {
-        weeklyBuckets[s.targetWeek - 1].targetThisWeek++;
-      }
-      if (s.isDelivered) {
-        totalDeliveredAll++;
-        if (s.deliveryWeek && s.deliveryWeek >= 1 && s.deliveryWeek <= totalWeeks) {
-          weeklyBuckets[s.deliveryWeek - 1].achievedThisWeek++;
-        }
-      }
-    });
-
-    let cTarget = 0;
-    let cAchieved = 0;
     const weeklyPoints: AvailabilityWeekDataPoint[] = [];
 
+    const buildBreakdown = (items: typeof processedSites): OverdueBreakdown => {
+      const motaazerSites = items.filter((s) => s.category === 'motaazer').map((s) => s.site);
+      const permitsSites = items.filter((s) => s.category === 'permits').map((s) => s.site);
+      const internalStalledSites = items.filter((s) => s.category === 'internalStalled').map((s) => s.site);
+      const externalStalledSites = items.filter((s) => s.category === 'externalStalled').map((s) => s.site);
+      const splicingStalledSites = items.filter((s) => s.category === 'splicingStalled').map((s) => s.site);
+      const otherSites = items.filter((s) => s.category === 'other').map((s) => s.site);
+
+      return {
+        total: items.length,
+        motaazer: motaazerSites.length,
+        permits: permitsSites.length,
+        internalStalled: internalStalledSites.length,
+        externalStalled: externalStalledSites.length,
+        splicingStalled: splicingStalledSites.length,
+        other: otherSites.length,
+        motaazerSites,
+        permitsSites,
+        internalStalledSites,
+        externalStalledSites,
+        splicingStalledSites,
+        otherSites,
+      };
+    };
+
     for (let w = 1; w <= totalWeeks; w++) {
-      const b = weeklyBuckets[w - 1];
-      cTarget += b.targetThisWeek;
-      cAchieved += b.achievedThisWeek;
+      // 1. المستهدف التراكمي: Cumulative sites with payment and start date up to week w
+      const targetMatches = processedSites.filter((s) => s.startWeek !== null && s.startWeek <= w);
+      const targetSites = targetMatches.map((s) => s.site);
+      const targetThisWeek = processedSites.filter((s) => s.startWeek === w).length;
 
-      // Rolling 5-week window delivered (that week and the 4 preceding weeks)
-      let deliveredLast5Weeks = 0;
-      for (let k = Math.max(1, w - 4); k <= w; k++) {
-        deliveredLast5Weeks += weeklyBuckets[k - 1].achievedThisWeek;
-      }
+      // 2. المحقق التراكمي: Cumulative delivered sites up to week w
+      const achievedMatches = processedSites.filter((s) => s.isDelivered && s.deliveryWeek !== null && s.deliveryWeek <= w);
+      const achievedSites = achievedMatches.map((s) => s.site);
+      const achievedThisWeek = processedSites.filter((s) => s.isDelivered && s.deliveryWeek === w).length;
 
-      // Overdue sites > 3 months and undelivered as of week w
-      const overdueList = processedSites.filter(
+      // 3. المسلمة آخر 5 أسابيع: Rolling 5-week window
+      const deliveredLast5WeeksMatches = processedSites.filter(
+        (s) => s.isDelivered && s.deliveryWeek !== null && s.deliveryWeek >= Math.max(1, w - 4) && s.deliveryWeek <= w
+      );
+      const deliveredLast5WeeksSites = deliveredLast5WeeksMatches.map((s) => s.site);
+
+      // 4. المتجاوزة 3 أشهر وغير مسلمة as of week w
+      const overdueMatches = processedSites.filter(
         (s) => s.slaExpirationWeek <= w && (!s.isDelivered || (s.deliveryWeek !== null && s.deliveryWeek > w))
       );
+      const overdueSites = overdueMatches.map((s) => s.site);
+      const overdueThisWeek = processedSites.filter(
+        (s) => s.slaExpirationWeek === w && (!s.isDelivered || (s.deliveryWeek !== null && s.deliveryWeek > w))
+      ).length;
+      const overdueBreakdown = buildBreakdown(overdueMatches);
 
-      let motaazer = 0;
-      let permits = 0;
-      let internalStalled = 0;
-      let externalStalled = 0;
-      let splicingStalled = 0;
-      let other = 0;
-
-      for (const s of overdueList) {
-        const combined = `${s.classification} ${s.extPath} ${s.intPath} ${s.obstacle}`.toLowerCase();
-        if (combined.includes('تعذر') || combined.includes('متعذر') || combined.includes('متعثر') || combined.includes('معوق')) {
-          motaazer++;
-        } else if (combined.includes('تصاريح') || s.extPath.includes('تصاريح')) {
-          permits++;
-        } else if (
-          s.classification.includes('عميل') ||
-          s.intPath.includes('لم يتم') ||
-          s.intPath.includes('داخلي') ||
-          s.intPath.includes('تجهيزات') ||
-          combined.includes('داخلي')
-        ) {
-          internalStalled++;
-        } else if (s.extPath && !s.extPath.includes('تم')) {
-          externalStalled++;
-        } else if (s.splicing && !s.splicing.includes('تم')) {
-          splicingStalled++;
-        } else {
-          other++;
-        }
-      }
-
-      const overdueBreakdown: OverdueBreakdown = {
-        total: overdueList.length,
-        motaazer,
-        permits,
-        internalStalled,
-        externalStalled,
-        splicingStalled,
-        other,
-      };
+      // 5. بدأت التنفيذ ولم تسلم بعد as of week w
+      const startedUndeliveredMatches = processedSites.filter(
+        (s) => s.startWeek !== null && s.startWeek <= w && (!s.isDelivered || (s.deliveryWeek !== null && s.deliveryWeek > w))
+      );
+      const startedUndeliveredSites = startedUndeliveredMatches.map((s) => s.site);
+      const startedBreakdown = buildBreakdown(startedUndeliveredMatches);
 
       weeklyPoints.push({
         week: w,
         arabicName: ARABIC_ORDINALS[w] || `${w}`,
         dateRange: getWeekDateRange(w, 2026),
-        targetThisWeek: b.targetThisWeek,
-        achievedThisWeek: b.achievedThisWeek,
-        overdueThisWeek: overdueList.length,
-        cumTarget: cTarget,
-        cumAchieved: cAchieved,
-        cumOverdue: overdueList.length,
-        deliveredLast5Weeks,
+        targetThisWeek,
+        achievedThisWeek,
+        overdueThisWeek,
+        cumTarget: targetSites.length,
+        cumAchieved: achievedSites.length,
+        cumOverdue: overdueSites.length,
+        deliveredLast5Weeks: deliveredLast5WeeksSites.length,
+        startedUndeliveredCount: startedUndeliveredSites.length,
+        targetSites,
+        achievedSites,
+        deliveredLast5WeeksSites,
+        overdueSites,
+        startedUndeliveredSites,
         overdueBreakdown,
+        startedBreakdown,
       });
     }
 
     const latestPoint = weeklyPoints[weeklyPoints.length - 1];
+    const totalDeliveredAll = processedSites.filter((s) => s.isDelivered).length;
     const latestOverdue = latestPoint ? latestPoint.cumOverdue : 0;
     const withinSlaCount = Math.max(0, sites.length - totalDeliveredAll - latestOverdue);
     const onTimeRate = sites.length > 0 ? Math.round((totalDeliveredAll / sites.length) * 100) : 100;
@@ -670,8 +845,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         <div className="flex items-center gap-3.5">
           <div
             className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-md ring-4 ${isAvailability
-                ? 'bg-gradient-to-br from-teal-600 via-sky-600 to-indigo-700 ring-teal-50'
-                : 'bg-gradient-to-br from-indigo-600 via-sky-600 to-purple-700 ring-indigo-50'
+              ? 'bg-gradient-to-br from-teal-600 via-sky-600 to-indigo-700 ring-teal-50'
+              : 'bg-gradient-to-br from-indigo-600 via-sky-600 to-purple-700 ring-indigo-50'
               }`}
           >
             {isAvailability ? <CalendarCheck2 className="w-6 h-6" /> : <Smartphone className="w-6 h-6" />}
@@ -685,8 +860,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
               </h3>
               <span
                 className={`text-xs px-2.5 py-0.5 rounded-full font-bold border ${isAvailability
-                    ? 'bg-teal-50 text-teal-800 border-teal-200/80'
-                    : 'bg-indigo-50 text-indigo-700 border-indigo-200/80'
+                  ? 'bg-teal-50 text-teal-800 border-teal-200/80'
+                  : 'bg-indigo-50 text-indigo-700 border-indigo-200/80'
                   }`}
               >
                 {isAvailability ? 'مشاريع الإتاحة (Availability Projects)' : companyLabelAr}
@@ -721,8 +896,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
               <button
                 onClick={() => setSelectedOperator('All')}
                 className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${selectedOperator === 'All'
-                    ? 'bg-white text-indigo-700 shadow-2xs font-black'
-                    : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                  : 'text-slate-600 hover:text-slate-900'
                   }`}
               >
                 الكل
@@ -730,8 +905,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
               <button
                 onClick={() => setSelectedOperator('WE')}
                 className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${selectedOperator === 'WE'
-                    ? 'bg-purple-600 text-white shadow-2xs font-black'
-                    : 'text-slate-600 hover:text-purple-700'
+                  ? 'bg-purple-600 text-white shadow-2xs font-black'
+                  : 'text-slate-600 hover:text-purple-700'
                   }`}
               >
                 WE
@@ -739,8 +914,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
               <button
                 onClick={() => setSelectedOperator('Vodafone')}
                 className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${selectedOperator === 'Vodafone'
-                    ? 'bg-rose-600 text-white shadow-2xs font-black'
-                    : 'text-slate-600 hover:text-rose-700'
+                  ? 'bg-rose-600 text-white shadow-2xs font-black'
+                  : 'text-slate-600 hover:text-rose-700'
                   }`}
               >
                 Vodafone
@@ -748,8 +923,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
               <button
                 onClick={() => setSelectedOperator('Orange')}
                 className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${selectedOperator === 'Orange'
-                    ? 'bg-orange-600 text-white shadow-2xs font-black'
-                    : 'text-slate-600 hover:text-orange-700'
+                  ? 'bg-orange-600 text-white shadow-2xs font-black'
+                  : 'text-slate-600 hover:text-orange-700'
                   }`}
               >
                 Orange
@@ -763,8 +938,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
               <button
                 onClick={() => setViewMode('cumulative')}
                 className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${viewMode === 'cumulative'
-                    ? 'bg-white text-indigo-700 shadow-2xs font-black'
-                    : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                  : 'text-slate-600 hover:text-slate-900'
                   }`}
               >
                 📈 المسار التراكمي
@@ -772,8 +947,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
               <button
                 onClick={() => setViewMode('weekly')}
                 className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${viewMode === 'weekly'
-                    ? 'bg-white text-indigo-700 shadow-2xs font-black'
-                    : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                  : 'text-slate-600 hover:text-slate-900'
                   }`}
               >
                 📊 الإنجاز الأسبوعي
@@ -1147,8 +1322,16 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                 height={chartHeight + 10}
                 fill="transparent"
                 className="cursor-pointer"
-                onMouseEnter={() => setHoveredWeekIndex(idx)}
-                onMouseLeave={() => setHoveredWeekIndex(null)}
+                onClick={() => setSelectedWeekIndex(idx)}
+                onMouseEnter={() => {
+                  if (leaveTimeoutRef.current) clearTimeout(leaveTimeoutRef.current);
+                  setHoveredWeekIndex(idx);
+                }}
+                onMouseLeave={() => {
+                  leaveTimeoutRef.current = setTimeout(() => {
+                    setHoveredWeekIndex(null);
+                  }, 200);
+                }}
               />
             );
           })}
@@ -1157,22 +1340,28 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         {/* ── Hover Tooltip (Interactive Floating Details Card) ── */}
         {hoveredPoint && (
           <div
-            className="absolute z-30 pointer-events-none transition-all duration-75 animate-in fade-in zoom-in-95"
+            className="absolute z-30 pointer-events-auto transition-all duration-75 animate-in fade-in zoom-in-95"
             style={{
               left: `${(hoveredPoint.x / svgWidth) * 100}%`,
               top: `${(hoveredPoint.y / svgHeight) * 100}%`,
               transform: `translate(${hoveredPoint.x > svgWidth * 0.72
-                  ? '-95%'
-                  : hoveredPoint.x < svgWidth * 0.28
-                    ? '-5%'
-                    : '-50%'
+                ? '-95%'
+                : hoveredPoint.x < svgWidth * 0.28
+                  ? '-5%'
+                  : '-50%'
                 }, ${hoveredPoint.y < 150 ? '16px' : '-105%'})`,
+            }}
+            onMouseEnter={() => {
+              if (leaveTimeoutRef.current) clearTimeout(leaveTimeoutRef.current);
+            }}
+            onMouseLeave={() => {
+              setHoveredWeekIndex(null);
             }}
           >
             <div
-              className={`text-white p-3.5 rounded-2xl shadow-2xl border text-right min-w-[300px] max-w-[360px] backdrop-blur-md ${isAvailability
-                  ? 'bg-slate-950/95 border-teal-500/40 shadow-teal-950/50'
-                  : 'bg-slate-950/95 border-sky-400/40 shadow-sky-950/40'
+              className={`text-white p-3.5 rounded-2xl shadow-2xl border text-right min-w-[320px] max-w-[380px] backdrop-blur-md ${isAvailability
+                ? 'bg-slate-950/95 border-teal-500/40 shadow-teal-950/50'
+                : 'bg-slate-950/95 border-sky-400/40 shadow-sky-950/40'
                 }`}
             >
               {/* Header: Week number & Dates */}
@@ -1197,93 +1386,208 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
               {isAvailability && hoveredAvailabilityWeek ? (
                 <div className="space-y-2 text-xs">
                   {/* 1. المستهدف التراكمي */}
-                  <div className="flex items-center justify-between p-1.5 rounded-lg bg-slate-900/80 border border-sky-500/30">
-                    <span className="flex items-center gap-1.5 text-slate-200">
-                      <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shrink-0"></span>
-                      <span className="font-bold">المستهدف التراكمي (3 أشهر):</span>
+                  <div
+                    onClick={() =>
+                      openInspection(
+                        'المستهدف التراكمي',
+                        'المشروعات التي بدأ سدادها وتنفيذها حتى نهاية هذا الأسبوع',
+                        hoveredAvailabilityWeek.week,
+                        hoveredAvailabilityWeek.targetSites
+                      )
+                    }
+                    className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-sky-500/30 hover:border-sky-400 hover:bg-sky-950/40 cursor-pointer transition-all duration-150 group"
+                    title="انقر لعرض قائمة المشروعات"
+                  >
+                    <span className="flex items-center gap-1.5 text-slate-200 group-hover:text-sky-200">
+                      <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shrink-0 group-hover:scale-110 transition-transform"></span>
+                      <span className="font-bold">المستهدف التراكمي:</span>
                     </span>
-                    <span className="font-mono font-black text-sky-300 text-sm">
-                      {hoveredAvailabilityWeek.cumTarget}{' '}
-                      <span className="text-[10px] font-sans font-normal text-slate-400">موقع</span>
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-black text-sky-300 text-sm">
+                        {hoveredAvailabilityWeek.cumTarget}{' '}
+                        <span className="text-[10px] font-sans font-normal text-slate-400">موقع</span>
+                      </span>
+                      <Eye className="w-3.5 h-3.5 text-sky-400/60 group-hover:text-sky-300 shrink-0" />
+                    </div>
                   </div>
 
                   {/* 2. المحقق التراكمي */}
-                  <div className="flex items-center justify-between p-1.5 rounded-lg bg-slate-900/80 border border-emerald-500/30">
-                    <span className="flex items-center gap-1.5 text-slate-200">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0"></span>
+                  <div
+                    onClick={() =>
+                      openInspection(
+                        'المحقق التراكمي (تم تسليمه)',
+                        'المشروعات المسلّمة والمعتمدة رسمياً حتى هذا الأسبوع',
+                        hoveredAvailabilityWeek.week,
+                        hoveredAvailabilityWeek.achievedSites
+                      )
+                    }
+                    className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-emerald-500/30 hover:border-emerald-400 hover:bg-emerald-950/40 cursor-pointer transition-all duration-150 group"
+                    title="انقر لعرض قائمة المشروعات المسلّمة"
+                  >
+                    <span className="flex items-center gap-1.5 text-slate-200 group-hover:text-emerald-200">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 group-hover:scale-110 transition-transform"></span>
                       <span className="font-bold">المحقق التراكمي (تم تسليمه):</span>
                     </span>
-                    <span className="font-mono font-black text-emerald-300 text-sm">
-                      {hoveredAvailabilityWeek.cumAchieved}{' '}
-                      <span className="text-[10px] font-sans font-normal text-slate-400">موقع</span>
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-black text-emerald-300 text-sm">
+                        {hoveredAvailabilityWeek.cumAchieved}{' '}
+                        <span className="text-[10px] font-sans font-normal text-slate-400">موقع</span>
+                      </span>
+                      <Eye className="w-3.5 h-3.5 text-emerald-400/60 group-hover:text-emerald-300 shrink-0" />
+                    </div>
                   </div>
 
                   {/* 3. المسلمة آخر 5 أسابيع */}
-                  <div className="flex items-center justify-between p-1.5 rounded-lg bg-slate-900/80 border border-teal-500/30">
-                    <span className="flex items-center gap-1.5 text-slate-200">
-                      <Sparkles className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                  <div
+                    onClick={() =>
+                      openInspection(
+                        'المسلّمة آخر 5 أسابيع',
+                        'المشروعات المسلّمة خلال نافذة الأسابيع الخمسة الأخيرة',
+                        hoveredAvailabilityWeek.week,
+                        hoveredAvailabilityWeek.deliveredLast5WeeksSites
+                      )
+                    }
+                    className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-teal-500/30 hover:border-teal-400 hover:bg-teal-950/40 cursor-pointer transition-all duration-150 group"
+                    title="انقر لعرض مشروعات آخر 5 أسابيع"
+                  >
+                    <span className="flex items-center gap-1.5 text-slate-200 group-hover:text-teal-200">
+                      <Sparkles className="w-3.5 h-3.5 text-teal-400 shrink-0 group-hover:scale-110 transition-transform" />
                       <span className="font-bold">المسلّمة آخر 5 أسابيع:</span>
                     </span>
-                    <span className="font-mono font-black text-teal-300 text-sm">
-                      {hoveredAvailabilityWeek.deliveredLast5Weeks}{' '}
-                      <span className="text-[10px] font-sans font-normal text-slate-400">موقع</span>
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-black text-teal-300 text-sm">
+                        {hoveredAvailabilityWeek.deliveredLast5Weeks}{' '}
+                        <span className="text-[10px] font-sans font-normal text-slate-400">موقع</span>
+                      </span>
+                      <Eye className="w-3.5 h-3.5 text-teal-400/60 group-hover:text-teal-300 shrink-0" />
+                    </div>
                   </div>
 
                   {/* 4. المتجاوزة 3 أشهر وغير مسلمة */}
                   <div className="p-2 rounded-xl bg-rose-950/50 border border-rose-500/40 space-y-1.5">
-                    <div className="flex items-center justify-between">
+                    <div
+                      onClick={() =>
+                        openInspection(
+                          'تجاوزت 3 أشهر وغير مسلّمة',
+                          'المشروعات التي تجاوزت مهلة التنفيذ التعاقدية (3 أشهر) ولم يتم تسليمها بعد',
+                          hoveredAvailabilityWeek.week,
+                          hoveredAvailabilityWeek.overdueSites
+                        )
+                      }
+                      className="flex items-center justify-between cursor-pointer hover:opacity-90 transition-opacity"
+                    >
                       <span className="flex items-center gap-1.5 text-rose-200 font-bold">
                         <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
                         <span>تجاوزت 3 أشهر وغير مسلّمة:</span>
                       </span>
-                      <span className="font-mono font-black text-rose-300 text-sm">
-                        {hoveredAvailabilityWeek.cumOverdue}{' '}
-                        <span className="text-[10px] font-sans font-normal text-rose-300/70">موقع</span>
-                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className="font-mono font-black text-rose-300 text-sm">
+                          {hoveredAvailabilityWeek.cumOverdue}{' '}
+                          <span className="text-[10px] font-sans font-normal text-rose-300/70">موقع</span>
+                        </span>
+                        <Eye className="w-3 h-3 text-rose-400 shrink-0" />
+                      </div>
                     </div>
 
                     {/* تفصيل أسباب وموقف المواقع المتجاوزة */}
                     {hoveredAvailabilityWeek.cumOverdue > 0 ? (
                       <div className="pt-1.5 border-t border-rose-500/30 text-[10px] space-y-1">
                         <span className="text-slate-300 font-bold block text-[10px]">
-                          تفصيل موقف المواقع المتجاوزة:
+                          تفصيل موقف المواقع المتجاوزة (انقر للتصفح):
                         </span>
                         <div className="grid grid-cols-2 gap-1 font-mono">
                           {hoveredAvailabilityWeek.overdueBreakdown.internalStalled > 0 && (
-                            <div className="bg-slate-900/90 px-1.5 py-1 rounded border border-amber-500/30 flex justify-between items-center text-slate-200">
+                            <div
+                              onClick={() =>
+                                openInspection(
+                                  'المتجاوزة: واقف مسار داخلي / متوقف على العميل',
+                                  'المشروعات المتجاوزة 3 أشهر والمتوقفة على المسار الداخلي أو تجهيزات العميل',
+                                  hoveredAvailabilityWeek.week,
+                                  hoveredAvailabilityWeek.overdueBreakdown.internalStalledSites || []
+                                )
+                              }
+                              className="bg-slate-900/90 px-1.5 py-1 rounded border border-amber-500/30 flex justify-between items-center text-slate-200 hover:border-amber-400 hover:bg-amber-950/40 cursor-pointer"
+                            >
                               <span className="text-amber-300 truncate font-sans">واقف داخلي/عميل:</span>
                               <span className="text-amber-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.internalStalled}</span>
                             </div>
                           )}
                           {hoveredAvailabilityWeek.overdueBreakdown.permits > 0 && (
-                            <div className="bg-slate-900/90 px-1.5 py-1 rounded border border-blue-500/30 flex justify-between items-center text-slate-200">
+                            <div
+                              onClick={() =>
+                                openInspection(
+                                  'المتجاوزة: واقف استخراج تصاريح',
+                                  'المشروعات المتجاوزة 3 أشهر والمعلقة على تصاريح الحفر وتراخيص الجهات المعنية',
+                                  hoveredAvailabilityWeek.week,
+                                  hoveredAvailabilityWeek.overdueBreakdown.permitsSites || []
+                                )
+                              }
+                              className="bg-slate-900/90 px-1.5 py-1 rounded border border-blue-500/30 flex justify-between items-center text-slate-200 hover:border-blue-400 hover:bg-blue-950/40 cursor-pointer"
+                            >
                               <span className="text-blue-300 truncate font-sans">واقف تصاريح:</span>
                               <span className="text-blue-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.permits}</span>
                             </div>
                           )}
                           {hoveredAvailabilityWeek.overdueBreakdown.motaazer > 0 && (
-                            <div className="bg-slate-900/90 px-1.5 py-1 rounded border border-rose-500/30 flex justify-between items-center text-slate-200">
+                            <div
+                              onClick={() =>
+                                openInspection(
+                                  'المتجاوزة: متعذر / معوقات',
+                                  'المشروعات المتجاوزة 3 أشهر ومصنفة متعذرة بسبب معوقات ميدانية',
+                                  hoveredAvailabilityWeek.week,
+                                  hoveredAvailabilityWeek.overdueBreakdown.motaazerSites || []
+                                )
+                              }
+                              className="bg-slate-900/90 px-1.5 py-1 rounded border border-rose-500/30 flex justify-between items-center text-slate-200 hover:border-rose-400 hover:bg-rose-950/40 cursor-pointer"
+                            >
                               <span className="text-rose-300 truncate font-sans">متعذر/معوقات:</span>
                               <span className="text-rose-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.motaazer}</span>
                             </div>
                           )}
                           {hoveredAvailabilityWeek.overdueBreakdown.externalStalled > 0 && (
-                            <div className="bg-slate-900/90 px-1.5 py-1 rounded border border-purple-500/30 flex justify-between items-center text-slate-200">
+                            <div
+                              onClick={() =>
+                                openInspection(
+                                  'المتجاوزة: واقف مسار خارجي',
+                                  'المشروعات المتجاوزة 3 أشهر والمتوقفة على أعمال المسار الخارجي والحفر',
+                                  hoveredAvailabilityWeek.week,
+                                  hoveredAvailabilityWeek.overdueBreakdown.externalStalledSites || []
+                                )
+                              }
+                              className="bg-slate-900/90 px-1.5 py-1 rounded border border-purple-500/30 flex justify-between items-center text-slate-200 hover:border-purple-400 hover:bg-purple-950/40 cursor-pointer"
+                            >
                               <span className="text-purple-300 truncate font-sans">واقف مسار خارجي:</span>
                               <span className="text-purple-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.externalStalled}</span>
                             </div>
                           )}
                           {hoveredAvailabilityWeek.overdueBreakdown.splicingStalled > 0 && (
-                            <div className="bg-slate-900/90 px-1.5 py-1 rounded border border-indigo-500/30 flex justify-between items-center text-slate-200">
+                            <div
+                              onClick={() =>
+                                openInspection(
+                                  'المتجاوزة: واقف لحامات وتوصيل',
+                                  'المشروعات المتجاوزة 3 أشهر والمتوقفة على أعمال اللحامات وإعداد البوكسات',
+                                  hoveredAvailabilityWeek.week,
+                                  hoveredAvailabilityWeek.overdueBreakdown.splicingStalledSites || []
+                                )
+                              }
+                              className="bg-slate-900/90 px-1.5 py-1 rounded border border-indigo-500/30 flex justify-between items-center text-slate-200 hover:border-indigo-400 hover:bg-indigo-950/40 cursor-pointer"
+                            >
                               <span className="text-indigo-300 truncate font-sans">واقف لحامات:</span>
                               <span className="text-indigo-400 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.splicingStalled}</span>
                             </div>
                           )}
                           {hoveredAvailabilityWeek.overdueBreakdown.other > 0 && (
-                            <div className="bg-slate-900/90 px-1.5 py-1 rounded border border-slate-700 flex justify-between items-center text-slate-300">
+                            <div
+                              onClick={() =>
+                                openInspection(
+                                  'المتجاوزة: أخرى / قيد التنفيذ',
+                                  'المشروعات المتجاوزة 3 أشهر وقيد الاستكمال والتنفيذ الميداني',
+                                  hoveredAvailabilityWeek.week,
+                                  hoveredAvailabilityWeek.overdueBreakdown.otherSites || []
+                                )
+                              }
+                              className="bg-slate-900/90 px-1.5 py-1 rounded border border-slate-700 flex justify-between items-center text-slate-300 hover:border-slate-500 hover:bg-slate-800 cursor-pointer"
+                            >
                               <span className="truncate font-sans">أخرى/قيد التنفيذ:</span>
                               <span className="text-slate-300 font-bold">{hoveredAvailabilityWeek.overdueBreakdown.other}</span>
                             </div>
@@ -1295,6 +1599,144 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                         ✅ التزام كامل بنافذة التسليم دون أي تأخير
                       </p>
                     )}
+                  </div>
+
+                  {/* 5. بدأت التنفيذ ولم تسلم بعد */}
+                  <div className="p-2 rounded-xl bg-slate-900/90 border border-slate-700 space-y-1.5">
+                    <div
+                      onClick={() =>
+                        openInspection(
+                          'بدأت التنفيذ ولم تسلم بعد',
+                          'المشروعات التي بدأ سدادها وتنفيذها وما زالت جارية ولم تسلم حتى هذا الأسبوع',
+                          hoveredAvailabilityWeek.week,
+                          hoveredAvailabilityWeek.startedUndeliveredSites
+                        )
+                      }
+                      className="flex items-center justify-between cursor-pointer hover:opacity-90 transition-opacity"
+                    >
+                      <span className="flex items-center gap-1.5 text-slate-200 font-bold">
+                        <Activity className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                        <span>بدأت التنفيذ ولم تسلم بعد:</span>
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className="font-mono font-black text-cyan-300 text-sm">
+                          {hoveredAvailabilityWeek.startedUndeliveredCount}{' '}
+                          <span className="text-[10px] font-sans font-normal text-slate-400">موقع</span>
+                        </span>
+                        <Eye className="w-3 h-3 text-cyan-400 shrink-0" />
+                      </div>
+                    </div>
+
+                    {hoveredAvailabilityWeek.startedUndeliveredCount > 0 && (
+                      <div className="pt-1.5 border-t border-slate-700/80 text-[10px] space-y-1">
+                        <span className="text-slate-400 font-bold block text-[10px]">
+                          توزيع المشروعات الجارية حسب الموقف (انقر للتصفح):
+                        </span>
+                        <div className="grid grid-cols-2 gap-1 font-mono">
+                          {hoveredAvailabilityWeek.startedBreakdown.internalStalled > 0 && (
+                            <div
+                              onClick={() =>
+                                openInspection(
+                                  'الجارية: واقف مسار داخلي / متوقف على العميل',
+                                  'المشروعات الجارية المعلقة على مسار داخلي أو تجهيزات العميل',
+                                  hoveredAvailabilityWeek.week,
+                                  hoveredAvailabilityWeek.startedBreakdown.internalStalledSites || []
+                                )
+                              }
+                              className="bg-slate-950/80 px-1.5 py-1 rounded border border-amber-500/30 flex justify-between items-center text-slate-200 hover:border-amber-400 hover:bg-amber-950/40 cursor-pointer"
+                            >
+                              <span className="text-amber-300 truncate font-sans">داخلي/عميل:</span>
+                              <span className="text-amber-400 font-bold">{hoveredAvailabilityWeek.startedBreakdown.internalStalled}</span>
+                            </div>
+                          )}
+                          {hoveredAvailabilityWeek.startedBreakdown.permits > 0 && (
+                            <div
+                              onClick={() =>
+                                openInspection(
+                                  'الجارية: واقف تصاريح',
+                                  'المشروعات الجارية المعلقة على استخراج تصاريح',
+                                  hoveredAvailabilityWeek.week,
+                                  hoveredAvailabilityWeek.startedBreakdown.permitsSites || []
+                                )
+                              }
+                              className="bg-slate-950/80 px-1.5 py-1 rounded border border-blue-500/30 flex justify-between items-center text-slate-200 hover:border-blue-400 hover:bg-blue-950/40 cursor-pointer"
+                            >
+                              <span className="text-blue-300 truncate font-sans">تصاريح:</span>
+                              <span className="text-blue-400 font-bold">{hoveredAvailabilityWeek.startedBreakdown.permits}</span>
+                            </div>
+                          )}
+                          {hoveredAvailabilityWeek.startedBreakdown.motaazer > 0 && (
+                            <div
+                              onClick={() =>
+                                openInspection(
+                                  'الجارية: متعذر / معوقات',
+                                  'المشروعات الجارية المصنفة متعذرة بسبب معوقات ميدانية',
+                                  hoveredAvailabilityWeek.week,
+                                  hoveredAvailabilityWeek.startedBreakdown.motaazerSites || []
+                                )
+                              }
+                              className="bg-slate-950/80 px-1.5 py-1 rounded border border-rose-500/30 flex justify-between items-center text-slate-200 hover:border-rose-400 hover:bg-rose-950/40 cursor-pointer"
+                            >
+                              <span className="text-rose-300 truncate font-sans">متعذر:</span>
+                              <span className="text-rose-400 font-bold">{hoveredAvailabilityWeek.startedBreakdown.motaazer}</span>
+                            </div>
+                          )}
+                          {hoveredAvailabilityWeek.startedBreakdown.externalStalled > 0 && (
+                            <div
+                              onClick={() =>
+                                openInspection(
+                                  'الجارية: مسار خارجي',
+                                  'المشروعات الجارية المتوقفة على المسار الخارجي',
+                                  hoveredAvailabilityWeek.week,
+                                  hoveredAvailabilityWeek.startedBreakdown.externalStalledSites || []
+                                )
+                              }
+                              className="bg-slate-950/80 px-1.5 py-1 rounded border border-purple-500/30 flex justify-between items-center text-slate-200 hover:border-purple-400 hover:bg-purple-950/40 cursor-pointer"
+                            >
+                              <span className="text-purple-300 truncate font-sans">مسار خارجي:</span>
+                              <span className="text-purple-400 font-bold">{hoveredAvailabilityWeek.startedBreakdown.externalStalled}</span>
+                            </div>
+                          )}
+                          {hoveredAvailabilityWeek.startedBreakdown.splicingStalled > 0 && (
+                            <div
+                              onClick={() =>
+                                openInspection(
+                                  'الجارية: لحامات وتوصيل',
+                                  'المشروعات الجارية المتوقفة على اللحامات وتوصيل الفايبر',
+                                  hoveredAvailabilityWeek.week,
+                                  hoveredAvailabilityWeek.startedBreakdown.splicingStalledSites || []
+                                )
+                              }
+                              className="bg-slate-950/80 px-1.5 py-1 rounded border border-indigo-500/30 flex justify-between items-center text-slate-200 hover:border-indigo-400 hover:bg-indigo-950/40 cursor-pointer"
+                            >
+                              <span className="text-indigo-300 truncate font-sans">لحامات:</span>
+                              <span className="text-indigo-400 font-bold">{hoveredAvailabilityWeek.startedBreakdown.splicingStalled}</span>
+                            </div>
+                          )}
+                          {hoveredAvailabilityWeek.startedBreakdown.other > 0 && (
+                            <div
+                              onClick={() =>
+                                openInspection(
+                                  'الجارية: قيد الاستكمال الميداني',
+                                  'المشروعات الجارية قيد استكمال أعمال التركيب والتشغيل',
+                                  hoveredAvailabilityWeek.week,
+                                  hoveredAvailabilityWeek.startedBreakdown.otherSites || []
+                                )
+                              }
+                              className="bg-slate-950/80 px-1.5 py-1 rounded border border-slate-700 flex justify-between items-center text-slate-300 hover:border-slate-500 hover:bg-slate-800 cursor-pointer"
+                            >
+                              <span className="truncate font-sans">قيد الاستكمال:</span>
+                              <span className="text-slate-300 font-bold">{hoveredAvailabilityWeek.startedBreakdown.other}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Hint */}
+                  <div className="pt-1 text-center text-[10px] text-teal-300/80 font-medium">
+                    💡 انقر على أي بند لعرض قائمة المشروعات وتصديرها
                   </div>
                 </div>
               ) : hoveredOperatorWeek ? (
@@ -1360,15 +1802,21 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         <div className="mt-5 pt-4 border-t border-slate-100 space-y-4">
           {/* Active / Hovered Week Focus Card */}
           {(() => {
-            const activeWeekData = hoveredAvailabilityWeek || availabilityStats.weeklyPoints[availabilityStats.weeklyPoints.length - 1];
+            const activeWeekData =
+              hoveredAvailabilityWeek ||
+              (selectedWeekIndex !== null ? availabilityStats.weeklyPoints[selectedWeekIndex] : null) ||
+              availabilityStats.weeklyPoints[availabilityStats.weeklyPoints.length - 1];
             if (!activeWeekData) return null;
             const isHovering = hoveredAvailabilityWeek !== null;
+            const isSelected = selectedWeekIndex !== null && !isHovering;
 
             return (
               <div
                 className={`p-4 rounded-2xl border transition-all duration-200 ${isHovering
                     ? 'bg-gradient-to-r from-teal-50/90 via-sky-50/70 to-indigo-50/80 border-teal-300 shadow-sm'
-                    : 'bg-slate-50/80 border-slate-200'
+                    : isSelected
+                      ? 'bg-gradient-to-r from-teal-50/60 via-slate-50 to-sky-50/60 border-teal-400 shadow-sm'
+                      : 'bg-slate-50/80 border-slate-200'
                   }`}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-3 border-b border-slate-200/80 gap-2">
@@ -1384,51 +1832,96 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                       <span className="text-[10px] bg-teal-100 text-teal-800 font-bold px-2 py-0.5 rounded-full animate-pulse">
                         أسبوع محدد بالماوس
                       </span>
+                    ) : isSelected ? (
+                      <span className="text-[10px] bg-teal-600 text-white font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <span>أسبوع مثبت بالنقر</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedWeekIndex(null);
+                          }}
+                          className="hover:bg-teal-700 rounded p-0.5"
+                          title="إلغاء التثبيت والعودة للأسبوع الحالي"
+                        >
+                          ✕
+                        </button>
+                      </span>
                     ) : (
                       <span className="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full">
-                        الأسبوع الحالي (مرر المؤشر على أي أسبوع لعرض تفاصيله)
+                        الأسبوع الحالي (انقر أو مرر المؤشر على أي أسبوع لعرض تفاصيله)
                       </span>
                     )}
                   </div>
-                  <span className="text-xs text-slate-500 font-medium">
-                    نسبة الإنجاز حتى هذا الأسبوع:{' '}
-                    <strong className="text-slate-800 font-mono">
-                      {activeWeekData.cumTarget > 0 ? Math.round((activeWeekData.cumAchieved / activeWeekData.cumTarget) * 100) : 100}%
-                    </strong>
-                  </span>
+                  <div className="flex items-center gap-3 text-xs text-slate-500 font-medium">
+                    <span>
+                      نسبة الإنجاز حتى هذا الأسبوع:{' '}
+                      <strong className="text-slate-800 font-mono">
+                        {activeWeekData.cumTarget > 0 ? Math.round((activeWeekData.cumAchieved / activeWeekData.cumTarget) * 100) : 100}%
+                      </strong>
+                    </span>
+                    <span className="text-[11px] text-teal-700 font-semibold bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                      💡 انقر على أي بطاقة لعرض وتصدير المشروعات
+                    </span>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                   {/* 1. المستهدف التراكمي */}
-                  <div className="p-3 rounded-xl bg-white border border-sky-200 shadow-2xs">
+                  <div
+                    onClick={() =>
+                      openInspection(
+                        'المستهدف التراكمي',
+                        'المشروعات التي بدأ سدادها وتنفيذها حتى نهاية هذا الأسبوع',
+                        activeWeekData.week,
+                        activeWeekData.targetSites
+                      )
+                    }
+                    className="p-3 rounded-xl bg-white border border-sky-200 shadow-2xs hover:border-sky-400 hover:shadow-md cursor-pointer transition-all duration-150 group"
+                  >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-bold text-sky-800 flex items-center gap-1">
-                        <Target className="w-3.5 h-3.5 text-sky-600" />
+                        <Target className="w-3.5 h-3.5 text-sky-600 group-hover:scale-110 transition-transform" />
                         <span>المستهدف التراكمي</span>
                       </span>
                       <span className="text-[10px] font-mono text-slate-400">+{activeWeekData.targetThisWeek} أسبوعي</span>
                     </div>
-                    <div className="text-lg sm:text-xl font-black text-sky-900 font-mono">
-                      {activeWeekData.cumTarget}{' '}
-                      <span className="text-xs font-sans font-normal text-slate-500">موقع</span>
+                    <div className="text-lg sm:text-xl font-black text-sky-900 font-mono flex items-baseline justify-between">
+                      <span>
+                        {activeWeekData.cumTarget}{' '}
+                        <span className="text-xs font-sans font-normal text-slate-500">موقع</span>
+                      </span>
+                      <Eye className="w-3.5 h-3.5 text-sky-400 group-hover:text-sky-600" />
                     </div>
                     <span className="text-[10px] text-sky-700 block mt-0.5">
-                      نافذة 3 أشهر حتى نهاية الأسبوع
+                      سداد وبدء التنفيذ حتى نهاية الأسبوع
                     </span>
                   </div>
 
                   {/* 2. المحقق التراكمي */}
-                  <div className="p-3 rounded-xl bg-white border border-emerald-200 shadow-2xs">
+                  <div
+                    onClick={() =>
+                      openInspection(
+                        'المحقق التراكمي (تم تسليمه)',
+                        'المشروعات المسلّمة والمعتمدة رسمياً حتى هذا الأسبوع',
+                        activeWeekData.week,
+                        activeWeekData.achievedSites
+                      )
+                    }
+                    className="p-3 rounded-xl bg-white border border-emerald-200 shadow-2xs hover:border-emerald-400 hover:shadow-md cursor-pointer transition-all duration-150 group"
+                  >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-bold text-emerald-800 flex items-center gap-1">
-                        <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        <CheckCheck className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
                         <span>المحقق التراكمي</span>
                       </span>
                       <span className="text-[10px] font-mono text-slate-400">+{activeWeekData.achievedThisWeek} أسبوعي</span>
                     </div>
-                    <div className="text-lg sm:text-xl font-black text-emerald-800 font-mono">
-                      {activeWeekData.cumAchieved}{' '}
-                      <span className="text-xs font-sans font-normal text-slate-500">موقع مسلّم</span>
+                    <div className="text-lg sm:text-xl font-black text-emerald-800 font-mono flex items-baseline justify-between">
+                      <span>
+                        {activeWeekData.cumAchieved}{' '}
+                        <span className="text-xs font-sans font-normal text-slate-500">موقع مسلّم</span>
+                      </span>
+                      <Eye className="w-3.5 h-3.5 text-emerald-400 group-hover:text-emerald-600" />
                     </div>
                     <span className="text-[10px] text-emerald-700 block mt-0.5">
                       تم تسليمها واعتمادها حتى هذا الأسبوع
@@ -1436,17 +1929,30 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                   </div>
 
                   {/* 3. المسلمة آخر 5 أسابيع */}
-                  <div className="p-3 rounded-xl bg-white border border-teal-200 shadow-2xs">
+                  <div
+                    onClick={() =>
+                      openInspection(
+                        'المسلّمة آخر 5 أسابيع',
+                        'المشروعات المسلّمة خلال نافذة الأسابيع الخمسة الأخيرة',
+                        activeWeekData.week,
+                        activeWeekData.deliveredLast5WeeksSites
+                      )
+                    }
+                    className="p-3 rounded-xl bg-white border border-teal-200 shadow-2xs hover:border-teal-400 hover:shadow-md cursor-pointer transition-all duration-150 group"
+                  >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-bold text-teal-800 flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                        <Sparkles className="w-3.5 h-3.5 text-teal-600 group-hover:scale-110 transition-transform" />
                         <span>المسلّمة آخر 5 أسابيع</span>
                       </span>
                       <span className="text-[10px] font-mono text-teal-600 font-bold">Rolling 5-W</span>
                     </div>
-                    <div className="text-lg sm:text-xl font-black text-teal-800 font-mono">
-                      {activeWeekData.deliveredLast5Weeks}{' '}
-                      <span className="text-xs font-sans font-normal text-slate-500">موقع</span>
+                    <div className="text-lg sm:text-xl font-black text-teal-800 font-mono flex items-baseline justify-between">
+                      <span>
+                        {activeWeekData.deliveredLast5Weeks}{' '}
+                        <span className="text-xs font-sans font-normal text-slate-500">موقع</span>
+                      </span>
+                      <Eye className="w-3.5 h-3.5 text-teal-400 group-hover:text-teal-600" />
                     </div>
                     <span className="text-[10px] text-teal-700 block mt-0.5">
                       معدل تسليم الأسابيع الـ 5 الأخيرة
@@ -1454,20 +1960,64 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                   </div>
 
                   {/* 4. المتجاوزة 3 أشهر وغير مسلمة */}
-                  <div className="p-3 rounded-xl bg-white border border-rose-200 shadow-2xs">
+                  <div
+                    onClick={() =>
+                      openInspection(
+                        'تجاوزت 3 أشهر وغير مسلّمة',
+                        'المشروعات التي تجاوزت مهلة التنفيذ التعاقدية (3 أشهر) ولم يتم تسليمها بعد',
+                        activeWeekData.week,
+                        activeWeekData.overdueSites
+                      )
+                    }
+                    className="p-3 rounded-xl bg-white border border-rose-200 shadow-2xs hover:border-rose-400 hover:shadow-md cursor-pointer transition-all duration-150 group"
+                  >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-bold text-rose-800 flex items-center gap-1">
-                        <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
                         <span>تجاوزت 3 أشهر</span>
                       </span>
                       <span className="text-[10px] font-mono text-rose-600 font-bold">غير مسلّمة</span>
                     </div>
-                    <div className="text-lg sm:text-xl font-black text-rose-800 font-mono">
-                      {activeWeekData.cumOverdue}{' '}
-                      <span className="text-xs font-sans font-normal text-slate-500">موقع</span>
+                    <div className="text-lg sm:text-xl font-black text-rose-800 font-mono flex items-baseline justify-between">
+                      <span>
+                        {activeWeekData.cumOverdue}{' '}
+                        <span className="text-xs font-sans font-normal text-slate-500">موقع</span>
+                      </span>
+                      <Eye className="w-3.5 h-3.5 text-rose-400 group-hover:text-rose-600" />
                     </div>
                     <span className="text-[10px] text-rose-700 block mt-0.5">
                       تجاوزت مهلة الـ 3 أشهر ولم تُسلّم
+                    </span>
+                  </div>
+
+                  {/* 5. بدأت التنفيذ ولم تسلم بعد */}
+                  <div
+                    onClick={() =>
+                      openInspection(
+                        'بدأت التنفيذ ولم تسلم بعد',
+                        'المشروعات التي بدأ سدادها وتنفيذها وما زالت جارية ولم تسلم حتى هذا الأسبوع',
+                        activeWeekData.week,
+                        activeWeekData.startedUndeliveredSites
+                      )
+                    }
+                    className="p-3 rounded-xl bg-white border border-cyan-200 shadow-2xs hover:border-cyan-400 hover:shadow-md cursor-pointer transition-all duration-150 group"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-cyan-800 flex items-center gap-1">
+                        <Activity className="w-3.5 h-3.5 text-cyan-600 group-hover:scale-110 transition-transform" />
+                        <span>بدأت ولم تسلّم</span>
+                      </span>
+                      <span className="text-[10px] font-mono text-cyan-600 font-bold">قيد التنفيذ</span>
+                    </div>
+                    <div className="text-lg sm:text-xl font-black text-cyan-900 font-mono flex items-baseline justify-between">
+                      <span>
+                        {activeWeekData.startedUndeliveredCount}{' '}
+                        <span className="text-xs font-sans font-normal text-slate-500">موقع</span>
+                      </span>
+                      <Eye className="w-3.5 h-3.5 text-cyan-400 group-hover:text-cyan-600" />
+                    </div>
+                    <span className="text-[10px] text-cyan-700 block mt-0.5">
+                      مشروعات جارية لم يتم تسليمها بعد
                     </span>
                   </div>
                 </div>
@@ -1476,8 +2026,9 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                 {activeWeekData.cumOverdue > 0 && (
                   <div className="mt-3 pt-3 border-t border-slate-200/70">
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-bold text-slate-700">
-                        تفصيل أسباب وموقف المواقع المتجاوزة (Overdue Sub-breakdown):
+                      <span className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                        <span>تفصيل أسباب وموقف المواقع المتجاوزة 3 أشهر (انقر للتصفح):</span>
                       </span>
                       <span className="text-[11px] text-slate-500 font-mono font-bold">
                         إجمالي: {activeWeekData.cumOverdue} موقع
@@ -1485,46 +2036,225 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                     </div>
                     <div className="flex items-center gap-2 flex-wrap text-xs">
                       {activeWeekData.overdueBreakdown.internalStalled > 0 && (
-                        <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-300 font-bold flex items-center gap-1.5 shadow-2xs">
+                        <button
+                          onClick={() =>
+                            openInspection(
+                              'المتجاوزة: واقف مسار داخلي / متوقف على العميل',
+                              'المشروعات المتجاوزة 3 أشهر والمتوقفة على المسار الداخلي أو تجهيزات العميل',
+                              activeWeekData.week,
+                              activeWeekData.overdueBreakdown.internalStalledSites || []
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-300 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-amber-100 hover:border-amber-400 transition-colors"
+                        >
                           <span className="w-2 h-2 rounded-full bg-amber-500"></span>
                           <span>واقف داخلي / متوقف على العميل:</span>
                           <strong className="font-mono text-amber-950 font-black">{activeWeekData.overdueBreakdown.internalStalled}</strong>
-                        </span>
+                        </button>
                       )}
                       {activeWeekData.overdueBreakdown.permits > 0 && (
-                        <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-900 border border-blue-300 font-bold flex items-center gap-1.5 shadow-2xs">
+                        <button
+                          onClick={() =>
+                            openInspection(
+                              'المتجاوزة: واقف استخراج تصاريح',
+                              'المشروعات المتجاوزة 3 أشهر والمعلقة على تصاريح الحفر وتراخيص الجهات المعنية',
+                              activeWeekData.week,
+                              activeWeekData.overdueBreakdown.permitsSites || []
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-900 border border-blue-300 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-blue-100 hover:border-blue-400 transition-colors"
+                        >
                           <span className="w-2 h-2 rounded-full bg-blue-500"></span>
                           <span>واقف استخراج تصاريح:</span>
                           <strong className="font-mono text-blue-950 font-black">{activeWeekData.overdueBreakdown.permits}</strong>
-                        </span>
+                        </button>
                       )}
                       {activeWeekData.overdueBreakdown.motaazer > 0 && (
-                        <span className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-900 border border-rose-300 font-bold flex items-center gap-1.5 shadow-2xs">
+                        <button
+                          onClick={() =>
+                            openInspection(
+                              'المتجاوزة: متعذر / معوقات',
+                              'المشروعات المتجاوزة 3 أشهر ومصنفة متعذرة بسبب معوقات ميدانية',
+                              activeWeekData.week,
+                              activeWeekData.overdueBreakdown.motaazerSites || []
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-900 border border-rose-300 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-rose-100 hover:border-rose-400 transition-colors"
+                        >
                           <span className="w-2 h-2 rounded-full bg-rose-500"></span>
                           <span>متعذر / معوقات تنفيذية:</span>
                           <strong className="font-mono text-rose-950 font-black">{activeWeekData.overdueBreakdown.motaazer}</strong>
-                        </span>
+                        </button>
                       )}
                       {activeWeekData.overdueBreakdown.externalStalled > 0 && (
-                        <span className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-900 border border-purple-300 font-bold flex items-center gap-1.5 shadow-2xs">
+                        <button
+                          onClick={() =>
+                            openInspection(
+                              'المتجاوزة: واقف مسار خارجي',
+                              'المشروعات المتجاوزة 3 أشهر والمتوقفة على أعمال المسار الخارجي والحفر',
+                              activeWeekData.week,
+                              activeWeekData.overdueBreakdown.externalStalledSites || []
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-900 border border-purple-300 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-purple-100 hover:border-purple-400 transition-colors"
+                        >
                           <span className="w-2 h-2 rounded-full bg-purple-500"></span>
                           <span>واقف مسار خارجي:</span>
                           <strong className="font-mono text-purple-950 font-black">{activeWeekData.overdueBreakdown.externalStalled}</strong>
-                        </span>
+                        </button>
                       )}
                       {activeWeekData.overdueBreakdown.splicingStalled > 0 && (
-                        <span className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-900 border border-indigo-300 font-bold flex items-center gap-1.5 shadow-2xs">
+                        <button
+                          onClick={() =>
+                            openInspection(
+                              'المتجاوزة: واقف لحامات وتوصيل',
+                              'المشروعات المتجاوزة 3 أشهر والمتوقفة على أعمال اللحامات وإعداد البوكسات',
+                              activeWeekData.week,
+                              activeWeekData.overdueBreakdown.splicingStalledSites || []
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-900 border border-indigo-300 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-indigo-100 hover:border-indigo-400 transition-colors"
+                        >
                           <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
                           <span>واقف لحامات وتوصيل:</span>
                           <strong className="font-mono text-indigo-950 font-black">{activeWeekData.overdueBreakdown.splicingStalled}</strong>
-                        </span>
+                        </button>
                       )}
                       {activeWeekData.overdueBreakdown.other > 0 && (
-                        <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 border border-slate-300 font-bold flex items-center gap-1.5 shadow-2xs">
+                        <button
+                          onClick={() =>
+                            openInspection(
+                              'المتجاوزة: أخرى / قيد التنفيذ',
+                              'المشروعات المتجاوزة 3 أشهر وقيد الاستكمال والتنفيذ الميداني',
+                              activeWeekData.week,
+                              activeWeekData.overdueBreakdown.otherSites || []
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 border border-slate-300 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-slate-200 transition-colors"
+                        >
                           <span className="w-2 h-2 rounded-full bg-slate-500"></span>
                           <span>أخرى / قيد الاستكمال:</span>
                           <strong className="font-mono text-slate-900 font-black">{activeWeekData.overdueBreakdown.other}</strong>
-                        </span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub-breakdown badges for Started/Undelivered sites */}
+                {activeWeekData.startedUndeliveredCount > 0 && (
+                  <div className="mt-3 pt-3 border-t border-slate-200/70">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-bold text-cyan-900 flex items-center gap-1.5">
+                        <Activity className="w-3.5 h-3.5 text-cyan-600" />
+                        <span>تفصيل موقف المشروعات الجارية التي لم تُسلّم بعد (انقر للتصفح):</span>
+                      </span>
+                      <span className="text-[11px] text-slate-500 font-mono font-bold">
+                        إجمالي: {activeWeekData.startedUndeliveredCount} موقع
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap text-xs">
+                      {activeWeekData.startedBreakdown.internalStalled > 0 && (
+                        <button
+                          onClick={() =>
+                            openInspection(
+                              'الجارية: واقف مسار داخلي / متوقف على العميل',
+                              'المشروعات الجارية المعلقة على مسار داخلي أو تجهيزات العميل',
+                              activeWeekData.week,
+                              activeWeekData.startedBreakdown.internalStalledSites || []
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-amber-50/80 text-amber-900 border border-amber-200 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-amber-100 transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                          <span>داخلي / عميل:</span>
+                          <strong className="font-mono text-amber-950 font-black">{activeWeekData.startedBreakdown.internalStalled}</strong>
+                        </button>
+                      )}
+                      {activeWeekData.startedBreakdown.permits > 0 && (
+                        <button
+                          onClick={() =>
+                            openInspection(
+                              'الجارية: واقف تصاريح',
+                              'المشروعات الجارية المعلقة على استخراج تصاريح',
+                              activeWeekData.week,
+                              activeWeekData.startedBreakdown.permitsSites || []
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-blue-50/80 text-blue-900 border border-blue-200 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-blue-100 transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                          <span>تصاريح:</span>
+                          <strong className="font-mono text-blue-950 font-black">{activeWeekData.startedBreakdown.permits}</strong>
+                        </button>
+                      )}
+                      {activeWeekData.startedBreakdown.motaazer > 0 && (
+                        <button
+                          onClick={() =>
+                            openInspection(
+                              'الجارية: متعذر / معوقات',
+                              'المشروعات الجارية المصنفة متعذرة بسبب معوقات ميدانية',
+                              activeWeekData.week,
+                              activeWeekData.startedBreakdown.motaazerSites || []
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-rose-50/80 text-rose-900 border border-rose-200 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-rose-100 transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                          <span>متعذر:</span>
+                          <strong className="font-mono text-rose-950 font-black">{activeWeekData.startedBreakdown.motaazer}</strong>
+                        </button>
+                      )}
+                      {activeWeekData.startedBreakdown.externalStalled > 0 && (
+                        <button
+                          onClick={() =>
+                            openInspection(
+                              'الجارية: مسار خارجي',
+                              'المشروعات الجارية المتوقفة على المسار الخارجي',
+                              activeWeekData.week,
+                              activeWeekData.startedBreakdown.externalStalledSites || []
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-purple-50/80 text-purple-900 border border-purple-200 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-purple-100 transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                          <span>مسار خارجي:</span>
+                          <strong className="font-mono text-purple-950 font-black">{activeWeekData.startedBreakdown.externalStalled}</strong>
+                        </button>
+                      )}
+                      {activeWeekData.startedBreakdown.splicingStalled > 0 && (
+                        <button
+                          onClick={() =>
+                            openInspection(
+                              'الجارية: لحامات وتوصيل',
+                              'المشروعات الجارية المتوقفة على اللحامات وتوصيل الفايبر',
+                              activeWeekData.week,
+                              activeWeekData.startedBreakdown.splicingStalledSites || []
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-indigo-50/80 text-indigo-900 border border-indigo-200 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-indigo-100 transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                          <span>لحامات:</span>
+                          <strong className="font-mono text-indigo-950 font-black">{activeWeekData.startedBreakdown.splicingStalled}</strong>
+                        </button>
+                      )}
+                      {activeWeekData.startedBreakdown.other > 0 && (
+                        <button
+                          onClick={() =>
+                            openInspection(
+                              'الجارية: قيد الاستكمال الميداني',
+                              'المشروعات الجارية قيد استكمال أعمال التركيب والتشغيل',
+                              activeWeekData.week,
+                              activeWeekData.startedBreakdown.otherSites || []
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 border border-slate-200 font-bold flex items-center gap-1.5 shadow-2xs hover:bg-slate-200 transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-slate-500"></span>
+                          <span>قيد الاستكمال:</span>
+                          <strong className="font-mono text-slate-900 font-black">{activeWeekData.startedBreakdown.other}</strong>
+                        </button>
                       )}
                     </div>
                   </div>
@@ -1535,36 +2265,86 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
 
           {/* Overall Scope KPI Summary Badges */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-0.5">
-              <span className="text-[11px] font-bold text-slate-500 block">مشروعات النطاق المفلتر</span>
+            <div
+              onClick={() =>
+                openInspection(
+                  'مشروعات النطاق المفلتر',
+                  'كافة المشروعات المطابقة للفلاتر الحالية',
+                  currentWeek,
+                  sites
+                )
+              }
+              className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-0.5 hover:border-slate-400 hover:shadow-xs cursor-pointer transition-all group"
+            >
+              <span className="text-[11px] font-bold text-slate-500 block group-hover:text-slate-700">مشروعات النطاق المفلتر</span>
               <span className="text-base sm:text-lg font-black text-slate-900 font-mono">
                 {availabilityStats.totalSites}
               </span>
-              <span className="text-[10px] text-slate-400 block font-semibold">مشروع في النطاق</span>
+              <span className="text-[10px] text-slate-400 block font-semibold">مشروع في النطاق (انقر للتصفح)</span>
             </div>
 
-            <div className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-center space-y-0.5">
-              <span className="text-[11px] font-bold text-emerald-800 block">تم تسليمها واعتمادها</span>
+            <div
+              onClick={() =>
+                openInspection(
+                  'تم تسليمها واعتمادها',
+                  'المشروعات التي تم تسليمها بنجاح واعتمدت رسمياً',
+                  currentWeek,
+                  sites.filter((s) => {
+                    const raw = s.rawRecord || {};
+                    const del = String(s.deliveryStatus || raw['موقف التسليم'] || raw['موقف_التسليم'] || '').trim();
+                    return del === 'تم التسليم' || s.status === 'تم التسليم';
+                  })
+                )
+              }
+              className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-center space-y-0.5 hover:border-emerald-400 hover:shadow-xs cursor-pointer transition-all group"
+            >
+              <span className="text-[11px] font-bold text-emerald-800 block group-hover:text-emerald-900">تم تسليمها واعتمادها</span>
               <span className="text-base sm:text-lg font-black text-emerald-700 font-mono">
                 {availabilityStats.totalAchieved}
               </span>
-              <span className="text-[10px] text-emerald-600 block font-semibold">موقع منتهي ومسلم</span>
+              <span className="text-[10px] text-emerald-600 block font-semibold">موقع منتهي ومسلم (انقر للتصفح)</span>
             </div>
 
-            <div className="p-3 rounded-2xl bg-rose-50/70 border border-rose-200 text-center space-y-0.5">
-              <span className="text-[11px] font-bold text-rose-800 block">تجاوزت مدة الـ 3 أشهر</span>
+            <div
+              onClick={() => {
+                const latestPt = availabilityStats.weeklyPoints[availabilityStats.weeklyPoints.length - 1];
+                openInspection(
+                  'تجاوزت مدة الـ 3 أشهر',
+                  'المشروعات التي تجاوزت مهلة التنفيذ التعاقدية (3 أشهر) ولم يتم تسليمها بعد',
+                  currentWeek,
+                  latestPt ? latestPt.overdueSites : []
+                );
+              }}
+              className="p-3 rounded-2xl bg-rose-50/70 border border-rose-200 text-center space-y-0.5 hover:border-rose-400 hover:shadow-xs cursor-pointer transition-all group"
+            >
+              <span className="text-[11px] font-bold text-rose-800 block group-hover:text-rose-900">تجاوزت مدة الـ 3 أشهر</span>
               <span className="text-base sm:text-lg font-black text-rose-700 font-mono">
                 {availabilityStats.totalOverdue}
               </span>
-              <span className="text-[10px] text-rose-600 block font-semibold">تجاوزت نافذة التسليم</span>
+              <span className="text-[10px] text-rose-600 block font-semibold">تجاوزت نافذة التسليم (انقر للتصفح)</span>
             </div>
 
-            <div className="p-3 rounded-2xl bg-sky-50/70 border border-sky-200 text-center space-y-0.5">
-              <span className="text-[11px] font-bold text-sky-800 block">سارية ضمن فترة الـ 3 أشهر</span>
+            <div
+              onClick={() => {
+                const latestPt = availabilityStats.weeklyPoints[availabilityStats.weeklyPoints.length - 1];
+                // Sites within SLA: started but not yet overdue (>3 months) and not delivered
+                const inSlaSites = latestPt
+                  ? latestPt.startedUndeliveredSites.filter((s) => !latestPt.overdueSites.includes(s))
+                  : [];
+                openInspection(
+                  'سارية ضمن فترة الـ 3 أشهر',
+                  'المشروعات الجارية قيد التنفيذ ضمن المهلة التعاقدية (3 أشهر)',
+                  currentWeek,
+                  inSlaSites
+                );
+              }}
+              className="p-3 rounded-2xl bg-sky-50/70 border border-sky-200 text-center space-y-0.5 hover:border-sky-400 hover:shadow-xs cursor-pointer transition-all group"
+            >
+              <span className="text-[11px] font-bold text-sky-800 block group-hover:text-sky-900">سارية ضمن فترة الـ 3 أشهر</span>
               <span className="text-base sm:text-lg font-black text-sky-700 font-mono">
                 {availabilityStats.totalWithinSla}
               </span>
-              <span className="text-[10px] text-sky-600 block font-semibold">قيد التنفيذ ضمن المهلة</span>
+              <span className="text-[10px] text-sky-600 block font-semibold">قيد التنفيذ ضمن المهلة (انقر للتصفح)</span>
             </div>
           </div>
         </div>
@@ -1635,8 +2415,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                       }
                     }}
                     className={`p-3 rounded-xl border transition-all cursor-pointer ${isSelected
-                        ? 'bg-indigo-50/90 border-indigo-400 ring-2 ring-indigo-200 shadow-sm'
-                        : 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-2xs'
+                      ? 'bg-indigo-50/90 border-indigo-400 ring-2 ring-indigo-200 shadow-sm'
+                      : 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-2xs'
                       }`}
                   >
                     <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -1644,10 +2424,10 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                         {dept.canonicalAdmin}
                       </span>
                       <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-black ${dept.achievementPercent >= 100
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : dept.achievementPercent >= 70
-                            ? 'bg-sky-100 text-sky-800'
-                            : 'bg-amber-100 text-amber-800'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : dept.achievementPercent >= 70
+                          ? 'bg-sky-100 text-sky-800'
+                          : 'bg-amber-100 text-amber-800'
                         }`}>
                         {dept.achievementPercent}%
                       </span>
@@ -1657,10 +2437,10 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                     <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-2">
                       <div
                         className={`h-full rounded-full transition-all duration-300 ${dept.achievementPercent >= 100
-                            ? 'bg-emerald-500'
-                            : dept.achievementPercent >= 70
-                              ? 'bg-sky-500'
-                              : 'bg-amber-500'
+                          ? 'bg-emerald-500'
+                          : dept.achievementPercent >= 70
+                            ? 'bg-sky-500'
+                            : 'bg-amber-500'
                           }`}
                         style={{ width: `${Math.min(100, dept.achievementPercent)}%` }}
                       ></div>
@@ -1694,7 +2474,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
           <Info className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
           <span>
             {isAvailability
-              ? 'يتم احتساب التارجت آلياً بإضافة 3 أشهر لتاريخ السداد والبدء في التنفيذ، وتحدد حالة التسليم أسبوعياً بناءً على تاريخ التسليم المعتمد.'
+              ? 'يتم احتساب المستهدف التراكمي بناءً على تاريخ السداد والبدء في التنفيذ، ومتابعة تجاوز مهلة الـ 3 أشهر وموقف التسليم الفعلي أسبوعياً.'
               : 'البيانات المعروضة تتضمن تتبع التسليم المعتمد والمعدل المطلوب تسليمه لكافة أسابيع أكتوبر ونوفمبر 2026 لمواقع المحمول.'}
           </span>
         </div>
@@ -1702,6 +2482,194 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
           {isAvailability ? `إجمالي الأسابيع المعروضة: ${totalSteps} أسبوعاً • سنة 2026` : '6 أسابيع (أكتوبر ونوفمبر 2026)'}
         </span>
       </div>
+
+      {/* ── Interactive Site Inspection Modal ── */}
+      {inspectionModal && inspectionModal.isOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={closeInspection}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden text-right"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={closeInspection}
+                  className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-colors"
+                  aria-label="إغلاق النافذة"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-teal-400" />
+                      <span>{inspectionModal.title}</span>
+                    </h3>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                      الأسبوع {inspectionModal.weekNumber}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-0.5">{inspectionModal.subtitle}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-xl text-xs font-black font-mono bg-white/15 text-white border border-white/20 shrink-0">
+                  {inspectionModal.sites.length} مشروع
+                </span>
+                <button
+                  onClick={() =>
+                    exportInspectionToCSV(
+                      inspectionModal.sites,
+                      inspectionModal.title,
+                      inspectionModal.weekNumber
+                    )
+                  }
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span className="hidden sm:inline">تصدير Excel / CSV</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Toolbar: Search and Filter */}
+            <div className="p-3 sm:p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="relative w-full sm:w-96">
+                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={modalSearch}
+                  onChange={(e) => setModalSearch(e.target.value)}
+                  placeholder="بحث بكود الموقع، اسم المشروع، القطاع، المسار، التصنيف..."
+                  className="w-full pr-9 pl-3 py-2 text-xs rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800 placeholder-slate-400 shadow-2xs"
+                  autoFocus
+                />
+              </div>
+
+              <div className="text-xs text-slate-500 flex items-center gap-2">
+                <span>المعروض:</span>
+                <strong className="font-mono text-slate-800 font-bold">
+                  {filteredModalSites.length} من {inspectionModal.sites.length}
+                </strong>
+                {modalSearch && (
+                  <button
+                    onClick={() => setModalSearch('')}
+                    className="text-xs text-teal-600 hover:underline mr-2 cursor-pointer"
+                  >
+                    مسح البحث
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Content: Table */}
+            <div className="flex-1 overflow-auto p-2 sm:p-4 bg-white">
+              {filteredModalSites.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 space-y-2">
+                  <FileSpreadsheet className="w-10 h-10 mx-auto text-slate-300" />
+                  <p className="text-sm font-semibold">لا توجد نتائج مطابقة لبحثك</p>
+                  <p className="text-xs text-slate-400">جرب البحث بكلمات أخرى أو مسح نص البحث</p>
+                </div>
+              ) : (
+                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+                  <table className="w-full text-right text-xs">
+                    <thead className="bg-slate-100 text-slate-700 sticky top-0 z-10 font-bold border-b border-slate-200">
+                      <tr>
+                        <th className="py-2.5 px-3 w-12 text-center">#</th>
+                        <th className="py-2.5 px-3">كود الموقع / المشروع</th>
+                        <th className="py-2.5 px-3">اسم الموقع / العميل</th>
+                        <th className="py-2.5 px-3">القطاع</th>
+                        <th className="py-2.5 px-3">الإدارة العامة للتنفيذ</th>
+                        <th className="py-2.5 px-3">تاريخ السداد والبدء</th>
+                        <th className="py-2.5 px-3">موقف التسليم</th>
+                        <th className="py-2.5 px-3">تاريخ التسليم</th>
+                        <th className="py-2.5 px-3">المسار الداخلي</th>
+                        <th className="py-2.5 px-3">المسار الخارجي</th>
+                        <th className="py-2.5 px-3">اللحامات</th>
+                        <th className="py-2.5 px-3">التصنيف / المعوق</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-sans">
+                      {filteredModalSites.map((s, idx) => {
+                        const raw = s.rawRecord || {};
+                        const code = s.id || raw['كود الموقع'] || raw['site_id'] || '—';
+                        const name = s.name || raw['اسم الموقع'] || raw['اسم المشروع'] || '—';
+                        const sector = s.sector || raw['القطاع'] || raw['قطاع التنفيذ'] || '—';
+                        const admin = s.generalAdmin || raw['الإدارة العامة'] || raw['الإدارة العامة للتنفيذ'] || '—';
+                        const pDate = s.paymentAndStartDate || raw['تاريخ السداد والبدء في التنفيذ'] || '—';
+                        const delStatus = String(
+                          s.deliveryStatus ||
+                          raw['موقف التسليم'] ||
+                          raw['موقف_التسليم'] ||
+                          (s.status === 'تم التسليم' ? 'تم التسليم' : 'لم يتم')
+                        ).trim();
+                        const isDel = delStatus === 'تم التسليم';
+                        const dDate = s.deliveryDate || (s as any).delivery_date || raw['تاريخ التسليم'] || raw['تاريخ التسليم '] || '—';
+                        const intPath = s.internalPath || raw['موقف المسار الداخلي'] || '—';
+                        const extPath = s.externalPath || raw['موقف المسار الخارجي'] || '—';
+                        const splicing = (s as any).splicingStatus || raw['موقف اللحامات'] || '—';
+                        const classification = s.classification || raw['التصنيف النهائي'] || raw['التصنيف'] || '';
+                        const obstacle = s.obstacleReason || raw['سبب المعوق او التعذر'] || '';
+
+                        return (
+                          <tr key={s.id || idx} className="hover:bg-slate-50 transition-colors">
+                            <td className="py-2.5 px-3 text-center font-mono text-slate-400 text-[11px]">{idx + 1}</td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-slate-900">{code}</td>
+                            <td className="py-2.5 px-3 font-medium text-slate-800 max-w-[180px] truncate" title={name}>{name}</td>
+                            <td className="py-2.5 px-3 text-slate-600 truncate max-w-[140px]" title={sector}>{sector}</td>
+                            <td className="py-2.5 px-3 text-slate-600 truncate max-w-[140px]" title={admin}>{admin}</td>
+                            <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">{pDate}</td>
+                            <td className="py-2.5 px-3">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 ${isDel
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : 'bg-rose-100 text-rose-800 border border-rose-300'
+                                  }`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${isDel ? 'bg-emerald-600' : 'bg-rose-600'}`}></span>
+                                {delStatus}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">{dDate}</td>
+                            <td className="py-2.5 px-3 text-[11px] text-slate-700 max-w-[120px] truncate" title={intPath}>{intPath}</td>
+                            <td className="py-2.5 px-3 text-[11px] text-slate-700 max-w-[120px] truncate" title={extPath}>{extPath}</td>
+                            <td className="py-2.5 px-3 text-[11px] text-slate-700 max-w-[120px] truncate" title={splicing}>{splicing}</td>
+                            <td className="py-2.5 px-3 text-[11px] text-slate-600 max-w-[180px]">
+                              {obstacle ? (
+                                <span className="text-rose-700 font-semibold truncate block" title={obstacle}>{obstacle}</span>
+                              ) : (
+                                <span className="truncate block" title={classification}>{classification || '—'}</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 sm:p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <span className="text-xs text-slate-500">
+                إجمالي المشروعات في هذه القائمة: <strong className="font-mono text-slate-800 font-bold">{filteredModalSites.length}</strong>
+              </span>
+              <button
+                onClick={closeInspection}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white transition-colors cursor-pointer"
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
