@@ -1,7 +1,7 @@
 // src/hooks/useEtahaAPI.ts
 // Live state & persistence API hook for Availability / Etaha project dataset
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import type { SiteRecord } from '../types/dashboard';
 import { ETAHA_RAW_RECORDS, type EtahaRecord } from '../data/etahaSites';
 import { supabase, supabaseClients } from '../lib/supabase';
@@ -39,15 +39,20 @@ function saveStoredEtahaRecords(records: EtahaRecord[]): void {
 }
 
 export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecord {
-  const siteCode = String(r.Code || `ETAH-${index + 1}`).trim();
-  const clientName = String(r['اسم العميل'] || '').trim();
-  const branchName = String(r['اسم الفرع'] || '').trim();
-  const address = String(r['العنوان'] || '').trim();
-  const rawStatus = String(r['التصنيف'] || r.classification || '').trim();
-  const internalPath = String(r['المسار الداخلي'] || r['المسار الداخلى'] || r['المسار_الداخلى'] || r['المسار_الداخلي'] || r.internalPath || '').trim();
-  const externalPath = String(r['المسار الخارجي'] || r['المسار_الخارجي'] || r.externalPath || '').trim();
-  const deliveryStatus = String(r['موقف التسليم'] || r['موقف_التسليم'] || r.deliveryStatus || '').trim();
-  const splicingStatus = String(r['موقف اللحامات'] || r['موقف_اللحامات'] || r.splicingStatus || '').trim();
+  const rowData = (r as any).data && typeof (r as any).data === 'object' ? (r as any).data : {};
+  const d: any = { ...r, ...rowData };
+
+  const siteCode = String(d.Code || d.code || `ETAH-${index + 1}`).trim();
+  const clientName = String(d['اسم العميل'] || d.clientName || '').trim();
+  const branchName = String(d['اسم الفرع'] || d.branchName || '').trim();
+  const address = String(d['العنوان'] || d.address || '').trim();
+  const rawStatus = String(d['التصنيف'] || d.classification || '').trim();
+  const internalPath = String(d['المسار الداخلي'] || d['المسار الداخلى'] || d['المسار_الداخلى'] || d['المسار_الداخلي'] || d.internalPath || '').trim();
+  const externalPath = String(d['المسار الخارجي'] || d['المسار_الخارجي'] || d.externalPath || '').trim();
+  const deliveryStatus = String(d['موقف التسليم'] || d['موقف_التسليم'] || d.deliveryStatus || '').trim();
+  const splicingStatus = String(d['موقف اللحامات'] || d['موقف_اللحامات'] || d.splicingStatus || '').trim();
+  const rawDelDate = String(d['تاريخ التسليم '] || d['تاريخ التسليم'] || d.deliveryDate || d.delivery_date || d['تاريخ_التسليم'] || '').trim();
+  const deliveryDate = parseToDateInputValue(rawDelDate);
 
   let status = 'جاري المعاينة';
   let executionCategory: 'Completed' | 'In Progress' | 'Blocked / On Hold' | 'Planned' = 'In Progress';
@@ -58,9 +63,10 @@ export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecor
     deliveryStatus.includes('تم التسليم') ||
     rawStatus === 'تم الانتهاء والتسليم' ||
     rawStatus === 'تم التسليم' ||
-    rawStatus.includes('تسليم')
+    rawStatus.includes('تسليم') ||
+    Boolean(deliveryDate)
   ) {
-    status = 'تم الانتهاء';
+    status = 'تم التسليم';
     executionCategory = 'Completed';
     progressPercent = 100;
   } else if (
@@ -101,14 +107,14 @@ export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecor
   }
 
   // Drive Etaha sector strictly from قطاع التنفيذ in Excel dataset
-  const rawExecSector = String(r['قطاع التنفيذ'] || r.executionSector || '').replace(/\s+/g, ' ').trim();
-  const rawAltSector = String(r['القطاعات'] || r.sector || '').replace(/\s+/g, ' ').trim();
+  const rawExecSector = String(d['قطاع التنفيذ'] || d.executionSector || '').replace(/\s+/g, ' ').trim();
+  const rawAltSector = String(d['القطاعات'] || d.sector || '').replace(/\s+/g, ' ').trim();
   const sector = rawExecSector || rawAltSector || 'قطاع غير محدد';
 
-  const generalAdmin = String(r['الادارة العامة المنفذة'] || r['الادارة العامة لتنفيذ الشبكات'] || 'الإدارة العامة لتنفيذ الشبكات').replace(/\s+/g, ' ').trim();
-  const competentAdmin = String(r['ادارة التنفيذ'] || r['إدارة التنفيذ المختصة'] || rawExecSector || 'إدارة التنفيذ المختصة').replace(/\s+/g, ' ').trim();
-  const governorate = String(r['المحافظة'] || '').trim();
-  const central = String(r['سنترال الربط'] || governorate || 'سنترال رئيسي').trim();
+  const generalAdmin = String(d['الادارة العامة المنفذة'] || d['الادارة العامة لتنفيذ الشبكات'] || 'الإدارة العامة لتنفيذ الشبكات').replace(/\s+/g, ' ').trim();
+  const competentAdmin = String(d['ادارة التنفيذ'] || d['إدارة التنفيذ المختصة'] || rawExecSector || 'إدارة التنفيذ المختصة').replace(/\s+/g, ' ').trim();
+  const governorate = String(d['المحافظة'] || d['المحافظه'] || d.governorate || '').trim();
+  const central = String(d['سنترال الربط'] || d.central || governorate || 'سنترال رئيسي').trim();
 
   let clientCategory = 'المؤسسات والشركات';
   if (clientName.includes('بنك') || clientName.includes('مصرف') || clientName.includes('CIB') || clientName.includes('QNB')) {
@@ -123,9 +129,9 @@ export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecor
     clientCategory = 'الجهات والوزارات الحكومية';
   }
 
-  const obstacleReason = String(r['سبب المعوق او التعذر'] || r['ملحوظه في حاله عدم الانتهاء'] || 'لا يوجد تعذر').trim();
-  const expectedDate = r['تاريخ الانتهاء'] || '2026-12-31';
-  const rawResponsibility = String(r['مسئوليه التنفيذ'] || r['مسؤولية التنفيذ'] || r['مسئولية التنفيذ'] || r.responsibility || r.executionResponsibility || 'التنفيذ').replace(/\s+/g, ' ').trim();
+  const obstacleReason = String(d['سبب المعوق او التعذر'] || d['ملحوظه في حاله عدم الانتهاء'] || d.obstacleReason || 'لا يوجد تعذر').trim();
+  const expectedDate = d['تاريخ الانتهاء'] || d.expectedDate || '2026-12-31';
+  const rawResponsibility = String(d['مسئوليه التنفيذ'] || d['مسؤولية التنفيذ'] || d.responsibility || d.executionResponsibility || 'التنفيذ').replace(/\s+/g, ' ').trim();
 
   return {
     id: `ETAH-${siteCode}`,
@@ -148,22 +154,25 @@ export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecor
     classification: rawStatus || 'إتاحة',
     obstacleReason,
     obstacleType: rawStatus.includes('معوق') ? 'معوقات' : rawStatus.includes('تعذر') ? 'تعذر' : '',
-    deliveryArea: r['موقف التسليم'] || r['موقف_التسليم'] || '',
+    deliveryArea: deliveryStatus || '',
     expectedDate,
     progressPercent,
-    notes: [r['ملحوظه في حاله عدم الانتهاء'], r['اسم ورقم تليفون مدير الادارة']].filter(Boolean).join(' | '),
-    externalPath: String(r['المسار الخارجي'] || r['المسار_الخارجي'] || '').trim(),
-    internalPath: String(r['المسار الداخلي'] || r['المسار الداخلى'] || r['المسار_الداخلى'] || r['المسار_الداخلي'] || r['موقف اللحامات'] || r['موقف_اللحامات'] || '').trim(),
-    deliveryStatus: String(r['موقف التسليم'] || r['موقف_التسليم'] || '').trim(),
+    notes: [d['ملحوظه في حاله عدم الانتهاء'], d['اسم ورقم تليفون مدير الادارة'], d.notes].filter(Boolean).join(' | '),
+    externalPath,
+    internalPath,
+    splicingStatus,
+    deliveryStatus,
+    deliveryDate,
     excelStatus: rawStatus || 'إتاحة',
     paymentAndStartDate: parseToDateInputValue(
-      r['تاريخ السداد والبدء في التنفيذ'] ||
-      r['تاريخ السداد و البدء فى التنفيذ'] ||
-      r.paymentAndStartDate ||
-      r.payment_and_start_date
+      d['تاريخ السداد والبدء في التنفيذ'] ||
+      d['تاريخ السداد و البدء فى التنفيذ'] ||
+      d.paymentAndStartDate ||
+      d.payment_and_start_date
     ),
-    specialTarget: Boolean(r.specialTarget || r['سبيشال تارجت'] || r['سبيشال_تارجت']),
-    rawRecord: r,
+    specialTarget: Boolean(d.specialTarget || d.special_target || d['سبيشال تارجت'] || d['سبيشال_تارجت']),
+    special_target: Boolean(d.specialTarget || d.special_target || d['سبيشال تارجت'] || d['سبيشال_تارجت']),
+    rawRecord: d,
   };
 }
 
@@ -248,6 +257,7 @@ export function useEtahaAPI() {
       const spliceVal = String(record['موقف اللحامات'] || record.splicingStatus || '').trim();
       const delVal = String(record['موقف التسليم'] || record.deliveryStatus || '').trim();
       const clsVal = String(record['التصنيف'] || record.classification || '').trim();
+      const delDate = String(record['تاريخ التسليم'] || record['تاريخ التسليم '] || record.deliveryDate || record.delivery_date || '').trim();
 
       const enriched: EtahaRecord = {
         ...record,
@@ -276,6 +286,16 @@ export function useEtahaAPI() {
         enriched['التصنيف'] = clsVal;
         enriched.classification = clsVal;
       }
+      if (delDate) {
+        enriched['تاريخ التسليم'] = delDate;
+        enriched.deliveryDate = delDate;
+        enriched.delivery_date = delDate;
+      } else if (delVal === 'تم التسليم' && !enriched['تاريخ التسليم']) {
+        const today = new Date().toISOString().slice(0, 10);
+        enriched['تاريخ التسليم'] = today;
+        enriched.deliveryDate = today;
+        enriched.delivery_date = today;
+      }
 
       if (idx >= 0) {
         updated = [...current];
@@ -289,7 +309,7 @@ export function useEtahaAPI() {
       setEtahaRecords(updated);
 
       const paymentDate = enriched['تاريخ السداد والبدء في التنفيذ'] || enriched['تاريخ السداد و البدء فى التنفيذ'] || enriched.paymentAndStartDate || enriched.payment_and_start_date || '';
-
+      const finalDelDate = enriched['تاريخ التسليم'] || enriched.deliveryDate || '';
       const isSpecial = Boolean(enriched.specialTarget || enriched['سبيشال تارجت'] || enriched['سبيشال_تارجت']);
 
       // Persist directly into Supabase availability / etaha tables
@@ -310,11 +330,19 @@ export function useEtahaAPI() {
               'الجهة': enriched['الجهة'] || enriched['اسم العميل'] || '',
               'السنترال': enriched['سنترال الربط'] || enriched.central || '',
               'القطاع': enriched['القطاعات'] || enriched['رئاسة قطاعات التنفيذ'] || enriched.sector || '',
+              'قطاع التنفيذ': enriched['قطاع التنفيذ'] || enriched.executionSector || '',
+              'الادارة العامة المنفذة': enriched['الادارة العامة المنفذة'] || enriched.generalAdmin || '',
+              'ادارة التنفيذ': enriched['ادارة التنفيذ'] || enriched.competentAdmin || '',
+              'مسئوليه التنفيذ': enriched['مسئوليه التنفيذ'] || enriched['مسؤولية التنفيذ'] || enriched.responsibility || '',
+              'مسؤولية التنفيذ': enriched['مسؤولية التنفيذ'] || enriched['مسئوليه التنفيذ'] || enriched.responsibility || '',
               'المحافظة': enriched['المحافظه'] || enriched['المحافظة'] || enriched.governorate || '',
               'الملاحظات': enriched['الملاحظات'] || enriched.notes || '',
               'تاريخ السداد والبدء في التنفيذ': paymentDate,
               'تاريخ السداد و البدء فى التنفيذ': paymentDate,
               payment_and_start_date: paymentDate,
+              'تاريخ التسليم': finalDelDate,
+              deliveryDate: finalDelDate,
+              delivery_date: finalDelDate,
               specialTarget: isSpecial,
               'سبيشال تارجت': isSpecial,
               'سبيشال_تارجت': isSpecial,
@@ -520,7 +548,7 @@ export function useEtahaAPI() {
     }
   }, []);
 
-  const etahaSites = etahaRecords.map((r, i) => mapEtahaRecordToSiteRecord(r, i));
+  const etahaSites = useMemo(() => etahaRecords.map((r, i) => mapEtahaRecordToSiteRecord(r, i)), [etahaRecords]);
 
   return {
     etahaRecords,

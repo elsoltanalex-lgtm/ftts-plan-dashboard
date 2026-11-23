@@ -61,7 +61,9 @@ export interface SiteRecord {
   // Etaha attributes
   externalPath?: string;
   internalPath?: string;
+  splicingStatus?: string;
   deliveryStatus?: string;
+  deliveryDate?: string;
   excelStatus?: string;
   paymentAndStartDate?: string;
   specialTarget?: boolean;

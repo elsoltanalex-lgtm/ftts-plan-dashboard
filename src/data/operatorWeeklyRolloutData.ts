@@ -3,6 +3,8 @@
 // Weeks: W1-Oct-2026 through W2-Nov-2026
 // Extracted from official operations tracking spreadsheet
 
+import type { SiteRecord } from '../types/dashboard';
+
 export interface OperatorWeeklyRow {
   admin: string;
   canonicalAdmin: string;
@@ -1269,7 +1271,8 @@ export interface OperatorWeeklySummary {
 
 export function getOperatorWeeklyRollout(
   companyFilter: 'Vodafone' | 'Orange' | 'WE' | 'All' = 'All',
-  deptFilter?: string | string[]
+  deptFilter?: string | string[],
+  liveSites?: SiteRecord[]
 ): OperatorWeeklySummary {
   let targetCompanies: ('Vodafone' | 'Orange' | 'WE')[] = [];
   if (companyFilter === 'All' || !companyFilter) {
@@ -1288,7 +1291,46 @@ export function getOperatorWeeklyRollout(
     ? [deptFilter]
     : [];
 
-  const weeksAgg: OperatorWeekAggregated[] = OPERATOR_WEEKS.map(wDef => {
+  // Live dynamic aggregation from in-memory sites (reactive to Add / Edit / Delete)
+  const hasLiveSites = Boolean(liveSites && liveSites.length > 0);
+  const liveDeptStats = new Map<string, { total: number; delivered: number }>();
+  let liveTotalAll = 0;
+  let liveDeliveredAll = 0;
+
+  if (hasLiveSites && liveSites) {
+    const scopedLive = liveSites.filter((s) => {
+      if (!s) return false;
+      const compStr = String(s.company || '').toLowerCase();
+      if (targetCompanies.length < 3) {
+        return targetCompanies.some((tc) => compStr.includes(tc.toLowerCase()));
+      }
+      return true;
+    });
+
+    scopedLive.forEach((s) => {
+      const rawDept = String(s.generalAdmin || s.rawRecord?.['الادارة العامة المنفذة'] || s.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || s.rawRecord?.['الادارة العامة'] || '').trim();
+      const cAdmin = toCanonicalDepartment(rawDept);
+      const isDel =
+        s.status === 'تم الانتهاء' ||
+        s.status === 'تم التسليم' ||
+        s.status === 'تم التشغيل فايبر' ||
+        s.executionCategory === 'Completed' ||
+        s.classification === 'تم الانتهاء والتسليم' ||
+        s.classification === 'تم التسليم' ||
+        s.deliveryStatus === 'تم التسليم' ||
+        s.progressPercent === 100;
+
+      liveTotalAll++;
+      if (isDel) liveDeliveredAll++;
+
+      const curr = liveDeptStats.get(cAdmin) || { total: 0, delivered: 0 };
+      curr.total++;
+      if (isDel) curr.delivered++;
+      liveDeptStats.set(cAdmin, curr);
+    });
+  }
+
+  const weeksAgg: OperatorWeekAggregated[] = OPERATOR_WEEKS.map((wDef, wIdx) => {
     let weekRows = OPERATOR_WEEKLY_DATA.filter(
       r => r.weekKey === wDef.key && targetCompanies.includes(r.company)
     );
@@ -1338,6 +1380,33 @@ export function getOperatorWeeklyRollout(
         curr.targetRate += r.targetRate;
       }
     });
+
+    // If live reactive sites are present, calibrate latest week (and progressive trajectory) to live state
+    const isLatestWeek = wIdx === OPERATOR_WEEKS.length - 1;
+    if (hasLiveSites && liveTotalAll > 0) {
+      if (isLatestWeek) {
+        // Recompute with exact live counts
+        totalSites = 0;
+        delivered = 0;
+        deptMap.forEach((val, cAdmin) => {
+          const liveStat = liveDeptStats.get(cAdmin);
+          if (liveStat) {
+            val.totalSites = liveStat.total;
+            val.delivered = liveStat.delivered;
+          }
+          if (activeDepts.length === 0 || activeDepts.some((ad) => toCanonicalDepartment(ad) === cAdmin)) {
+            totalSites += val.totalSites;
+            delivered += val.delivered;
+          }
+        });
+      } else {
+        // Calibrate historical progress smoothly if total changed
+        const ratio = totalSites > 0 ? liveTotalAll / totalSites : 1;
+        if (Math.abs(ratio - 1) > 0.001) {
+          totalSites = Math.round(totalSites * ratio);
+        }
+      }
+    }
 
     const deptRows = Array.from(deptMap.values())
       .filter(d => activeDepts.length === 0 || activeDepts.some(ad => toCanonicalDepartment(ad) === d.canonicalAdmin))

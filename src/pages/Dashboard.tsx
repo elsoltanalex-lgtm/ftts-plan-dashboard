@@ -1547,8 +1547,8 @@ export const Dashboard: React.FC = () => {
                       }));
                     }}
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border shadow-2xs ${filters.specialTarget
-                        ? 'bg-amber-500 text-white border-amber-600 shadow-sm ring-2 ring-amber-300'
-                        : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                      ? 'bg-amber-500 text-white border-amber-600 shadow-sm ring-2 ring-amber-300'
+                      : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
                       }`}
                     title="تصفية وعرض مواقع الموبايل المصنفة كـ Special Target فقط"
                   >
@@ -1597,8 +1597,8 @@ export const Dashboard: React.FC = () => {
                       }));
                     }}
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border shadow-2xs ${filters.specialTarget
-                        ? 'bg-amber-500 text-white border-amber-600 shadow-sm ring-2 ring-amber-300'
-                        : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                      ? 'bg-amber-500 text-white border-amber-600 shadow-sm ring-2 ring-amber-300'
+                      : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
                       }`}
                     title="تصفية وعرض مشروعات الإتاحة المصنفة كـ Special Target فقط"
                   >
@@ -1946,12 +1946,33 @@ export const Dashboard: React.FC = () => {
               const matched = authorizedScopeData.find((s) => String(s?.siteCode || '').trim().toUpperCase() === targetCode);
               if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY' || matched?.company === 'Availability' || matched?.company === 'الإتاحة') {
                 await deleteEtahaRecord(code);
+                await refetchEtahaRecords();
+                setDeletedSiteCodes((prev) => {
+                  const next = new Set(prev);
+                  next.add(targetCode);
+                  persistDeletedSiteCodes(next);
+                  return next;
+                });
                 setToastMessage(`تم حذف وإلغاء مشروع الإتاحة (${code}) بنجاح ✅`);
               } else if (matched?.company === 'Orange') {
                 await deleteOrangeRecord(code);
+                await refetchOrangeRecords();
+                setDeletedSiteCodes((prev) => {
+                  const next = new Set(prev);
+                  next.add(targetCode);
+                  persistDeletedSiteCodes(next);
+                  return next;
+                });
                 setToastMessage(`تم حذف وإلغاء موقع Orange (${code}) بنجاح ✅`);
               } else if (matched?.company === 'Vodafone') {
                 await deleteVodafoneRecord(code);
+                await refetchVodafoneRecords();
+                setDeletedSiteCodes((prev) => {
+                  const next = new Set(prev);
+                  next.add(targetCode);
+                  persistDeletedSiteCodes(next);
+                  return next;
+                });
                 setToastMessage(`تم حذف وإلغاء موقع Vodafone (${code}) بنجاح ✅`);
               } else {
                 handleDeleteSite(siteOrCode);
@@ -1966,16 +1987,21 @@ export const Dashboard: React.FC = () => {
             try {
               if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
                 await deleteEtahaRecordsBulk(siteCodes);
+                await refetchEtahaRecords();
                 setToastMessage(`تم حذف ${siteCodes.length} مشروع بنجاح من قاعدة بيانات الإتاحة ✅`);
               } else if (filters.company === 'Orange') {
                 await deleteOrangeRecordsBulk(siteCodes);
+                await refetchOrangeRecords();
                 setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Orange ✅`);
               } else if (filters.company === 'Vodafone') {
                 await deleteVodafoneRecordsBulk(siteCodes);
+                await refetchVodafoneRecords();
                 setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Vodafone ✅`);
               } else {
                 await deleteRecordsBulk(siteCodes);
                 removeRecordsLocally(siteCodes);
+                await refetchWeRecords();
+                await refetchWeCodes();
                 setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من قاعدة بيانات Supabase ✅`);
               }
               setDeletedSiteCodes((prev) => {
@@ -2307,7 +2333,16 @@ export const Dashboard: React.FC = () => {
             const res = await saveEtahaRecord(record);
             if (res.success) {
               await refetchEtahaRecords();
-              setToastMessage(`تم حفظ وتحديث بيانات مشروع الإتاحة (${record['Code'] || record['siteCode'] || ''}) بنجاح ✅`);
+              const code = record['Code'] || record['siteCode'] || record['code'] || '';
+              if (code) {
+                setDeletedSiteCodes((prev) => {
+                  const next = new Set(prev);
+                  next.delete(String(code).trim().toUpperCase());
+                  persistDeletedSiteCodes(next);
+                  return next;
+                });
+              }
+              setToastMessage(`تم حفظ وتحديث بيانات مشروع الإتاحة (${code}) بنجاح ✅`);
             } else {
               setToastMessage(`حدث خطأ أثناء حفظ بيانات الإتاحة: ${res.error || ''}`);
             }
@@ -2369,16 +2404,21 @@ export const Dashboard: React.FC = () => {
             const targetCompany = quickDeleteTargetCompany || filters.company;
             if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
               await deleteEtahaRecordsBulk(siteCodes);
+              await refetchEtahaRecords();
               setToastMessage(`تم حذف ${siteCodes.length} مشروع بنجاح من قاعدة بيانات الإتاحة ✅`);
             } else if (targetCompany === 'Orange') {
               await deleteOrangeRecordsBulk(siteCodes);
+              await refetchOrangeRecords();
               setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Orange ✅`);
             } else if (targetCompany === 'Vodafone') {
               await deleteVodafoneRecordsBulk(siteCodes);
+              await refetchVodafoneRecords();
               setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Vodafone ✅`);
             } else {
               await deleteRecordsBulk(siteCodes);
               removeRecordsLocally(siteCodes);
+              await refetchWeRecords();
+              await refetchWeCodes();
               setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من قاعدة بيانات Supabase ✅`);
             }
             setDeletedSiteCodes((prev) => {

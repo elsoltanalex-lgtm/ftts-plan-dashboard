@@ -17,6 +17,7 @@ import {
   Save,
   Building2,
   Calendar,
+  CalendarCheck2,
   AlertCircle,
   FileCheck,
   CheckCircle2,
@@ -735,14 +736,25 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
   // Handler for delivery status changes
   const handleDeliveryChange = (newDel: string) => {
     handleInputChange('موقف التسليم', newDel);
-    if (newDel === 'تم التسليم' && isBothPathsCompleted) {
-      handleInputChange('التصنيف', 'تم الانتهاء والتسليم');
+    handleInputChange('deliveryStatus', newDel);
+    if (newDel === 'تم التسليم') {
+      if (isBothPathsCompleted) {
+        handleInputChange('التصنيف', 'تم الانتهاء والتسليم');
+        handleInputChange('classification', 'تم الانتهاء والتسليم');
+      }
+      const existingDelDate = formData['تاريخ التسليم'] || formData['تاريخ التسليم '] || formData.deliveryDate;
+      if (!existingDelDate) {
+        const today = new Date().toISOString().slice(0, 10);
+        handleInputChange('تاريخ التسليم', today);
+        handleInputChange('deliveryDate', today);
+      }
     }
   };
 
   // Special handler for classification changes with conditional cleanup
   const handleClassificationChange = (newCls: string) => {
     handleInputChange('التصنيف', newCls);
+    handleInputChange('classification', newCls);
 
     // Clear conditional errors when switching
     setErrors((prev) => {
@@ -753,8 +765,15 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
       return next;
     });
 
-    if (newCls === 'تم الانتهاء والتسليم') {
+    if (newCls === 'تم الانتهاء والتسليم' || newCls === 'تم التسليم') {
       handleInputChange('موقف التسليم', 'تم التسليم');
+      handleInputChange('deliveryStatus', 'تم التسليم');
+      const existingDelDate = formData['تاريخ التسليم'] || formData['تاريخ التسليم '] || formData.deliveryDate;
+      if (!existingDelDate) {
+        const today = new Date().toISOString().slice(0, 10);
+        handleInputChange('تاريخ التسليم', today);
+        handleInputChange('deliveryDate', today);
+      }
     }
   };
 
@@ -861,6 +880,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
       const spliceVal = String(formData['موقف اللحامات'] || formData.splicingStatus || 'لم يتم البدء').trim();
       const delVal = String(formData['موقف التسليم'] || formData.deliveryStatus || 'لم يتم').trim();
       const clsVal = String(formData['التصنيف'] || formData.classification || 'جاري العمل').trim();
+      const delDate = String(formData['تاريخ التسليم'] || formData['تاريخ التسليم '] || formData.deliveryDate || '').trim();
 
       const payload: EtahaRecord = {
         ...cleanedData,
@@ -882,6 +902,9 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
         'تاريخ السداد و البدء فى التنفيذ': paymentDate,
         paymentAndStartDate: paymentDate,
         payment_and_start_date: paymentDate,
+        'تاريخ التسليم': delDate || (delVal === 'تم التسليم' ? new Date().toISOString().slice(0, 10) : ''),
+        deliveryDate: delDate || (delVal === 'تم التسليم' ? new Date().toISOString().slice(0, 10) : ''),
+        delivery_date: delDate || (delVal === 'تم التسليم' ? new Date().toISOString().slice(0, 10) : ''),
         Code: code,
         المشروع: 'اتاحة',
         _id: `ETAHA-${code}`,
@@ -1759,7 +1782,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                     </h4>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
                     {/* المسار الداخلي */}
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -1840,6 +1863,27 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                           </option>
                         ))}
                       </select>
+                    </div>
+
+                    {/* تاريخ التسليم / الانتهاء والتشغيل */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                        <CalendarCheck2 className="w-3.5 h-3.5 text-purple-600" />
+                        <span>تاريخ التسليم</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={parseToDateInputValue(formData['تاريخ التسليم'] || formData['تاريخ التسليم '] || formData.deliveryDate)}
+                        onChange={(e) => {
+                          handleInputChange('تاريخ التسليم', e.target.value);
+                          handleInputChange('deliveryDate', e.target.value);
+                        }}
+                        className={`w-full px-3 py-2 border rounded-xl text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 text-slate-800 ${
+                          formData['موقف التسليم'] === 'تم التسليم'
+                            ? 'bg-purple-50/60 border-purple-300 text-purple-950 ring-1 ring-purple-200'
+                            : 'bg-slate-50 border-slate-300'
+                        }`}
+                      />
                     </div>
 
                     {/* التصنيف العام / النهائي */}

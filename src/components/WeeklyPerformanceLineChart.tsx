@@ -272,10 +272,10 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
     return undefined;
   }, [selectedDeptFilter, filters.generalAdmin]);
 
-  // Operator Rollout Data (Parsed from official operations Excel)
+  // Operator Rollout Data (Parsed from official operations Excel & synchronized with live sites)
   const operatorRollout: OperatorWeeklySummary = useMemo(() => {
-    return getOperatorWeeklyRollout(selectedOperator, activeDeptFilter);
-  }, [selectedOperator, activeDeptFilter]);
+    return getOperatorWeeklyRollout(selectedOperator, activeDeptFilter, sites);
+  }, [selectedOperator, activeDeptFilter, sites]);
 
   // ─────────────────────────────────────────────────────────────
   // 2. AVAILABILITY WEEKLY SLA / 3-MONTH DELIVERY CALCULATION
@@ -303,7 +303,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         raw['تاريخ السداد و البدء فى التنفيذ'] ||
         raw.paymentAndStartDate ||
         raw.payment_and_start_date;
-      const dVal = raw['تاريخ التسليم '] || raw['تاريخ التسليم'] || site.deliveryDate;
+      const dVal = site.deliveryDate || (site as any).delivery_date || raw['تاريخ التسليم '] || raw['تاريخ التسليم'] || raw.deliveryDate || raw.delivery_date;
 
       const pDate = parseDateSafe(pVal);
       const dDate = parseDateSafe(dVal);
@@ -312,10 +312,16 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         Boolean(dDate) ||
         site.status === 'تم الانتهاء' ||
         site.status === 'تم التسليم' ||
+        site.status === 'تم التشغيل فايبر' ||
+        site.executionCategory === 'Completed' ||
         site.classification === 'تم الانتهاء والتسليم' ||
+        site.classification === 'تم التسليم' ||
+        site.deliveryStatus === 'تم التسليم' ||
+        site.deliveryArea === 'تم التسليم' ||
         raw['موقف التسليم'] === 'تم التسليم' ||
         raw['التصنيف'] === 'تم الانتهاء والتسليم' ||
-        raw['التصنيف النهائي'] === 'تم التسليم';
+        raw['التصنيف النهائي'] === 'تم التسليم' ||
+        raw['التصنيف'] === 'تم التسليم';
 
       let slaExpirationWeek = 999;
       let targetWeek = totalWeeks;
@@ -350,15 +356,15 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             deliveryWeek = totalWeeks;
           }
         } else {
-          deliveryWeek = Math.min(45, totalWeeks);
+          deliveryWeek = targetWeek <= totalWeeks ? targetWeek : Math.min(currentWeek, totalWeeks);
         }
       }
 
-      const intPath = String(raw['موقف المسار الداخلي'] || raw['المسار الداخلى'] || raw['المسار الداخلي'] || site.internalPath || '').trim();
-      const extPath = String(raw['موقف المسار الخارجي'] || raw['المسار الخارجي'] || site.externalPath || '').trim();
-      const splicing = String(raw['موقف اللحامات'] || raw['اللحامات'] || '').trim();
-      const classification = String(raw['التصنيف النهائي'] || raw['التصنيف'] || site.classification || '').trim();
-      const obstacle = String(raw['سبب المعوق او التعذر'] || raw['اسباب التعذر'] || site.obstacleReason || '').trim();
+      const intPath = String(site.internalPath || raw['موقف المسار الداخلي'] || raw['المسار الداخلى'] || raw['المسار الداخلي'] || '').trim();
+      const extPath = String(site.externalPath || raw['موقف المسار الخارجي'] || raw['المسار الخارجي'] || '').trim();
+      const splicing = String((site as any).splicingStatus || raw['موقف اللحامات'] || raw['اللحامات'] || '').trim();
+      const classification = String(site.classification || raw['التصنيف النهائي'] || raw['التصنيف'] || '').trim();
+      const obstacle = String(site.obstacleReason || raw['سبب المعوق او التعذر'] || raw['اسباب التعذر'] || '').trim();
 
       return {
         targetWeek,
@@ -663,11 +669,10 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
       <div className="flex flex-col lg:flex-row lg:items-center justify-between pb-5 mb-5 border-b border-slate-100 gap-4">
         <div className="flex items-center gap-3.5">
           <div
-            className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-md ring-4 ${
-              isAvailability
+            className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-md ring-4 ${isAvailability
                 ? 'bg-gradient-to-br from-teal-600 via-sky-600 to-indigo-700 ring-teal-50'
                 : 'bg-gradient-to-br from-indigo-600 via-sky-600 to-purple-700 ring-indigo-50'
-            }`}
+              }`}
           >
             {isAvailability ? <CalendarCheck2 className="w-6 h-6" /> : <Smartphone className="w-6 h-6" />}
           </div>
@@ -679,11 +684,10 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                   : 'المسار الأسبوعي لمواقع الفايبر المنتهية والمشغلة (Weekly Fiber Rollout: Target vs Delivered)'}
               </h3>
               <span
-                className={`text-xs px-2.5 py-0.5 rounded-full font-bold border ${
-                  isAvailability
+                className={`text-xs px-2.5 py-0.5 rounded-full font-bold border ${isAvailability
                     ? 'bg-teal-50 text-teal-800 border-teal-200/80'
                     : 'bg-indigo-50 text-indigo-700 border-indigo-200/80'
-                }`}
+                  }`}
               >
                 {isAvailability ? 'مشاريع الإتاحة (Availability Projects)' : companyLabelAr}
               </span>
@@ -716,41 +720,37 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
               <button
                 onClick={() => setSelectedOperator('All')}
-                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                  selectedOperator === 'All'
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${selectedOperator === 'All'
                     ? 'bg-white text-indigo-700 shadow-2xs font-black'
                     : 'text-slate-600 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 الكل
               </button>
               <button
                 onClick={() => setSelectedOperator('WE')}
-                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                  selectedOperator === 'WE'
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${selectedOperator === 'WE'
                     ? 'bg-purple-600 text-white shadow-2xs font-black'
                     : 'text-slate-600 hover:text-purple-700'
-                }`}
+                  }`}
               >
                 WE
               </button>
               <button
                 onClick={() => setSelectedOperator('Vodafone')}
-                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                  selectedOperator === 'Vodafone'
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${selectedOperator === 'Vodafone'
                     ? 'bg-rose-600 text-white shadow-2xs font-black'
                     : 'text-slate-600 hover:text-rose-700'
-                }`}
+                  }`}
               >
                 Vodafone
               </button>
               <button
                 onClick={() => setSelectedOperator('Orange')}
-                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                  selectedOperator === 'Orange'
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${selectedOperator === 'Orange'
                     ? 'bg-orange-600 text-white shadow-2xs font-black'
                     : 'text-slate-600 hover:text-orange-700'
-                }`}
+                  }`}
               >
                 Orange
               </button>
@@ -762,21 +762,19 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
               <button
                 onClick={() => setViewMode('cumulative')}
-                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                  viewMode === 'cumulative'
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${viewMode === 'cumulative'
                     ? 'bg-white text-indigo-700 shadow-2xs font-black'
                     : 'text-slate-600 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 📈 المسار التراكمي
               </button>
               <button
                 onClick={() => setViewMode('weekly')}
-                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                  viewMode === 'weekly'
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${viewMode === 'weekly'
                     ? 'bg-white text-indigo-700 shadow-2xs font-black'
                     : 'text-slate-600 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 📊 الإنجاز الأسبوعي
               </button>
@@ -917,52 +915,50 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
           {/* Bottom Horizontal Axis Label (Weeks) */}
           {isAvailability
             ? availabilityStats.weeklyPoints.map((d) => {
-                const w = d.week;
-                const showTick = w === 1 || w % 5 === 0 || w === totalSteps;
-                if (!showTick) return null;
-                const x = getX(w);
-                return (
-                  <g key={w}>
-                    <line x1={x} y1={originY} x2={x} y2={originY + 6} stroke="#64748b" strokeWidth="1.5" />
-                    <text
-                      x={x}
-                      y={originY + 22}
-                      textAnchor="middle"
-                      className={`text-[11px] font-mono ${
-                        w === totalSteps ? 'font-black fill-teal-700 font-bold' : 'font-semibold fill-slate-500'
+              const w = d.week;
+              const showTick = w === 1 || w % 5 === 0 || w === totalSteps;
+              if (!showTick) return null;
+              const x = getX(w);
+              return (
+                <g key={w}>
+                  <line x1={x} y1={originY} x2={x} y2={originY + 6} stroke="#64748b" strokeWidth="1.5" />
+                  <text
+                    x={x}
+                    y={originY + 22}
+                    textAnchor="middle"
+                    className={`text-[11px] font-mono ${w === totalSteps ? 'font-black fill-teal-700 font-bold' : 'font-semibold fill-slate-500'
                       }`}
-                    >
-                      {w === totalSteps ? `أسبوع ${w} (الحالي)` : `أسبوع ${w}`}
-                    </text>
-                  </g>
-                );
-              })
+                  >
+                    {w === totalSteps ? `أسبوع ${w} (الحالي)` : `أسبوع ${w}`}
+                  </text>
+                </g>
+              );
+            })
             : operatorRollout.weeks.map((w, idx) => {
-                const x = getX(idx + 1);
-                return (
-                  <g key={w.weekKey}>
-                    <line x1={x} y1={originY} x2={x} y2={originY + 6} stroke="#64748b" strokeWidth="1.5" />
-                    <text
-                      x={x}
-                      y={originY + 20}
-                      textAnchor="middle"
-                      className={`text-[11px] font-bold ${
-                        idx === operatorRollout.weeks.length - 1 ? 'fill-sky-800 font-black' : 'fill-slate-600'
+              const x = getX(idx + 1);
+              return (
+                <g key={w.weekKey}>
+                  <line x1={x} y1={originY} x2={x} y2={originY + 6} stroke="#64748b" strokeWidth="1.5" />
+                  <text
+                    x={x}
+                    y={originY + 20}
+                    textAnchor="middle"
+                    className={`text-[11px] font-bold ${idx === operatorRollout.weeks.length - 1 ? 'fill-sky-800 font-black' : 'fill-slate-600'
                       }`}
-                    >
-                      {w.weekDef.shortAr}
-                    </text>
-                    <text
-                      x={x}
-                      y={originY + 34}
-                      textAnchor="middle"
-                      className="text-[9px] font-mono fill-slate-400"
-                    >
-                      {w.weekDef.dateRangeAr.replace(' 2026', '')}
-                    </text>
-                  </g>
-                );
-              })}
+                  >
+                    {w.weekDef.shortAr}
+                  </text>
+                  <text
+                    x={x}
+                    y={originY + 34}
+                    textAnchor="middle"
+                    className="text-[9px] font-mono fill-slate-400"
+                  >
+                    {w.weekDef.dateRangeAr.replace(' 2026', '')}
+                  </text>
+                </g>
+              );
+            })}
 
           {/* Origin (0,0) Intersection Indicator */}
           <circle cx={originX} cy={originY} r="4" fill="#64748b" />
@@ -1165,28 +1161,25 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             style={{
               left: `${(hoveredPoint.x / svgWidth) * 100}%`,
               top: `${(hoveredPoint.y / svgHeight) * 100}%`,
-              transform: `translate(${
-                hoveredPoint.x > svgWidth * 0.72
+              transform: `translate(${hoveredPoint.x > svgWidth * 0.72
                   ? '-95%'
                   : hoveredPoint.x < svgWidth * 0.28
-                  ? '-5%'
-                  : '-50%'
-              }, ${hoveredPoint.y < 150 ? '16px' : '-105%'})`,
+                    ? '-5%'
+                    : '-50%'
+                }, ${hoveredPoint.y < 150 ? '16px' : '-105%'})`,
             }}
           >
             <div
-              className={`text-white p-3.5 rounded-2xl shadow-2xl border text-right min-w-[300px] max-w-[360px] backdrop-blur-md ${
-                isAvailability
+              className={`text-white p-3.5 rounded-2xl shadow-2xl border text-right min-w-[300px] max-w-[360px] backdrop-blur-md ${isAvailability
                   ? 'bg-slate-950/95 border-teal-500/40 shadow-teal-950/50'
                   : 'bg-slate-950/95 border-sky-400/40 shadow-sky-950/40'
-              }`}
+                }`}
             >
               {/* Header: Week number & Dates */}
               <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-700/80 gap-2">
                 <span
-                  className={`font-black text-xs flex items-center gap-1.5 ${
-                    isAvailability ? 'text-teal-300' : 'text-sky-300'
-                  }`}
+                  className={`font-black text-xs flex items-center gap-1.5 ${isAvailability ? 'text-teal-300' : 'text-sky-300'
+                    }`}
                 >
                   <Calendar className="w-3.5 h-3.5 shrink-0" />
                   <span>
@@ -1373,11 +1366,10 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
 
             return (
               <div
-                className={`p-4 rounded-2xl border transition-all duration-200 ${
-                  isHovering
+                className={`p-4 rounded-2xl border transition-all duration-200 ${isHovering
                     ? 'bg-gradient-to-r from-teal-50/90 via-sky-50/70 to-indigo-50/80 border-teal-300 shadow-sm'
                     : 'bg-slate-50/80 border-slate-200'
-                }`}
+                  }`}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-3 border-b border-slate-200/80 gap-2">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -1642,23 +1634,21 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                         setSelectedDeptFilter(dept.canonicalAdmin);
                       }
                     }}
-                    className={`p-3 rounded-xl border transition-all cursor-pointer ${
-                      isSelected
+                    className={`p-3 rounded-xl border transition-all cursor-pointer ${isSelected
                         ? 'bg-indigo-50/90 border-indigo-400 ring-2 ring-indigo-200 shadow-sm'
                         : 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-2xs'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between gap-2 mb-1.5">
                       <span className="text-xs font-bold text-slate-800 leading-tight">
                         {dept.canonicalAdmin}
                       </span>
-                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-black ${
-                        dept.achievementPercent >= 100
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-black ${dept.achievementPercent >= 100
                           ? 'bg-emerald-100 text-emerald-800'
                           : dept.achievementPercent >= 70
-                          ? 'bg-sky-100 text-sky-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}>
+                            ? 'bg-sky-100 text-sky-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}>
                         {dept.achievementPercent}%
                       </span>
                     </div>
@@ -1666,13 +1656,12 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                     {/* Progress Bar */}
                     <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-2">
                       <div
-                        className={`h-full rounded-full transition-all duration-300 ${
-                          dept.achievementPercent >= 100
+                        className={`h-full rounded-full transition-all duration-300 ${dept.achievementPercent >= 100
                             ? 'bg-emerald-500'
                             : dept.achievementPercent >= 70
-                            ? 'bg-sky-500'
-                            : 'bg-amber-500'
-                        }`}
+                              ? 'bg-sky-500'
+                              : 'bg-amber-500'
+                          }`}
                         style={{ width: `${Math.min(100, dept.achievementPercent)}%` }}
                       ></div>
                     </div>
