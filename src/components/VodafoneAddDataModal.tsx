@@ -280,6 +280,9 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
       setMasterRecord(null);
       setFormData({
         'Site code': '',
+        specialTarget: false,
+        special_target: false,
+        'سبيشال تارجت': false,
         'سنترال الربط': '',
         'المحافظه': '',
         'قطاع التنفيذ': '',
@@ -300,8 +303,18 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
       if (initialRecord) {
         setMasterRecord(initialRecord);
         const obstacleVal = initialRecord['اسباب المعوق'] || (initialRecord['التصنيف']?.includes('معوق') ? (initialRecord['اسباب التعذر'] || initialRecord['اسباب التعّذر'] || '') : '');
+        const isSpecial = Boolean(
+          initialRecord.specialTarget ??
+          initialRecord.special_target ??
+          initialRecord['سبيشال تارجت'] ??
+          (initialRecord as any)?.['سبيشال_تارجت'] ??
+          false
+        );
         setFormData({
           ...initialRecord,
+          specialTarget: isSpecial,
+          special_target: isSpecial,
+          'سبيشال تارجت': isSpecial,
           'اسباب المعوق': obstacleVal,
         });
         setStep('fill-form');
@@ -328,17 +341,35 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
       (s) => String(s?.siteCode || '').trim().toUpperCase() === norm
     );
     const raw = (site?.rawRecord as VodafoneRecord) || null;
+    const isSpecial = Boolean(
+      raw?.specialTarget ??
+      raw?.special_target ??
+      raw?.['سبيشال تارجت'] ??
+      (raw as any)?.['سبيشال_تارجت'] ??
+      site?.specialTarget ??
+      site?.special_target ??
+      site?.rawRecord?.specialTarget ??
+      site?.rawRecord?.special_target ??
+      site?.rawRecord?.['سبيشال تارجت'] ??
+      false
+    );
     if (raw) {
       setMasterRecord(raw);
       const obstacleVal = raw['اسباب المعوق'] || (raw['التصنيف']?.includes('معوق') ? (raw['اسباب التعذر'] || raw['اسباب التعّذر'] || '') : '');
       setFormData({
         ...raw,
+        specialTarget: isSpecial,
+        special_target: isSpecial,
+        'سبيشال تارجت': isSpecial,
         'اسباب المعوق': obstacleVal,
       });
     } else {
       setFormData((prev) => ({
         ...prev,
         'Site code': code,
+        specialTarget: isSpecial,
+        special_target: isSpecial,
+        'سبيشال تارجت': isSpecial,
         'سنترال الربط': site?.central || '',
         'المحافظه': site?.governorate || '',
         'قطاع التنفيذ': (site as any)?.executionSector || '',
@@ -491,8 +522,17 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
         ? (formData['اسباب المعوق'] || formData['اسباب التعذر'] || '')
         : (isStalled ? (formData['اسباب التعذر'] || formData['اسباب التعّذر'] || '') : '');
 
+      const isSpecial = Boolean(
+        formData.specialTarget ||
+        formData.special_target ||
+        formData['سبيشال تارجت']
+      );
+
       const payload: VodafoneRecord = {
         ...formData,
+        specialTarget: isSpecial,
+        special_target: isSpecial,
+        'سبيشال تارجت': isSpecial,
         'Site code': code,
         'site code': code,
         'مسئولية التنفيذ': masterRecord?.['مسئولية التنفيذ'] || 'التنفيذ',
@@ -766,6 +806,31 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
                       placeholder="المحافظة"
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20"
                     />
+                  </div>
+
+                  {/* Special Target Checkbox */}
+                  <div className="sm:col-span-2">
+                    <label className="flex items-center gap-2.5 p-3 bg-amber-50/80 hover:bg-amber-100/70 border-2 border-amber-300/80 rounded-xl cursor-pointer transition select-none">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(formData.specialTarget || formData.special_target || formData['سبيشال تارجت'])}
+                        onChange={(e) => {
+                          handleInputChange('specialTarget', e.target.checked);
+                          handleInputChange('special_target', e.target.checked);
+                          handleInputChange('سبيشال تارجت', e.target.checked);
+                        }}
+                        className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
+                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-black text-amber-950 flex items-center gap-1">
+                          <span>⭐</span>
+                          <span>Special Target</span>
+                        </span>
+                        <span className="text-[11px] text-amber-700 font-semibold">
+                          - تحديد هذا الموقع كهدف ذو أولوية خاصة واستراتيجية
+                        </span>
+                      </div>
+                    </label>
                   </div>
                 </div>
               </div>

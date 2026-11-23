@@ -162,6 +162,24 @@ function mapWeRecordToSiteRecord(r: WeRecord, index = 0): SiteRecord {
     responsibility: String(r['مسئولية التنفيذ'] || 'WE').trim(),
     lat: r['NLatitude'] || '',
     lng: r['NLongitude'] || '',
+    specialTarget: Boolean(
+      (r as any).specialTarget ??
+      (r as any).special_target ??
+      (r as any)['specialTarget'] ??
+      (r as any)['special_target'] ??
+      r['سبيشال تارجت'] ??
+      (r as any)['سبيشال_تارجت'] ??
+      false
+    ),
+    special_target: Boolean(
+      (r as any).specialTarget ??
+      (r as any).special_target ??
+      (r as any)['specialTarget'] ??
+      (r as any)['special_target'] ??
+      r['سبيشال تارجت'] ??
+      (r as any)['سبيشال_تارجت'] ??
+      false
+    ),
     rawRecord: r,
   };
 }
@@ -741,11 +759,12 @@ export const Dashboard: React.FC = () => {
           const siteDel = String(site.deliveryStatus || site.deliveryArea || site.rawRecord?.['موقف التسليم'] || '').trim();
           if (!activeDels.includes(siteDel)) return false;
         }
+      }
 
-        if (filters.specialTarget === true || filters.specialTarget === 'true' || filters.specialTarget === 'special') {
-          const isSpecial = Boolean(site.specialTarget || site.rawRecord?.specialTarget || site.rawRecord?.['سبيشال تارجت'] || site.rawRecord?.['سبيشال_تارجت']);
-          if (!isSpecial) return false;
-        }
+      // Universal: Special Target Filter (Works across FTTS WE, Vodafone, Orange, All and Availability)
+      if (filters.specialTarget === true || filters.specialTarget === 'true' || filters.specialTarget === 'special') {
+        const isSpecial = Boolean(site.specialTarget || site.special_target || site.rawRecord?.specialTarget || site.rawRecord?.special_target || site.rawRecord?.['سبيشال تارجت'] || site.rawRecord?.['سبيشال_تارجت']);
+        if (!isSpecial) return false;
       }
 
       return true;
@@ -857,11 +876,12 @@ export const Dashboard: React.FC = () => {
           const siteDel = String(site.deliveryStatus || site.deliveryArea || site.rawRecord?.['موقف التسليم'] || '').trim();
           if (!activeDels.includes(siteDel)) return false;
         }
+      }
 
-        if (filters.specialTarget === true || filters.specialTarget === 'true' || filters.specialTarget === 'special') {
-          const isSpecial = Boolean(site.specialTarget || site.rawRecord?.specialTarget || site.rawRecord?.['سبيشال تارجت'] || site.rawRecord?.['سبيشال_تارجت']);
-          if (!isSpecial) return false;
-        }
+      // Universal: Special Target Filter (Works across FTTS WE, Vodafone, Orange, All and Availability)
+      if (filters.specialTarget === true || filters.specialTarget === 'true' || filters.specialTarget === 'special') {
+        const isSpecial = Boolean(site.specialTarget || site.special_target || site.rawRecord?.specialTarget || site.rawRecord?.special_target || site.rawRecord?.['سبيشال تارجت'] || site.rawRecord?.['سبيشال_تارجت']);
+        if (!isSpecial) return false;
       }
 
       return true;
@@ -1488,6 +1508,29 @@ export const Dashboard: React.FC = () => {
                       />
                     </>
                   )}
+
+                  {/* زر فلترة Special Target السريع لجميع مشروعات الموبايل */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilters((prev) => ({
+                        ...prev,
+                        specialTarget: prev.specialTarget ? undefined : true,
+                      }));
+                    }}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border shadow-2xs ${filters.specialTarget
+                        ? 'bg-amber-500 text-white border-amber-600 shadow-sm ring-2 ring-amber-300'
+                        : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                      }`}
+                    title="تصفية وعرض مواقع الموبايل المصنفة كـ Special Target فقط"
+                  >
+                    <span>⭐</span>
+                    <span>Special Target {filters.specialTarget ? '(مفعل)' : ''}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${filters.specialTarget ? 'bg-white/30 text-white' : 'bg-amber-200/80 text-amber-900 font-bold'
+                      }`}>
+                      {authorizedScopeData.filter((s) => Boolean(s.specialTarget || s.special_target || s.rawRecord?.specialTarget || s.rawRecord?.special_target || s.rawRecord?.['سبيشال تارجت'] || s.rawRecord?.['سبيشال_تارجت'])).length}
+                    </span>
+                  </button>
                 </div>
               </div>
             )}

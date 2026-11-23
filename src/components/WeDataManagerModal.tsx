@@ -8,16 +8,16 @@ import { FIELD_CONFIG } from '../config/fieldConfig';
 import { deleteRecord, deleteRecordsBulk, exportCleanCSV } from '../hooks/useWeAPI';
 import { useAuth } from '../context/AuthContext';
 import { isRecordInSector } from '../utils/sectorPermissions';
-import { 
-  Trash2, 
-  Edit3, 
-  Download, 
-  Search, 
-  Filter, 
-  CheckSquare, 
-  Square, 
-  AlertTriangle, 
-  X, 
+import {
+  Trash2,
+  Edit3,
+  Download,
+  Search,
+  Filter,
+  CheckSquare,
+  Square,
+  AlertTriangle,
+  X,
   Columns,
   RefreshCw,
   Lock,
@@ -47,18 +47,18 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'incomplete' | 'obstacles' | 'stalled' | 'completed'>('all');
-  
+
   // Selection State for Bulk Delete
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; ids: string[]; message: string } | null>(null);
-  
+
   // Toast Notification
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // Column Customizer State for CSV Export
   const [isColumnsModalOpen, setIsColumnsModalOpen] = useState(false);
-  
+
   // Default selected columns for clean CSV (hide empty or internal technical keys)
   const defaultColumns = useMemo(() => {
     return FIELD_CONFIG.map(f => f.csvColumn);
@@ -132,7 +132,7 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
       return;
     }
     const id = record._id;
-    setSelectedIds((prev) => 
+    setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
   };
@@ -140,7 +140,7 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
   const handleSelectAllFiltered = () => {
     const userDeletableRecords = filteredRecords.filter((r) => canDeleteRecord(r));
     const deletableIds = userDeletableRecords.map((r) => r._id).filter(Boolean);
-    
+
     if (deletableIds.length === 0) {
       showToast('لا توجد سجلات تابعة لقطاعك محددة في النتائج الحالية للحذف', 'error');
       return;
@@ -246,7 +246,7 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
   };
 
   const toggleColumn = (col: string) => {
-    setSelectedColumns((prev) => 
+    setSelectedColumns((prev) =>
       prev.includes(col) ? prev.filter((c) => c !== col) : [...prev, col]
     );
   };
@@ -257,7 +257,7 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full h-[92vh] flex flex-col border border-slate-200 overflow-hidden">
-        
+
         {/* Header */}
         <div className="px-6 py-4 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white flex items-center justify-between shadow-md">
           <div className="flex items-center gap-3">
@@ -301,9 +301,8 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
         {/* Toast Alert */}
         {toast && (
           <div
-            className={`px-4 py-2.5 text-sm font-medium flex items-center justify-between ${
-              toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
-            }`}
+            className={`px-4 py-2.5 text-sm font-medium flex items-center justify-between ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+              }`}
           >
             <span>{toast.message}</span>
             <button onClick={() => setToast(null)} className="text-white/80 hover:text-white">✕</button>
@@ -336,51 +335,46 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
             <button
               onClick={() => setSelectedFilter('all')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition ${
-                selectedFilter === 'all'
+              className={`px-3 py-1.5 rounded-lg font-medium transition ${selectedFilter === 'all'
                   ? 'bg-blue-600 text-white shadow-sm'
                   : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
+                }`}
             >
               الكل ({records.length})
             </button>
             <button
               onClick={() => setSelectedFilter('obstacles')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition ${
-                selectedFilter === 'obstacles'
+              className={`px-3 py-1.5 rounded-lg font-medium transition ${selectedFilter === 'obstacles'
                   ? 'bg-amber-600 text-white shadow-sm'
                   : 'bg-white text-amber-700 hover:bg-amber-50 border border-slate-200'
-              }`}
+                }`}
             >
               معوقات
             </button>
             <button
               onClick={() => setSelectedFilter('stalled')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition ${
-                selectedFilter === 'stalled'
+              className={`px-3 py-1.5 rounded-lg font-medium transition ${selectedFilter === 'stalled'
                   ? 'bg-rose-600 text-white shadow-sm'
                   : 'bg-white text-rose-700 hover:bg-rose-50 border border-slate-200'
-              }`}
+                }`}
             >
               متعثرات
             </button>
             <button
               onClick={() => setSelectedFilter('completed')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition ${
-                selectedFilter === 'completed'
+              className={`px-3 py-1.5 rounded-lg font-medium transition ${selectedFilter === 'completed'
                   ? 'bg-emerald-600 text-white shadow-sm'
                   : 'bg-white text-emerald-700 hover:bg-emerald-50 border border-slate-200'
-              }`}
+                }`}
             >
               تم التشغيل
             </button>
             <button
               onClick={() => setSelectedFilter('incomplete')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition ${
-                selectedFilter === 'incomplete'
+              className={`px-3 py-1.5 rounded-lg font-medium transition ${selectedFilter === 'incomplete'
                   ? 'bg-purple-600 text-white shadow-sm'
                   : 'bg-white text-purple-700 hover:bg-purple-50 border border-slate-200'
-              }`}
+                }`}
               title="سجلات تفتقد لكود الموقع أو الحالة"
             >
               بيانات ناقصة
@@ -541,21 +535,28 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
                         )}
                       </td>
                       <td className="p-3 font-mono font-bold text-slate-800">
-                        {siteCode}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>{siteCode}</span>
+                          {Boolean(r.specialTarget || r.special_target || r['سبيشال تارجت']) && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                              <span>⭐</span>
+                              <span>Special Target</span>
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="p-3">
                         <span
-                          className={`px-2 py-0.5 rounded text-[11px] font-medium ${
-                            tasneef.includes('تشغيل')
+                          className={`px-2 py-0.5 rounded text-[11px] font-medium ${tasneef.includes('تشغيل')
                               ? 'bg-emerald-100 text-emerald-800'
                               : tasneef.includes('معوق')
-                              ? 'bg-amber-100 text-amber-800'
-                              : tasneef.includes('متعذر') || tasneef.includes('متعثر')
-                              ? 'bg-rose-100 text-rose-800'
-                              : tasneef.includes('تصاريح')
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-slate-100 text-slate-700'
-                          }`}
+                                ? 'bg-amber-100 text-amber-800'
+                                : tasneef.includes('متعذر') || tasneef.includes('متعثر')
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : tasneef.includes('تصاريح')
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-slate-100 text-slate-700'
+                            }`}
                         >
                           {tasneef || 'غير محدد'}
                         </span>
@@ -732,9 +733,8 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
                 return (
                   <label
                     key={col}
-                    className={`flex items-center justify-between p-2 rounded-lg cursor-pointer text-xs transition ${
-                      isChecked ? 'bg-blue-50/60 font-semibold text-blue-900' : 'hover:bg-slate-50 text-slate-600'
-                    }`}
+                    className={`flex items-center justify-between p-2 rounded-lg cursor-pointer text-xs transition ${isChecked ? 'bg-blue-50/60 font-semibold text-blue-900' : 'hover:bg-slate-50 text-slate-600'
+                      }`}
                   >
                     <span>{col}</span>
                     <input

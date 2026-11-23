@@ -83,6 +83,24 @@ export function mapVodafoneRecordToSiteRecord(r: VodafoneRecord, index = 0): Sit
     notes: String(r['الملاحظات'] || '').trim(),
     lat: r['احدثيات خط العرض'] || '',
     lng: r['احدثيات خط الطول'] || '',
+    specialTarget: Boolean(
+      r.specialTarget ??
+      r.special_target ??
+      (r as any)['specialTarget'] ??
+      (r as any)['special_target'] ??
+      r['سبيشال تارجت'] ??
+      (r as any)['سبيشال_تارجت'] ??
+      false
+    ),
+    special_target: Boolean(
+      r.specialTarget ??
+      r.special_target ??
+      (r as any)['specialTarget'] ??
+      (r as any)['special_target'] ??
+      r['سبيشال تارجت'] ??
+      (r as any)['سبيشال_تارجت'] ??
+      false
+    ),
     rawRecord: r,
   };
 }
@@ -210,6 +228,16 @@ export function useVodafoneAPI() {
       });
 
       const now = new Date().toISOString();
+      const isSpecial = Boolean(
+        record.specialTarget ??
+        record.special_target ??
+        (record as any)['specialTarget'] ??
+        (record as any)['special_target'] ??
+        record['سبيشال تارجت'] ??
+        (record as any)['سبيشال_تارجت'] ??
+        false
+      );
+
       const enriched: VodafoneRecord = {
         ...record,
         company: 'Vodafone',
@@ -218,6 +246,9 @@ export function useVodafoneAPI() {
         site_code: code,
         'التصنيف': record['التصنيف'] || '',
         classification: record['التصنيف'] || '',
+        specialTarget: isSpecial,
+        special_target: isSpecial,
+        'سبيشال تارجت': isSpecial,
         _updatedAt: now,
       };
 
@@ -225,6 +256,9 @@ export function useVodafoneAPI() {
         site_code: code,
         'site code': code,
         'Site code': code,
+        special_target: isSpecial,
+        specialTarget: isSpecial,
+        'سبيشال تارجت': isSpecial,
         'Site Status': enriched['التصنيف'] || enriched.classification || 'جاري',
         data: enriched,
         updated_at: now,

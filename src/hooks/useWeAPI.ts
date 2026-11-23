@@ -30,10 +30,22 @@ export function normalizeRecord(row: Record<string, any>): WeRecord {
   const siteCode = base['site code'] || row['site code'] || row.site_code || row['Site code'] || '';
   const docUrl = base.documentUrl || row.documentUrl || base.attachmentUrl || row.attachmentUrl || '';
   const docName = base['المستند'] || row['المستند'] || (docUrl ? `Doc-${siteCode}.pdf` : '');
+  const isSpecial = Boolean(
+    base.specialTarget ??
+    base.special_target ??
+    base['سبيشال تارجت'] ??
+    row.specialTarget ??
+    row.special_target ??
+    row['سبيشال تارجت'] ??
+    false
+  );
 
   return {
     ...base,
     ...row,
+    specialTarget: isSpecial,
+    special_target: isSpecial,
+    'سبيشال تارجت': isSpecial,
     'site code': siteCode,
     site_code: siteCode,
     _id: row.id || row._id || base._id || '',
@@ -470,8 +482,21 @@ export async function saveRecord(
     const targetId = record._id || (record as any).id;
     const now = new Date().toISOString();
 
+    const isSpecial = Boolean(
+      (record as any).specialTarget ??
+      (record as any).special_target ??
+      (record as any)['specialTarget'] ??
+      (record as any)['special_target'] ??
+      record['سبيشال تارجت'] ??
+      (record as any)['سبيشال_تارجت'] ??
+      false
+    );
+
     const fullData: WeRecord = {
       ...record,
+      specialTarget: isSpecial,
+      special_target: isSpecial,
+      'سبيشال تارجت': isSpecial,
       'site code': siteCode,
       site_code: siteCode,
       _id: targetId || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `we-${Date.now()}`),
@@ -484,6 +509,9 @@ export async function saveRecord(
     const safePayload: Record<string, any> = {
       site_code: siteCode,
       'site code': siteCode,
+      special_target: isSpecial,
+      specialTarget: isSpecial,
+      'سبيشال تارجت': isSpecial,
       'Exc Sectores': record['Exc Sectores'] || record['Exc sector'] || '',
       'Sectores': record['Sectores'] || record['Exc sector'] || '',
       'Exc sector': record['Exc sector'] || record['Sectores'] || '',

@@ -149,8 +149,20 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
         return;
       }
 
+      const isSpecial = Boolean(
+        matchedSite.specialTarget ??
+        matchedSite.special_target ??
+        matchedSite.rawRecord?.specialTarget ??
+        matchedSite.rawRecord?.special_target ??
+        matchedSite.rawRecord?.['سبيشال تارجت'] ??
+        false
+      );
+
       const rec: OrangeRecord = {
         'Site code': matchedSite.siteCode,
+        specialTarget: isSpecial,
+        special_target: isSpecial,
+        'سبيشال تارجت': isSpecial,
         HUBID: matchedSite.siteCode,
         'رئاسة القطاعات ': matchedSite.sector,
         'الادارة العامة': matchedSite.generalAdmin,
@@ -194,6 +206,9 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
 
     const blank: OrangeRecord = {
       'Site code': '',
+      specialTarget: false,
+      special_target: false,
+      'سبيشال تارجت': false,
       'رئاسة القطاعات ': 'القاهرة الكبرى',
       'قطاع المناطق': 'قطاع مناطق القاهرة الجديدة ',
       'قطاع التنفيذ': 'القاهرة الكبرى',
@@ -217,8 +232,18 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
     if (!isOpen) return;
     if (initialRecord) {
       setMasterRecord(initialRecord);
+      const isSpecial = Boolean(
+        initialRecord.specialTarget ??
+        initialRecord.special_target ??
+        initialRecord['سبيشال تارجت'] ??
+        (initialRecord as any)?.['سبيشال_تارجت'] ??
+        false
+      );
       setFormData({
         ...initialRecord,
+        specialTarget: isSpecial,
+        special_target: isSpecial,
+        'سبيشال تارجت': isSpecial,
         'التصنيف (مدني)': normalizeOrangeClassification(initialRecord['التصنيف (مدني)']),
       });
       setActiveMode('edit');
@@ -294,7 +319,18 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
     setSaving(true);
     setErrors({});
     try {
-      const res = await onSave(formData);
+      const isSpecial = Boolean(
+        formData.specialTarget ||
+        formData.special_target ||
+        formData['سبيشال تارجت']
+      );
+      const payload: OrangeRecord = {
+        ...formData,
+        specialTarget: isSpecial,
+        special_target: isSpecial,
+        'سبيشال تارجت': isSpecial,
+      };
+      const res = await onSave(payload);
       if (res.success) {
         setSuccessMessage(res.message || '✅ تم حفظ وتحديث بيانات موقع Orange بنجاح في قاعدة البيانات!');
         setTimeout(() => {
@@ -514,6 +550,31 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
                       value={formData['العنوان'] || ''}
                       className="w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed"
                     />
+                  </div>
+
+                  {/* Special Target Checkbox */}
+                  <div className="sm:col-span-2">
+                    <label className="flex items-center gap-2.5 p-3 bg-amber-50/80 hover:bg-amber-100/70 border-2 border-amber-300/80 rounded-xl cursor-pointer transition select-none">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(formData.specialTarget || formData.special_target || formData['سبيشال تارجت'])}
+                        onChange={(e) => {
+                          handleInputChange('specialTarget', e.target.checked);
+                          handleInputChange('special_target', e.target.checked);
+                          handleInputChange('سبيشال تارجت', e.target.checked);
+                        }}
+                        className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
+                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-black text-amber-950 flex items-center gap-1">
+                          <span>⭐</span>
+                          <span>Special Target</span>
+                        </span>
+                        <span className="text-[11px] text-amber-700 font-semibold">
+                          - تحديد هذا الموقع كهدف ذو أولوية خاصة واستراتيجية
+                        </span>
+                      </div>
+                    </label>
                   </div>
                 </div>
               </div>

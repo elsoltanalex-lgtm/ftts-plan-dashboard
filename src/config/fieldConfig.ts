@@ -298,7 +298,7 @@ export const getSortedFields = () => [...FIELD_CONFIG].sort((a, b) => a.order - 
 export const getFieldByColumn = (col: string) => FIELD_CONFIG.find(f => f.csvColumn === col);
 
 // Type for a WE record using the CSV column names as keys
-export type WeRecord = Record<string, string>;
+export type WeRecord = Record<string, any>;
 
 // ──────────────────────────────────────────────────────
 // Approved Classifications Specification

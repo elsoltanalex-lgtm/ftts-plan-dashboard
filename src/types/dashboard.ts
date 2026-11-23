@@ -64,6 +64,7 @@ export interface SiteRecord {
   excelStatus?: string;
   paymentAndStartDate?: string;
   specialTarget?: boolean;
+  special_target?: boolean;
   rawRecord?: any;
 }
 

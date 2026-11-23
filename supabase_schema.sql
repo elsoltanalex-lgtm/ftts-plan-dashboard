@@ -317,5 +317,14 @@ CREATE POLICY "Allow Public Delete Storage" ON storage.objects
     FOR DELETE USING (bucket_id IN ('site-attachments', 'excel-uploads'));
 
 -- ==============================================================================
+-- 7. SPECIAL TARGET SUPPORT (Mobile & Availability Projects)
+-- ==============================================================================
+ALTER TABLE public.we ADD COLUMN IF NOT EXISTS special_target BOOLEAN DEFAULT false;
+ALTER TABLE public.we_records ADD COLUMN IF NOT EXISTS special_target BOOLEAN DEFAULT false;
+ALTER TABLE public.vodafone_records ADD COLUMN IF NOT EXISTS special_target BOOLEAN DEFAULT false;
+ALTER TABLE public.orange_records ADD COLUMN IF NOT EXISTS special_target BOOLEAN DEFAULT false;
+ALTER TABLE public.etaha_records ADD COLUMN IF NOT EXISTS special_target BOOLEAN DEFAULT false;
+
+-- ==============================================================================
 -- Schema configuration completed successfully!
 -- ==============================================================================

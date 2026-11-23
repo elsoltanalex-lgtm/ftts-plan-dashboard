@@ -87,6 +87,24 @@ export function mapOrangeRecordToSiteRecord(r: OrangeRecord, index = 0): SiteRec
     notes: String(r['الملاحظات'] || '').trim(),
     lat: r['احدثيات خط العرض'] || '',
     lng: r['احدثيات خط الطول'] || '',
+    specialTarget: Boolean(
+      r.specialTarget ??
+      r.special_target ??
+      (r as any)['specialTarget'] ??
+      (r as any)['special_target'] ??
+      r['سبيشال تارجت'] ??
+      (r as any)['سبيشال_تارجت'] ??
+      false
+    ),
+    special_target: Boolean(
+      r.specialTarget ??
+      r.special_target ??
+      (r as any)['specialTarget'] ??
+      (r as any)['special_target'] ??
+      r['سبيشال تارجت'] ??
+      (r as any)['سبيشال_تارجت'] ??
+      false
+    ),
     rawRecord: r,
   };
 }
@@ -215,6 +233,16 @@ export function useOrangeAPI() {
       });
 
       const now = new Date().toISOString();
+      const isSpecial = Boolean(
+        record.specialTarget ??
+        record.special_target ??
+        (record as any)['specialTarget'] ??
+        (record as any)['special_target'] ??
+        record['سبيشال تارجت'] ??
+        (record as any)['سبيشال_تارجت'] ??
+        false
+      );
+
       const enriched: OrangeRecord = {
         ...record,
         company: 'Orange',
@@ -224,6 +252,9 @@ export function useOrangeAPI() {
         'التصنيف': record['التصنيف'] || record['التصنيف (مدني)'] || '',
         'التصنيف (مدني)': record['التصنيف (مدني)'] || record['التصنيف'] || '',
         classification: record['التصنيف'] || record['التصنيف (مدني)'] || '',
+        specialTarget: isSpecial,
+        special_target: isSpecial,
+        'سبيشال تارجت': isSpecial,
         _updatedAt: now,
       };
 
@@ -231,6 +262,9 @@ export function useOrangeAPI() {
         site_code: code,
         'site code': code,
         'Site code': code,
+        special_target: isSpecial,
+        specialTarget: isSpecial,
+        'سبيشال تارجت': isSpecial,
         'Site Status': enriched['التصنيف (مدني)'] || enriched['التصنيف'] || 'جاري',
         data: enriched,
         updated_at: now,

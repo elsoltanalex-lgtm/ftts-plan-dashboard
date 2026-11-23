@@ -1192,6 +1192,9 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     const blank: WeRecord = {
       'site code': customCode.trim().toUpperCase(),
       site_code: customCode.trim().toUpperCase(),
+      specialTarget: false,
+      special_target: false,
+      'سبيشال تارجت': false,
       'Exc Sectores': 'المنطقة الشرقية والغربية',
       'رئاسة قطاعات التنفيذ': 'المنطقة الشرقية والغربية',
       'رئاسة القطاعات': 'المنطقة الشرقية والغربية',
@@ -1258,8 +1261,22 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
         const docUrlVal = record.documentUrl || record.attachmentUrl || inMemorySite?.documentUrl || '';
         const docVal = record['المستند'] || inMemorySite?.documentRef || (docUrlVal ? `Doc-${normCode}.pdf` : '');
 
+        const isSpecial = Boolean(
+          record.specialTarget ??
+          record.special_target ??
+          record['سبيشال تارجت'] ??
+          inMemorySite?.specialTarget ??
+          inMemorySite?.special_target ??
+          inMemorySite?.rawRecord?.specialTarget ??
+          inMemorySite?.rawRecord?.special_target ??
+          inMemorySite?.rawRecord?.['سبيشال تارجت'] ??
+          false
+        );
         const initial: WeRecord = {
           ...record,
+          specialTarget: isSpecial,
+          special_target: isSpecial,
+          'سبيشال تارجت': isSpecial,
           _id: record._id || (record as any).id || '',
           'site code': normCode,
           site_code: normCode,
@@ -1325,9 +1342,22 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
         const rawStatus = (inMemorySite.rawRecord?.['Site Status'] || inMemorySite.rawRecord?.['حالة الموقع'] || '').replace(/\s+/g, ' ').trim();
         const cleanSiteStatus = rawStatus && !isClassificationValue(rawStatus) ? rawStatus : 'ON AIR';
 
+        const isSpecialFallback = Boolean(
+          inMemorySite.specialTarget ??
+          inMemorySite.special_target ??
+          inMemorySite.rawRecord?.specialTarget ??
+          inMemorySite.rawRecord?.special_target ??
+          inMemorySite.rawRecord?.['سبيشال تارجت'] ??
+          inMemorySite.rawRecord?.['سبيشال_تارجت'] ??
+          false
+        );
+
         const fallback: WeRecord = {
           'site code': inMemorySite.siteCode,
           site_code: inMemorySite.siteCode,
+          specialTarget: isSpecialFallback,
+          special_target: isSpecialFallback,
+          'سبيشال تارجت': isSpecialFallback,
           'Exc sector': inMemorySite.sector || userDefaultSector,
           'قطاع التنفيذ': inMemorySite.sector || userDefaultSector,
           'Sectores': inMemorySite.sector || userDefaultSector,
@@ -1408,8 +1438,24 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       const docUrlVal = initialRecord.documentUrl || initialRecord.attachmentUrl || inMemorySite?.documentUrl || '';
       const docVal = initialRecord['المستند'] || inMemorySite?.documentRef || (docUrlVal ? `Doc-${normCode}.pdf` : '');
 
+      const isSpecialInit = Boolean(
+        initialRecord.specialTarget ??
+        initialRecord.special_target ??
+        initialRecord['سبيشال تارجت'] ??
+        (initialRecord as any)?.['سبيشال_تارجت'] ??
+        inMemorySite?.specialTarget ??
+        inMemorySite?.special_target ??
+        inMemorySite?.rawRecord?.specialTarget ??
+        inMemorySite?.rawRecord?.special_target ??
+        inMemorySite?.rawRecord?.['سبيشال تارجت'] ??
+        false
+      );
+
       const normRecord = {
         ...initialRecord,
+        specialTarget: isSpecialInit,
+        special_target: isSpecialInit,
+        'سبيشال تارجت': isSpecialInit,
         _id: initialRecord._id || (initialRecord as any).id || '',
         'site code': normCode,
         site_code: normCode,
@@ -1589,6 +1635,16 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     try {
       const isEdit = activeMode === 'edit';
       const dataToSave = { ...formData };
+
+      // Ensure Special Target boolean is consistently populated
+      const isSpecialToSave = Boolean(
+        dataToSave.specialTarget ||
+        dataToSave.special_target ||
+        dataToSave['سبيشال تارجت']
+      );
+      dataToSave.specialTarget = isSpecialToSave;
+      dataToSave.special_target = isSpecialToSave;
+      dataToSave['سبيشال تارجت'] = isSpecialToSave;
 
       // Ensure consistent aliases for sector, zone, and administrations
       if (dataToSave['قطاع التنفيذ']) {
@@ -2203,6 +2259,31 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                           className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-100 disabled:text-slate-500 shadow-2xs"
                           placeholder="اسم السنترال"
                         />
+                      </div>
+
+                      {/* Special Target Checkbox */}
+                      <div className="col-span-1 sm:col-span-2 lg:col-span-4">
+                        <label className="flex items-center gap-2.5 p-3 bg-amber-50/80 hover:bg-amber-100/70 border-2 border-amber-300/80 rounded-xl cursor-pointer transition select-none">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(formData.specialTarget || formData.special_target || formData['سبيشال تارجت'])}
+                            onChange={(e) => {
+                              handleFieldChange('specialTarget', e.target.checked);
+                              handleFieldChange('special_target', e.target.checked);
+                              handleFieldChange('سبيشال تارجت', e.target.checked);
+                            }}
+                            className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
+                          />
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-black text-amber-950 flex items-center gap-1">
+                              <span>⭐</span>
+                              <span>Special Target</span>
+                            </span>
+                            <span className="text-[11px] text-amber-700 font-semibold">
+                              - تحديد هذا الموقع كهدف ذو أولوية خاصة واستراتيجية
+                            </span>
+                          </div>
+                        </label>
                       </div>
                     </div>
                   </div>
@@ -3175,6 +3256,31 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                               </option>
                             ))}
                           </select>
+                        </div>
+
+                        {/* Special Target Checkbox */}
+                        <div className="col-span-1 md:col-span-2 lg:col-span-3">
+                          <label className="flex items-center gap-2.5 p-3 bg-amber-50/80 hover:bg-amber-100/70 border-2 border-amber-300/80 rounded-xl cursor-pointer transition select-none">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(formData.specialTarget || formData.special_target || formData['سبيشال تارجت'])}
+                              onChange={(e) => {
+                                handleFieldChange('specialTarget', e.target.checked);
+                                handleFieldChange('special_target', e.target.checked);
+                                handleFieldChange('سبيشال تارجت', e.target.checked);
+                              }}
+                              className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
+                            />
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs font-black text-amber-950 flex items-center gap-1">
+                                <span>⭐</span>
+                                <span>Special Target</span>
+                              </span>
+                              <span className="text-[11px] text-amber-700 font-semibold">
+                                - تحديد هذا الموقع كهدف ذو أولوية خاصة واستراتيجية
+                              </span>
+                            </div>
+                          </label>
                         </div>
                       </div>
                     </div>

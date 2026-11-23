@@ -58,6 +58,9 @@ export interface OrangeRecord {
   'المسافة كم'?: string | number;
   'تكلفة الاعمال بالجنيه'?: string | number;
   'الملاحظات'?: string;
+  specialTarget?: boolean;
+  special_target?: boolean;
+  'سبيشال تارجت'?: boolean;
   _id?: string;
   _createdAt?: string;
   _updatedAt?: string;

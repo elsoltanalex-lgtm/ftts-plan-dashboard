@@ -33,6 +33,9 @@ export interface VodafoneRecord {
   'اسباب المعوق'?: string;
   'الجهة المطلوب الدعم منها'?: string;
   'التاريخ المتوقع للانتهاء'?: string;
+  specialTarget?: boolean;
+  special_target?: boolean;
+  'سبيشال تارجت'?: boolean;
   _id?: string;
   _createdAt?: string;
   _updatedAt?: string;
