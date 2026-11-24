@@ -607,6 +607,7 @@ export function isClassificationCompleted(cat: string): boolean {
     c.includes('انتهاء') ||
     c.includes('تسليم') ||
     c.includes('تشغيل') ||
+    c.includes('مشغل') ||
     c.includes('فيبر') ||
     c.includes('فايبر') ||
     c.includes('on air') ||

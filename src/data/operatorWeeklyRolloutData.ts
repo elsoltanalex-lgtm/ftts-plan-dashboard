@@ -4,6 +4,7 @@
 // Extracted from official operations tracking spreadsheet
 
 import type { SiteRecord } from '../types/dashboard';
+import { isClassificationCompleted } from './dashboardData';
 
 export interface OperatorWeeklyRow {
   admin: string;
@@ -1311,9 +1312,12 @@ export function getOperatorWeeklyRollout(
       const rawDept = String(s.generalAdmin || s.rawRecord?.['الادارة العامة المنفذة'] || s.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || s.rawRecord?.['الادارة العامة'] || '').trim();
       const cAdmin = toCanonicalDepartment(rawDept);
       const isDel =
+        isClassificationCompleted(s.status) ||
+        isClassificationCompleted(s.classification) ||
         s.status === 'تم الانتهاء' ||
         s.status === 'تم التسليم' ||
         s.status === 'تم التشغيل فايبر' ||
+        s.status === 'مشغل' ||
         s.executionCategory === 'Completed' ||
         s.classification === 'تم الانتهاء والتسليم' ||
         s.classification === 'تم التسليم' ||

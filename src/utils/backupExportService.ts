@@ -3,7 +3,7 @@
 
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
-import { supabase, supabaseFallback } from '../lib/supabase';
+import { supabase, supabaseFallback, supabaseClients } from '../lib/supabase';
 import type { SiteRecord } from '../types/dashboard';
 import { WE_EXCEL_SITES, TAHAWOL_EXCEL_SITES } from '../data/preloadedProjects';
 import { VODAFONE_RAW_RECORDS } from '../data/vodafoneSites';
@@ -44,7 +44,7 @@ function triggerBlobDownload(blob: Blob, fileName: string) {
  * Safely queries a Supabase table with fallback across available Supabase clients
  */
 async function fetchSupabaseTableData(tableName: string): Promise<any[] | null> {
-  const clients = [supabase, supabaseFallback];
+  const clients = supabaseClients;
   for (const client of clients) {
     try {
       const { data, error } = await client
@@ -70,7 +70,7 @@ async function fetchAllUploadedDocuments(records: any[] = []): Promise<Downloade
   const documents: DownloadedDocument[] = [];
   const seenNames = new Set<string>();
 
-  const clients = [supabase, supabaseFallback];
+  const clients = supabaseClients;
   const candidateBuckets = ['site-attachments', 'excel-uploads', 'documents', 'attachments'];
   const candidateFolders = ['', 'documents', 'attachments', 'sites', 'uploads'];
 
