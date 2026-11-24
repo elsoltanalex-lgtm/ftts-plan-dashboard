@@ -5,7 +5,7 @@ import { useState, useCallback, useEffect } from 'react';
 import type { SiteRecord } from '../types/dashboard';
 import type { VodafoneRecord } from '../types/vodafone';
 import { VODAFONE_RAW_RECORDS } from '../data/vodafoneSites';
-import { supabase, supabaseFallback, supabaseClients } from '../lib/supabase';
+import { supabase, supabaseFallback, supabaseClients, isUUID } from '../lib/supabase';
 
 const STORAGE_KEY = 'ftts_vodafone_records_v1';
 const VODAFONE_TABLE_CANDIDATES = ['vodafone_records', 'vodafone', 'we_records'];
@@ -252,20 +252,22 @@ export function useVodafoneAPI() {
         _updatedAt: now,
       };
 
+      // Safe payload matching physical Supabase table columns + JSONB data
+      // (Preserves specialTarget and all operator attributes inside data: enriched)
       const safePayload: any = {
         site_code: code,
         'site code': code,
-        'Site code': code,
-        special_target: isSpecial,
-        specialTarget: isSpecial,
-        'سبيشال تارجت': isSpecial,
         'Site Status': enriched['التصنيف'] || enriched.classification || 'جاري',
         data: enriched,
         updated_at: now,
       };
+      if (enriched._id && isUUID(enriched._id)) {
+        safePayload.id = enriched._id;
+      }
 
       // Persist directly into Supabase vodafone tables across active clients
       let cloudSaved = false;
+      let lastCloudError: any = null;
       clientLoop: for (const client of supabaseClients) {
         for (const table of VODAFONE_TABLE_CANDIDATES) {
           try {
@@ -280,31 +282,54 @@ export function useVodafoneAPI() {
               const retryQuoted = await client
                 .from(table)
                 .update(safePayload)
-                .eq('Site code', code)
+                .eq('site code', code)
                 .select();
               if (!retryQuoted.error && retryQuoted.data && retryQuoted.data.length > 0) {
                 updateData = retryQuoted.data;
                 updateErr = null;
+              } else if (retryQuoted.error) {
+                lastCloudError = retryQuoted.error;
               }
+            }
+
+            if (updateErr) {
+              lastCloudError = updateErr;
+              console.error(`[Vodafone Supabase] Update error on table ${table}:`, updateErr);
             }
 
             if (!updateErr && updateData && updateData.length > 0) {
               cloudSaved = true;
+              console.log(`[Vodafone Supabase] Successfully updated site ${code} in ${table}`);
               break clientLoop;
             }
 
             // 2. INSERT if row does not exist
+            const insertPayload: any = {
+              ...safePayload,
+              created_at: enriched._createdAt || now,
+            };
+            if (enriched._id && isUUID(enriched._id)) {
+              insertPayload.id = enriched._id;
+            }
+
             const { data: insertData, error: insertErr } = await client
               .from(table)
-              .insert([{ ...safePayload, created_at: enriched._createdAt || now }])
+              .insert([insertPayload])
               .select();
+
+            if (insertErr) {
+              lastCloudError = insertErr;
+              console.error(`[Vodafone Supabase] Insert error on table ${table}:`, insertErr);
+            }
 
             if (!insertErr && insertData && insertData.length > 0) {
               cloudSaved = true;
+              console.log(`[Vodafone Supabase] Successfully inserted site ${code} in ${table}`);
               break clientLoop;
             }
-          } catch (err) {
-            console.warn(`[Vodafone Supabase] Error saving to ${table}:`, err);
+          } catch (err: any) {
+            lastCloudError = err;
+            console.error(`[Vodafone Supabase] Error saving site ${code} to table ${table}:`, err);
           }
         }
       }
@@ -328,11 +353,12 @@ export function useVodafoneAPI() {
         };
       }
 
-      // Return error if Supabase save failed (satisfies Requirement 2)
+      // Return explicit error with details if cloud save failed across all clients
+      console.error(`[Vodafone Supabase] Failed to save site ${code} across all clients:`, lastCloudError);
       return {
         success: false,
         cloudSaved: false,
-        error: `فشل تسجيل التحديث لموقع Vodafone (${code}) في قاعدة بيانات Supabase السحابية. يرجى التحقق من اتصال الإنترنت.`,
+        error: `فشل تسجيل التحديث لموقع Vodafone (${code}) في قاعدة بيانات Supabase السحابية: ${lastCloudError?.message || 'يرجى التحقق من اتصال الإنترنت.'}`,
       };
     } catch (err: any) {
       return { success: false, error: err?.message || 'فشل حفظ بيانات الموقع' };
@@ -350,11 +376,19 @@ export function useVodafoneAPI() {
       saveStoredVodafoneRecords(filtered);
       setVodafoneRecords(filtered);
 
-      // Delete from Supabase tables
-      for (const table of VODAFONE_TABLE_CANDIDATES) {
-        try {
-          await supabase.from(table).delete().or(`site_code.eq."${norm}",site code.eq."${norm}",id.eq."${norm}"`);
-        } catch { }
+      // Delete from Supabase tables across active clients (Client 2 Fallback hosts active live dataset)
+      for (const client of supabaseClients) {
+        for (const table of VODAFONE_TABLE_CANDIDATES) {
+          try {
+            const { error: err1 } = await client.from(table).delete().eq('site_code', norm);
+            const { error: err2 } = await client.from(table).delete().eq('site code', norm);
+            if (err1 && err2) {
+              console.error(`[Vodafone Supabase] Delete error on table ${table}:`, err1 || err2);
+            }
+          } catch (delErr) {
+            console.error(`[Vodafone Supabase] Delete exception on table ${table}:`, delErr);
+          }
+        }
       }
 
       return { success: true };
@@ -375,14 +409,17 @@ export function useVodafoneAPI() {
       saveStoredVodafoneRecords(filtered);
       setVodafoneRecords(filtered);
 
-      // Batch delete from Supabase tables
+      // Batch delete from Supabase tables across active clients
       const codeArray = Array.from(codeSet);
-      for (const table of VODAFONE_TABLE_CANDIDATES) {
-        try {
-          await supabase.from(table).delete().in('site_code', codeArray);
-          await supabase.from(table).delete().in('site code', codeArray);
-          await supabase.from(table).delete().in('id', codeArray);
-        } catch { }
+      for (const client of supabaseClients) {
+        for (const table of VODAFONE_TABLE_CANDIDATES) {
+          try {
+            await client.from(table).delete().in('site_code', codeArray);
+            await client.from(table).delete().in('site code', codeArray);
+          } catch (bulkErr) {
+            console.error(`[Vodafone Supabase] Bulk delete exception on table ${table}:`, bulkErr);
+          }
+        }
       }
 
       return { success: true, count: current.length - filtered.length };
@@ -431,14 +468,15 @@ export function useVodafoneAPI() {
         // Standardized Supabase payload
         finalRec.company = 'Vodafone';
         const payload: any = {
-          id: code,
           site_code: code,
           'site code': code,
-          'Site code': code,
           'Site Status': finalRec['التصنيف'] || 'جاري',
           data: finalRec,
           updated_at: now,
         };
+        if (finalRec._id && isUUID(finalRec._id)) {
+          payload.id = finalRec._id;
+        }
 
         clientLoop: for (const client of supabaseClients) {
           for (const table of VODAFONE_TABLE_CANDIDATES) {

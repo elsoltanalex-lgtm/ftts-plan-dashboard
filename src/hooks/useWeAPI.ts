@@ -506,12 +506,10 @@ export async function saveRecord(
     };
 
     // Safe payload matching physical Supabase table columns + JSONB data
+    // (Note: specialTarget / special_target is preserved inside fullData -> data JSONB column)
     const safePayload: Record<string, any> = {
       site_code: siteCode,
       'site code': siteCode,
-      special_target: isSpecial,
-      specialTarget: isSpecial,
-      'سبيشال تارجت': isSpecial,
       'Exc Sectores': record['Exc Sectores'] || record['Exc sector'] || '',
       'Sectores': record['Sectores'] || record['Exc sector'] || '',
       'Exc sector': record['Exc sector'] || record['Sectores'] || '',
@@ -529,6 +527,7 @@ export async function saveRecord(
     let cloudSaved = false;
     let savedRow: any = null;
     let actionType: 'updated' | 'created' = isEditMode || Boolean(targetId) ? 'updated' : 'created';
+    let lastCloudError: any = null;
 
     // Attempt save in Supabase candidate tables across active clients (Client 2 Fallback hosts active live dataset)
     clientLoop: for (const client of supabaseClients) {
@@ -544,21 +543,34 @@ export async function saveRecord(
             if (!retryByQuoted.error && retryByQuoted.data && retryByQuoted.data.length > 0) {
               updated = retryByQuoted.data;
               updateErr = null;
+            } else if (retryByQuoted.error) {
+              lastCloudError = retryByQuoted.error;
             }
+          }
+
+          if (updateErr) {
+            lastCloudError = updateErr;
+            console.error(`[WE Supabase] Update error on table ${table}:`, updateErr);
           }
 
           if (!updateErr && updated && updated.length > 0) {
             cloudSaved = true;
             savedRow = updated[0];
             actionType = 'updated';
+            console.log(`[WE Supabase] Successfully updated site ${siteCode} in ${table}`);
             break clientLoop;
           }
 
           // 2. Search existing rows by siteCode to verify if row exists
-          const { data: existingRows } = await client
+          const { data: existingRows, error: searchErr } = await client
             .from(table)
             .select('*')
             .eq('site_code', siteCode);
+
+          if (searchErr) {
+            lastCloudError = searchErr;
+            console.error(`[WE Supabase] Search error on table ${table}:`, searchErr);
+          }
 
           if (existingRows && existingRows.length > 0) {
             const { data: updatedExisting, error: existingErr } = await client
@@ -571,7 +583,11 @@ export async function saveRecord(
               cloudSaved = true;
               savedRow = updatedExisting[0];
               actionType = 'updated';
+              console.log(`[WE Supabase] Successfully updated existing site ${siteCode} in ${table}`);
               break clientLoop;
+            } else if (existingErr) {
+              lastCloudError = existingErr;
+              console.error(`[WE Supabase] Re-update error on table ${table}:`, existingErr);
             }
           }
 
@@ -600,14 +616,22 @@ export async function saveRecord(
             .insert([insertPayload])
             .select();
 
+          if (insertErr) {
+            lastCloudError = insertErr;
+            console.error(`[WE Supabase] Insert error on table ${table}:`, insertErr);
+          }
+
           if (!insertErr && inserted && inserted.length > 0) {
             cloudSaved = true;
             savedRow = inserted[0];
             actionType = 'created';
+            console.log(`[WE Supabase] Successfully inserted site ${siteCode} in ${table}`);
             break clientLoop;
           }
-        } catch (tableEx) {
-          // Continue to next candidate table
+        } catch (tableEx: any) {
+          lastCloudError = tableEx;
+          console.error(`[WE Supabase] Exception saving site ${siteCode} to table ${table}:`, tableEx);
+          // Continue to next candidate table / client
         }
       }
     }
@@ -640,10 +664,11 @@ export async function saveRecord(
       };
     }
 
-    // Return explicit error if cloud save failed (satisfies Requirement 2)
+    // Return explicit error if cloud save failed
+    console.error(`[WE Supabase] All clients failed to save site ${siteCode}:`, lastCloudError);
     return {
       success: false,
-      error: 'فشل حفظ وتحديث السجل في قاعدة بيانات Supabase السحابية. يرجى التحقق من اتصال الإنترنت والمحاولة مجدداً.',
+      error: `فشل حفظ وتحديث السجل لموقع ${siteCode} في قاعدة بيانات Supabase السحابية: ${lastCloudError?.message || 'يرجى التحقق من اتصال الإنترنت والمحاولة مجدداً.'}`,
     };
   } catch (err: any) {
     return { success: false, error: err?.message || 'خطأ أثناء حفظ السجل' };
@@ -766,8 +791,12 @@ export async function deleteRecord(idOrCode: string): Promise<{ success: boolean
           const { error: err3 } = await client.from(table).delete().eq('id', clean);
           if (!err1 || !err2 || !err3) {
             anySuccess = true;
+          } else {
+            console.error(`[WE Supabase] Delete error on ${table}:`, err1 || err2 || err3);
           }
-        } catch { }
+        } catch (delEx) {
+          console.error(`[WE Supabase] Delete exception on ${table}:`, delEx);
+        }
       }
     }
 

@@ -12,7 +12,16 @@ export const FALLBACK_SUPABASE_URL = 'https://fzdmdvgmorzifysygkhp.supabase.co';
 export const FALLBACK_SUPABASE_KEY = 'sb_publishable_J-ecQDFtFrIXGPP3caANTw_lup9wJay';
 export const supabaseFallback = createClient(FALLBACK_SUPABASE_URL, FALLBACK_SUPABASE_KEY);
 
-export const supabaseClients = [supabase, supabaseFallback];
+// Prioritize the active fallback client hosting live records with full write/read permissions
+export const supabaseClients = [supabaseFallback, supabase];
+
+/**
+ * Validates whether a string is a valid UUID
+ */
+export function isUUID(str?: string | null): boolean {
+  if (!str) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(str).trim());
+}
 
 /**
  * Supabase Storage Buckets

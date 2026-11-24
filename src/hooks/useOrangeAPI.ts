@@ -6,7 +6,7 @@ import type { SiteRecord } from '../types/dashboard';
 import type { OrangeRecord } from '../types/orange';
 import { normalizeOrangeClassification } from '../types/orange';
 import { ORANGE_RAW_RECORDS, ORANGE_SITES } from '../data/orangeSites';
-import { supabase, supabaseFallback, supabaseClients } from '../lib/supabase';
+import { supabase, supabaseFallback, supabaseClients, isUUID } from '../lib/supabase';
 
 const STORAGE_KEY = 'ftts_orange_records_v3';
 const ORANGE_TABLE_CANDIDATES = ['orange_records', 'orange', 'we_records'];
@@ -258,20 +258,22 @@ export function useOrangeAPI() {
         _updatedAt: now,
       };
 
+      // Safe payload matching physical Supabase table columns + JSONB data
+      // (Preserves specialTarget and all operator attributes inside data: enriched)
       const safePayload: any = {
         site_code: code,
         'site code': code,
-        'Site code': code,
-        special_target: isSpecial,
-        specialTarget: isSpecial,
-        'سبيشال تارجت': isSpecial,
         'Site Status': enriched['التصنيف (مدني)'] || enriched['التصنيف'] || 'جاري',
         data: enriched,
         updated_at: now,
       };
+      if (enriched._id && isUUID(enriched._id)) {
+        safePayload.id = enriched._id;
+      }
 
       // Persist directly into Supabase orange tables across active clients
       let cloudSaved = false;
+      let lastCloudError: any = null;
       clientLoop: for (const client of supabaseClients) {
         for (const table of ORANGE_TABLE_CANDIDATES) {
           try {
@@ -286,31 +288,54 @@ export function useOrangeAPI() {
               const retryQuoted = await client
                 .from(table)
                 .update(safePayload)
-                .eq('Site code', code)
+                .eq('site code', code)
                 .select();
               if (!retryQuoted.error && retryQuoted.data && retryQuoted.data.length > 0) {
                 updateData = retryQuoted.data;
                 updateErr = null;
+              } else if (retryQuoted.error) {
+                lastCloudError = retryQuoted.error;
               }
+            }
+
+            if (updateErr) {
+              lastCloudError = updateErr;
+              console.error(`[Orange Supabase] Update error on table ${table}:`, updateErr);
             }
 
             if (!updateErr && updateData && updateData.length > 0) {
               cloudSaved = true;
+              console.log(`[Orange Supabase] Successfully updated site ${code} in ${table}`);
               break clientLoop;
             }
 
             // 2. INSERT if row does not exist
+            const insertPayload: any = {
+              ...safePayload,
+              created_at: enriched._createdAt || now,
+            };
+            if (enriched._id && isUUID(enriched._id)) {
+              insertPayload.id = enriched._id;
+            }
+
             const { data: insertData, error: insertErr } = await client
               .from(table)
-              .insert([{ ...safePayload, created_at: enriched._createdAt || now }])
+              .insert([insertPayload])
               .select();
+
+            if (insertErr) {
+              lastCloudError = insertErr;
+              console.error(`[Orange Supabase] Insert error on table ${table}:`, insertErr);
+            }
 
             if (!insertErr && insertData && insertData.length > 0) {
               cloudSaved = true;
+              console.log(`[Orange Supabase] Successfully inserted site ${code} in ${table}`);
               break clientLoop;
             }
-          } catch (err) {
-            console.warn(`[Orange Supabase] Error saving to ${table}:`, err);
+          } catch (err: any) {
+            lastCloudError = err;
+            console.error(`[Orange Supabase] Error saving site ${code} to table ${table}:`, err);
           }
         }
       }
@@ -334,17 +359,12 @@ export function useOrangeAPI() {
         };
       }
 
-      // Return explicit error if Supabase save failed (satisfies Requirement 2)
+      // Return explicit error with details if cloud save failed across all clients
+      console.error(`[Orange Supabase] Failed to save site ${code} across all clients:`, lastCloudError);
       return {
         success: false,
         cloudSaved: false,
-        error: `فشل تسجيل التحديث لموقع Orange (${code}) في قاعدة بيانات Supabase السحابية. يرجى التحقق من اتصال الإنترنت.`,
-      };
-
-      return {
-        success: true,
-        cloudSaved,
-        message: successMsg,
+        error: `فشل تسجيل التحديث لموقع Orange (${code}) في قاعدة بيانات Supabase السحابية: ${lastCloudError?.message || 'يرجى التحقق من اتصال الإنترنت.'}`,
       };
     } catch (err: any) {
       return { success: false, error: err?.message || 'فشل حفظ بيانات الموقع' };
@@ -362,11 +382,19 @@ export function useOrangeAPI() {
       saveStoredOrangeRecords(filtered);
       setOrangeRecords(filtered);
 
-      // Delete from Supabase tables
-      for (const table of ORANGE_TABLE_CANDIDATES) {
-        try {
-          await supabase.from(table).delete().or(`site_code.eq."${norm}",site code.eq."${norm}",id.eq."${norm}"`);
-        } catch { }
+      // Delete from Supabase tables across active clients (Client 2 Fallback hosts active live dataset)
+      for (const client of supabaseClients) {
+        for (const table of ORANGE_TABLE_CANDIDATES) {
+          try {
+            const { error: err1 } = await client.from(table).delete().eq('site_code', norm);
+            const { error: err2 } = await client.from(table).delete().eq('site code', norm);
+            if (err1 && err2) {
+              console.error(`[Orange Supabase] Delete error on table ${table}:`, err1 || err2);
+            }
+          } catch (delErr) {
+            console.error(`[Orange Supabase] Delete exception on table ${table}:`, delErr);
+          }
+        }
       }
 
       return { success: true };
@@ -387,14 +415,17 @@ export function useOrangeAPI() {
       saveStoredOrangeRecords(filtered);
       setOrangeRecords(filtered);
 
-      // Batch delete from Supabase tables
+      // Batch delete from Supabase tables across active clients
       const codeArray = Array.from(codeSet);
-      for (const table of ORANGE_TABLE_CANDIDATES) {
-        try {
-          await supabase.from(table).delete().in('site_code', codeArray);
-          await supabase.from(table).delete().in('site code', codeArray);
-          await supabase.from(table).delete().in('id', codeArray);
-        } catch { }
+      for (const client of supabaseClients) {
+        for (const table of ORANGE_TABLE_CANDIDATES) {
+          try {
+            await client.from(table).delete().in('site_code', codeArray);
+            await client.from(table).delete().in('site code', codeArray);
+          } catch (bulkErr) {
+            console.error(`[Orange Supabase] Bulk delete exception on table ${table}:`, bulkErr);
+          }
+        }
       }
 
       return { success: true, count: current.length - filtered.length };
@@ -445,11 +476,13 @@ export function useOrangeAPI() {
         const payload: any = {
           site_code: code,
           'site code': code,
-          'Site code': code,
           'Site Status': finalRec['التصنيف (مدني)'] || finalRec['التصنيف'] || 'جاري',
           data: finalRec,
           updated_at: now,
         };
+        if (finalRec._id && isUUID(finalRec._id)) {
+          payload.id = finalRec._id;
+        }
 
         clientLoop: for (const client of supabaseClients) {
           for (const table of ORANGE_TABLE_CANDIDATES) {
