@@ -560,11 +560,15 @@ export const Filters: React.FC<FiltersProps> = ({
     const list = Array.from(
       new Set(
         baseSites
-          .map((s) => String(s.externalPath || s.rawRecord?.['المسار الخارجي'] || '').trim())
+          .map((s) => {
+            const raw = String(s.externalPath || s.rawRecord?.['المسار الخارجي'] || '').trim();
+            if (raw === 'تعذر' || raw === 'متعذرات' || raw === 'متعذر') return 'متعذر';
+            return raw;
+          })
           .filter(Boolean)
       )
     );
-    const order = ['تم الانتهاء', 'جاري العمل', 'جاري استخراج تصاريح', 'متعذرات', 'معوقات'];
+    const order = ['تم الانتهاء', 'جاري العمل', 'جاري استخراج تصاريح', 'متعذر', 'معوقات'];
     return list.sort((a, b) => {
       const idxA = order.indexOf(a);
       const idxB = order.indexOf(b);
@@ -600,11 +604,15 @@ export const Filters: React.FC<FiltersProps> = ({
     const list = Array.from(
       new Set(
         baseSites
-          .map((s) => String(s.excelStatus || s.classification || s.rawRecord?.['التصنيف'] || '').trim())
+          .map((s) => {
+            const raw = String(s.excelStatus || s.classification || s.rawRecord?.['التصنيف'] || '').trim();
+            if (raw === 'تعذر' || raw === 'متعذرات' || raw === 'متعذر') return 'متعذر';
+            return raw;
+          })
           .filter(Boolean)
       )
     );
-    const order = ['تم الانتهاء والتسليم', 'تم خارجي -متوقف علي العميل', 'جاري خارجي', 'تصاريح', 'تعذر', 'معوقات', 'منتظر التسليم'];
+    const order = ['تم الانتهاء والتسليم', 'تم خارجي -متوقف علي العميل', 'جاري خارجي', 'تصاريح', 'متعذر', 'معوقات', 'منتظر التسليم'];
     return list.sort((a, b) => {
       const idxA = order.indexOf(a);
       const idxB = order.indexOf(b);

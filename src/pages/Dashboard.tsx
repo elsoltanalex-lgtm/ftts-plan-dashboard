@@ -753,8 +753,13 @@ export const Dashboard: React.FC = () => {
 
         const activeExts = toFilterArray(filters.externalPath);
         if (activeExts.length > 0) {
-          const siteExt = String(site.externalPath || site.rawRecord?.['المسار الخارجي'] || '').trim();
-          if (!activeExts.includes(siteExt)) return false;
+          const rawExt = String(site.externalPath || site.rawRecord?.['المسار الخارجي'] || '').trim();
+          const normExt = (rawExt === 'تعذر' || rawExt === 'متعذرات' || rawExt === 'متعذر') ? 'متعذر' : rawExt;
+          const matches = activeExts.some((ae) => {
+            const normAe = (ae === 'تعذر' || ae === 'متعذرات' || ae === 'متعذر') ? 'متعذر' : ae;
+            return normAe === normExt;
+          });
+          if (!matches) return false;
         }
 
         const activeInts = toFilterArray(filters.internalPath);
@@ -765,8 +770,13 @@ export const Dashboard: React.FC = () => {
 
         const activeExcels = toFilterArray(filters.excelStatus);
         if (activeExcels.length > 0) {
-          const siteExcel = String(site.excelStatus || site.classification || site.rawRecord?.['التصنيف'] || '').trim();
-          if (!activeExcels.includes(siteExcel)) return false;
+          const rawExcel = String(site.excelStatus || site.classification || site.rawRecord?.['التصنيف'] || '').trim();
+          const normExcel = (rawExcel === 'تعذر' || rawExcel === 'متعذرات' || rawExcel === 'متعذر') ? 'متعذر' : rawExcel;
+          const matches = activeExcels.some((ae) => {
+            const normAe = (ae === 'تعذر' || ae === 'متعذرات' || ae === 'متعذر') ? 'متعذر' : ae;
+            return normAe === normExcel;
+          });
+          if (!matches) return false;
         }
 
         const activeDels = toFilterArray(filters.deliveryStatus);
@@ -883,8 +893,13 @@ export const Dashboard: React.FC = () => {
 
         const activeExts = toFilterArray(filters.externalPath);
         if (activeExts.length > 0) {
-          const siteExt = String(site.externalPath || site.rawRecord?.['المسار الخارجي'] || '').trim();
-          if (!activeExts.includes(siteExt)) return false;
+          const rawExt = String(site.externalPath || site.rawRecord?.['المسار الخارجي'] || '').trim();
+          const normExt = (rawExt === 'تعذر' || rawExt === 'متعذرات' || rawExt === 'متعذر') ? 'متعذر' : rawExt;
+          const matches = activeExts.some((ae) => {
+            const normAe = (ae === 'تعذر' || ae === 'متعذرات' || ae === 'متعذر') ? 'متعذر' : ae;
+            return normAe === normExt;
+          });
+          if (!matches) return false;
         }
 
         const activeInts = toFilterArray(filters.internalPath);
@@ -895,8 +910,13 @@ export const Dashboard: React.FC = () => {
 
         const activeExcels = toFilterArray(filters.excelStatus);
         if (activeExcels.length > 0) {
-          const siteExcel = String(site.excelStatus || site.classification || site.rawRecord?.['التصنيف'] || '').trim();
-          if (!activeExcels.includes(siteExcel)) return false;
+          const rawExcel = String(site.excelStatus || site.classification || site.rawRecord?.['التصنيف'] || '').trim();
+          const normExcel = (rawExcel === 'تعذر' || rawExcel === 'متعذرات' || rawExcel === 'متعذر') ? 'متعذر' : rawExcel;
+          const matches = activeExcels.some((ae) => {
+            const normAe = (ae === 'تعذر' || ae === 'متعذرات' || ae === 'متعذر') ? 'متعذر' : ae;
+            return normAe === normExcel;
+          });
+          if (!matches) return false;
         }
 
         const activeDels = toFilterArray(filters.deliveryStatus);

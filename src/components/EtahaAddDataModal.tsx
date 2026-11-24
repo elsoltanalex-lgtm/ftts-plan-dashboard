@@ -85,7 +85,6 @@ const APPROVED_EXTERNAL_PATHS = [
   'جاري العمل',
   'جاري استخراج تصاريح',
   'معوقات',
-  'متعذرات',
   'متعذر',
   'جاري العمل مدني',
   'جاري السحب واللحام',
@@ -114,8 +113,6 @@ const APPROVED_CLASSIFICATIONS = [
   'تم خارجي -متوقف علي العميل',
   'تصاريح',
   'معوقات',
-  'تعذر',
-  'متعذرات',
   'متعذر',
   'جاري خارجي',
   'جاري العمل',
@@ -496,7 +493,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
   const currentDelivery = String(formData['موقف التسليم'] || formData.deliveryStatus || '').trim();
   const isDeliverySelected = currentClassification === 'تم الانتهاء والتسليم' || currentClassification === 'تم التسليم' || currentDelivery === 'تم التسليم';
   const isBlockedObstacles = currentClassification === 'معوقات' || currentClassification.includes('معوق');
-  const isStalled = currentClassification === 'متعذرات' || currentClassification === 'متعذر' || currentClassification.includes('تعذر');
+  const isStalled = currentClassification === 'متعذر' || currentClassification === 'متعذرات' || currentClassification === 'تعذر' || currentClassification.includes('تعذر') || currentClassification.includes('متعذر');
 
   // Synchronize state when modal is opened or mode/code changes
   useEffect(() => {
@@ -845,7 +842,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
       if (!String(formData['سبب المعوق او التعذر'] || '').trim()) {
         newErrors['سبب المعوق او التعذر'] = 'يرجى إدخال أسباب وتفاصيل المعوقات الحالية للمشروع.';
       }
-    } else if (cls === 'متعذرات' || cls === 'متعذر' || cls.includes('تعذر')) {
+    } else if (cls === 'متعذر' || cls === 'متعذرات' || cls === 'تعذر' || cls.includes('تعذر') || cls.includes('متعذر')) {
       if (!String(formData['سبب المعوق او التعذر'] || '').trim()) {
         newErrors['سبب المعوق او التعذر'] = 'يرجى إدخال أسباب وتفاصيل التعذر الحالية للمشروع.';
       }
@@ -876,10 +873,16 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
       );
 
       const intVal = String(formData['المسار الداخلى'] || formData['المسار الداخلي'] || formData.internalPath || 'لم يتم').trim();
-      const extVal = String(formData['المسار الخارجي'] || formData.externalPath || 'لم يتم البدء').trim();
+      let extVal = String(formData['المسار الخارجي'] || formData.externalPath || 'لم يتم البدء').trim();
+      if (extVal === 'تعذر' || extVal === 'متعذرات' || extVal === 'متعذر') {
+        extVal = 'متعذر';
+      }
       const spliceVal = String(formData['موقف اللحامات'] || formData.splicingStatus || 'لم يتم البدء').trim();
       const delVal = String(formData['موقف التسليم'] || formData.deliveryStatus || 'لم يتم').trim();
-      const clsVal = String(formData['التصنيف'] || formData.classification || 'جاري العمل').trim();
+      let clsVal = String(formData['التصنيف'] || formData.classification || 'جاري العمل').trim();
+      if (clsVal === 'تعذر' || clsVal === 'متعذرات' || clsVal === 'متعذر' || clsVal.includes('تعذر')) {
+        clsVal = 'متعذر';
+      }
       const delDate = String(formData['تاريخ التسليم'] || formData['تاريخ التسليم '] || formData.deliveryDate || '').trim();
 
       const payload: EtahaRecord = {
@@ -2096,13 +2099,13 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                     </div>
                   )}
 
-                  {/* ── الحالة 3: تم اختيار "متعذرات" أو "متعذر" ── */}
+                  {/* ── الحالة 3: تم اختيار "متعذر" ── */}
                   {isStalled && (
                     <div className="space-y-3 p-4 bg-rose-50/70 border border-rose-300 rounded-2xl animate-in fade-in">
                       <div className="flex items-center gap-2 pb-2 border-b border-rose-200">
                         <AlertCircle className="w-4 h-4 text-rose-700" />
                         <h4 className="text-xs font-black text-rose-900 uppercase tracking-wider">
-                          قسم المتعذرات والتواريخ والملاحظات (Stalled Reasons & Dates)
+                          قسم المتعذر والتواريخ والملاحظات (Stalled Reasons & Dates)
                         </h4>
                       </div>
 

@@ -46,10 +46,15 @@ export function siteMatchesMultiFilter(
     );
   }
 
-  if (key === 'classification') {
+  if (key === 'classification' || key === 'excelStatus') {
     const siteCat = getSiteClassification(site);
-    const rawCls = String(site.classification || '').trim();
-    return activeValues.some((c) => siteCat === c || rawCls === c);
+    const rawCls = String(site.classification || site.excelStatus || site.rawRecord?.['التصنيف'] || '').trim();
+    const normRawCls = (rawCls === 'تعذر' || rawCls === 'متعذرات' || rawCls === 'متعذر') ? 'متعذر' : rawCls;
+    const normSiteCat = (siteCat === 'تعذر' || siteCat === 'متعذرات' || siteCat === 'متعذر') ? 'متعذر' : siteCat;
+    return activeValues.some((c) => {
+      const normC = (c === 'تعذر' || c === 'متعذرات' || c === 'متعذر') ? 'متعذر' : c;
+      return normSiteCat === normC || normRawCls === normC;
+    });
   }
 
   if (key === 'status') {

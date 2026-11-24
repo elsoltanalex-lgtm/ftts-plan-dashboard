@@ -46,9 +46,15 @@ export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecor
   const clientName = String(d['اسم العميل'] || d.clientName || '').trim();
   const branchName = String(d['اسم الفرع'] || d.branchName || '').trim();
   const address = String(d['العنوان'] || d.address || '').trim();
-  const rawStatus = String(d['التصنيف'] || d.classification || '').trim();
+  let rawStatus = String(d['التصنيف'] || d.classification || '').trim();
+  if (rawStatus === 'تعذر' || rawStatus === 'متعذرات' || rawStatus === 'متعذر') {
+    rawStatus = 'متعذر';
+  }
   const internalPath = String(d['المسار الداخلي'] || d['المسار الداخلى'] || d['المسار_الداخلى'] || d['المسار_الداخلي'] || d.internalPath || '').trim();
-  const externalPath = String(d['المسار الخارجي'] || d['المسار_الخارجي'] || d.externalPath || '').trim();
+  let externalPath = String(d['المسار الخارجي'] || d['المسار_الخارجي'] || d.externalPath || '').trim();
+  if (externalPath === 'تعذر' || externalPath === 'متعذرات' || externalPath === 'متعذر') {
+    externalPath = 'متعذر';
+  }
   const deliveryStatus = String(d['موقف التسليم'] || d['موقف_التسليم'] || d.deliveryStatus || '').trim();
   const splicingStatus = String(d['موقف اللحامات'] || d['موقف_اللحامات'] || d.splicingStatus || '').trim();
   const rawDelDate = String(d['تاريخ التسليم '] || d['تاريخ التسليم'] || d.deliveryDate || d.delivery_date || d['تاريخ_التسليم'] || '').trim();
@@ -153,7 +159,7 @@ export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecor
     executionResponsibility: rawResponsibility,
     classification: rawStatus || 'إتاحة',
     obstacleReason,
-    obstacleType: rawStatus.includes('معوق') ? 'معوقات' : rawStatus.includes('تعذر') ? 'تعذر' : '',
+    obstacleType: rawStatus.includes('معوق') ? 'معوقات' : (rawStatus.includes('تعذر') || rawStatus === 'متعذر') ? 'متعذر' : '',
     deliveryArea: deliveryStatus || '',
     expectedDate,
     progressPercent,
@@ -253,10 +259,16 @@ export function useEtahaAPI() {
 
       const now = new Date().toISOString();
       const intVal = String(record['المسار الداخلي'] || record['المسار الداخلى'] || record.internalPath || '').trim();
-      const extVal = String(record['المسار الخارجي'] || record.externalPath || '').trim();
+      let extVal = String(record['المسار الخارجي'] || record.externalPath || '').trim();
+      if (extVal === 'تعذر' || extVal === 'متعذرات' || extVal === 'متعذر') {
+        extVal = 'متعذر';
+      }
       const spliceVal = String(record['موقف اللحامات'] || record.splicingStatus || '').trim();
       const delVal = String(record['موقف التسليم'] || record.deliveryStatus || '').trim();
-      const clsVal = String(record['التصنيف'] || record.classification || '').trim();
+      let clsVal = String(record['التصنيف'] || record.classification || '').trim();
+      if (clsVal === 'تعذر' || clsVal === 'متعذرات' || clsVal === 'متعذر' || clsVal.includes('تعذر')) {
+        clsVal = 'متعذر';
+      }
       const delDate = String(record['تاريخ التسليم'] || record['تاريخ التسليم '] || record.deliveryDate || record.delivery_date || '').trim();
 
       const enriched: EtahaRecord = {
@@ -464,12 +476,21 @@ export function useEtahaAPI() {
 
         recordMap.set(c, finalRec);
 
+        if (finalRec['التصنيف'] === 'تعذر' || finalRec['التصنيف'] === 'متعذرات') {
+          finalRec['التصنيف'] = 'متعذر';
+          finalRec.classification = 'متعذر';
+        }
+        if (finalRec['المسار الخارجي'] === 'تعذر' || finalRec['المسار الخارجي'] === 'متعذرات') {
+          finalRec['المسار الخارجي'] = 'متعذر';
+          finalRec.externalPath = 'متعذر';
+        }
+
         const payload: any = {
           id: c,
           code: c,
           Code: c,
           'المشروع': finalRec['المشروع'] || finalRec.project || 'اتاحة',
-          'التصنيف': finalRec['موقف التسليم'] || finalRec.classification || '',
+          'التصنيف': finalRec['التصنيف'] || finalRec.classification || finalRec['موقف التسليم'] || '',
           'الجهة': finalRec['الجهة'] || '',
           'السنترال': finalRec['سنترال الربط'] || finalRec.central || '',
           'القطاع': finalRec['رئاسة قطاعات التنفيذ'] || finalRec.sector || '',

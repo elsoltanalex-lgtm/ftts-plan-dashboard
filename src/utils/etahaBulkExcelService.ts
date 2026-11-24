@@ -51,7 +51,7 @@ export const ETAHA_APPROVED_STATUSES = [
   'تصاريح',
   'جاري خارجي',
   'معوقات',
-  'تعذر',
+  'متعذر',
   'منتظر التسليم',
 ];
 
@@ -202,7 +202,7 @@ export async function generateEtahaBulkImportTemplate(sites: SiteRecord[]): Prom
     row.getCell(13).dataValidation = {
       type: 'list',
       allowBlank: false,
-      formulae: ['"تم الانتهاء والتسليم,تم خارجي -متوقف علي العميل,تصاريح,جاري خارجي,معوقات,تعذر,منتظر التسليم"'],
+      formulae: ['"تم الانتهاء والتسليم,تم خارجي -متوقف علي العميل,تصاريح,جاري خارجي,معوقات,متعذر,منتظر التسليم"'],
       showErrorMessage: true,
       errorTitle: 'تصنيف غير صحيح',
       error: 'يرجى اختيار تصنيف معتمد من القائمة فقط',
@@ -316,12 +316,18 @@ export function parseAndValidateEtahaBulkExcel(
     const startDate = extractCell(row, ['تاريخ السداد والبدء في التنفيذ', 'تاريخ السداد و البدء فى التنفيذ', 'تاريخ السداد', 'تاريخ البدء']);
 
     // Editable fields
-    const classification = extractCell(row, ['التصنيف', 'classification']) || 'جاري التنفيذ';
+    let classification = extractCell(row, ['التصنيف', 'classification']) || 'جاري التنفيذ';
+    if (classification === 'تعذر' || classification === 'متعذرات' || classification === 'متعذر') {
+      classification = 'متعذر';
+    }
     const obstacleReason = extractCell(row, ['سبب المعوق او التعذر', 'سبب المعوق', 'أسباب التعذر']);
     const notes = extractCell(row, ['ملحوظه في حاله عدم الانتهاء', 'ملحوظة', 'ملاحظات', 'notes']);
     const completionDate = extractCell(row, ['تاريخ الانتهاء', 'تاريخ التسليم', 'تاريخ التسليم ']);
     const deliveryStatus = extractCell(row, ['موقف التسليم', 'تسليم']);
-    const externalPath = extractCell(row, ['المسار الخارجي']);
+    let externalPath = extractCell(row, ['المسار الخارجي']);
+    if (externalPath === 'تعذر' || externalPath === 'متعذرات' || externalPath === 'متعذر') {
+      externalPath = 'متعذر';
+    }
     const splicingStatus = extractCell(row, ['موقف اللحامات']);
 
     const tamperedFields: string[] = [];
