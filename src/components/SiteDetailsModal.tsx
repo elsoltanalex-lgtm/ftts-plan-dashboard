@@ -883,6 +883,24 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Bulk Delete Modal rendered directly inside SiteDetailsModal */}
+      <BulkDeleteModal
+        isOpen={isBulkDeleteModalOpen}
+        onClose={() => {
+          setIsBulkDeleteModalOpen(false);
+        }}
+        sites={sites}
+        initialSelectedCodes={Array.from(selectedCodes)}
+        activeScopeLabel="المواقع المحددة للتفاصيل"
+        onDeleteBulk={async (siteCodes) => {
+          if (onDeleteBulkSites) {
+            await onDeleteBulkSites(siteCodes);
+            setSelectedCodes(new Set());
+            setIsBulkDeleteModalOpen(false);
+          }
+        }}
+      />
     </div>
   );
 };

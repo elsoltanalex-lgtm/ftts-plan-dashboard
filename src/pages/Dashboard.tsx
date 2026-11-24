@@ -190,21 +190,27 @@ function mapWeRecordToSiteRecord(r: WeRecord, index = 0): SiteRecord {
 const FTTS_DELETED_CODES_KEY = 'ftts_deleted_site_codes_v3';
 
 function loadDeletedSiteCodes(): Set<string> {
+  const set = new Set<string>();
   try {
-    const raw = localStorage.getItem(FTTS_DELETED_CODES_KEY);
-    if (raw) {
-      const arr = JSON.parse(raw);
-      if (Array.isArray(arr)) {
-        return new Set(arr.map((c: string) => String(c).trim().toUpperCase()));
-      }
+    const raw1 = localStorage.getItem(FTTS_DELETED_CODES_KEY);
+    if (raw1) {
+      const arr1 = JSON.parse(raw1);
+      if (Array.isArray(arr1)) arr1.forEach((c: string) => set.add(String(c).trim().toUpperCase()));
+    }
+    const raw2 = localStorage.getItem('we_deleted_codes_cache');
+    if (raw2) {
+      const arr2 = JSON.parse(raw2);
+      if (Array.isArray(arr2)) arr2.forEach((c: string) => set.add(String(c).trim().toUpperCase()));
     }
   } catch { }
-  return new Set();
+  return set;
 }
 
 function persistDeletedSiteCodes(set: Set<string>) {
   try {
-    localStorage.setItem(FTTS_DELETED_CODES_KEY, JSON.stringify(Array.from(set)));
+    const arr = Array.from(set);
+    localStorage.setItem(FTTS_DELETED_CODES_KEY, JSON.stringify(arr));
+    localStorage.setItem('we_deleted_codes_cache', JSON.stringify(arr));
   } catch { }
 }
 
@@ -423,6 +429,127 @@ export const Dashboard: React.FC = () => {
     setIsQuickDeleteModalOpen(true);
   }, []);
 
+  // Unified bulk deletion across all operators (WE, Vodafone, Orange, Etaha)
+  const handleBulkDeleteSites = useCallback(async (rawSiteCodes: string[], forcedCompany?: string) => {
+    if (!rawSiteCodes || rawSiteCodes.length === 0) return;
+
+    // Clean codes
+    const siteCodes = rawSiteCodes.map((c) => String(c).trim()).filter(Boolean);
+    if (siteCodes.length === 0) return;
+
+    // 1. Optimistic instant UI update
+    setDeletedSiteCodes((prev) => {
+      const next = new Set(prev);
+      siteCodes.forEach((c) => {
+        next.add(c.toUpperCase());
+        const bare = c.replace(/^(VDF-|ORG-|ORANGE-|ETAH-)/i, '').trim().toUpperCase();
+        if (bare) next.add(bare);
+      });
+      persistDeletedSiteCodes(next);
+      return next;
+    });
+
+    try {
+      const isAvailability = activeScope === 'ETAHA' || activeScope === 'AVAILABILITY';
+      const targetCompany = forcedCompany || quickDeleteTargetCompany || (filters.company !== 'All' ? filters.company : undefined);
+
+      const weCodes: string[] = [];
+      const vdfCodes: string[] = [];
+      const orgCodes: string[] = [];
+      const etahaCodes: string[] = [];
+
+      // Build quick lookup maps
+      const vdfLookup = new Set<string>();
+      vodafoneSites.forEach((s) => {
+        if (s.siteCode) vdfLookup.add(String(s.siteCode).trim().toUpperCase());
+        if (s.id) vdfLookup.add(String(s.id).trim().toUpperCase());
+      });
+
+      const orgLookup = new Set<string>();
+      orangeSites.forEach((s) => {
+        if (s.siteCode) orgLookup.add(String(s.siteCode).trim().toUpperCase());
+        if (s.id) orgLookup.add(String(s.id).trim().toUpperCase());
+      });
+
+      const etahaLookup = new Set<string>();
+      etahaSites.forEach((s) => {
+        if (s.siteCode) etahaLookup.add(String(s.siteCode).trim().toUpperCase());
+        if (s.id) etahaLookup.add(String(s.id).trim().toUpperCase());
+      });
+
+      siteCodes.forEach((code) => {
+        const upper = code.toUpperCase();
+        const bare = code.replace(/^(VDF-|ORG-|ORANGE-|ETAH-)/i, '').trim().toUpperCase();
+
+        if (isAvailability || targetCompany === 'Availability' || targetCompany === 'الإتاحة' || upper.startsWith('ETAH-') || etahaLookup.has(upper) || etahaLookup.has(bare)) {
+          etahaCodes.push(code);
+        } else if (targetCompany === 'Vodafone' || upper.startsWith('VDF-') || vdfLookup.has(upper) || vdfLookup.has(bare)) {
+          vdfCodes.push(code);
+        } else if (targetCompany === 'Orange' || upper.startsWith('ORG-') || upper.startsWith('ORANGE-') || orgLookup.has(upper) || orgLookup.has(bare)) {
+          orgCodes.push(code);
+        } else {
+          weCodes.push(code);
+        }
+      });
+
+      // Execute in parallel across respective operators
+      const tasks: Promise<any>[] = [];
+
+      if (etahaCodes.length > 0) {
+        tasks.push(
+          deleteEtahaRecordsBulk(etahaCodes)
+            .then(() => refetchEtahaRecords())
+            .catch((e) => console.error('Etaha bulk delete error:', e))
+        );
+      }
+      if (vdfCodes.length > 0) {
+        tasks.push(
+          deleteVodafoneRecordsBulk(vdfCodes)
+            .then(() => refetchVodafoneRecords())
+            .catch((e) => console.error('Vodafone bulk delete error:', e))
+        );
+      }
+      if (orgCodes.length > 0) {
+        tasks.push(
+          deleteOrangeRecordsBulk(orgCodes)
+            .then(() => refetchOrangeRecords())
+            .catch((e) => console.error('Orange bulk delete error:', e))
+        );
+      }
+      if (weCodes.length > 0) {
+        removeRecordsLocally(weCodes);
+        tasks.push(
+          deleteRecordsBulk(weCodes)
+            .then(() => Promise.all([refetchWeRecords(), refetchWeCodes()]))
+            .catch((e) => console.error('WE bulk delete error:', e))
+        );
+      }
+
+      await Promise.allSettled(tasks);
+      setToastMessage(`تم حذف ${siteCodes.length} موقع/مشروع بنجاح من قاعدة البيانات وتحديث النظام فورياً ✅`);
+    } catch (err: any) {
+      console.error('Error during bulk deletion:', err);
+      setToastMessage(`حدث خطأ أثناء حذف بعض المواقع: ${err?.message || ''}`);
+    }
+  }, [
+    activeScope,
+    quickDeleteTargetCompany,
+    filters.company,
+    vodafoneSites,
+    orangeSites,
+    etahaSites,
+    deleteEtahaRecordsBulk,
+    refetchEtahaRecords,
+    deleteVodafoneRecordsBulk,
+    refetchVodafoneRecords,
+    deleteOrangeRecordsBulk,
+    refetchOrangeRecords,
+    deleteRecordsBulk,
+    removeRecordsLocally,
+    refetchWeRecords,
+    refetchWeCodes,
+  ]);
+
   // Convert live Supabase WE records to SiteRecord format
   const liveWeSites = useMemo<SiteRecord[]>(() => {
     let baseSites: SiteRecord[] = [];
@@ -468,20 +595,34 @@ export const Dashboard: React.FC = () => {
     const weSites = liveWeSites.map((s) => ({ ...s, company: 'WE' as const }));
 
     // 2. Official Vodafone Sites (699 sites from official FTTS master plan)
-    const vdfSites = vodafoneSites.map((s) => ({
+    const vdfSites = (deletedSiteCodes.size === 0
+      ? vodafoneSites
+      : vodafoneSites.filter((s) => {
+          const c = String(s?.siteCode || '').trim().toUpperCase();
+          const id = String(s?.id || '').trim().toUpperCase();
+          return !deletedSiteCodes.has(c) && !deletedSiteCodes.has(id);
+        })
+    ).map((s) => ({
       ...s,
       company: 'Vodafone' as const,
     }));
 
     // 3. Official Orange Sites (480 sites from official Orange network report)
-    const orgSites = orangeSites.map((s) => ({
+    const orgSites = (deletedSiteCodes.size === 0
+      ? orangeSites
+      : orangeSites.filter((s) => {
+          const c = String(s?.siteCode || '').trim().toUpperCase();
+          const id = String(s?.id || '').trim().toUpperCase();
+          return !deletedSiteCodes.has(c) && !deletedSiteCodes.has(id);
+        })
+    ).map((s) => ({
       ...s,
       company: 'Orange' as const,
     }));
 
     // Total FTTS Plan = WE (1029) + Vodafone (699) + Orange (480) = 2208 sites
     return [...weSites, ...vdfSites, ...orgSites];
-  }, [liveWeSites, vodafoneSites, orangeSites]);
+  }, [liveWeSites, vodafoneSites, orangeSites, deletedSiteCodes]);
 
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [donutResetKey, setDonutResetKey] = useState(0);
@@ -524,12 +665,20 @@ export const Dashboard: React.FC = () => {
 
   // Active base dataset according to selected project scope
   const currentScopeData = useMemo(() => {
+    const liveEtaha = deletedSiteCodes.size === 0
+      ? etahaSites
+      : etahaSites.filter((s) => {
+          const c = String(s?.siteCode || '').trim().toUpperCase();
+          const id = String(s?.id || '').trim().toUpperCase();
+          return !deletedSiteCodes.has(c) && !deletedSiteCodes.has(id);
+        });
+
     switch (activeScope) {
       case 'FTTS':
         return combinedFttsSites;
       case 'AVAILABILITY':
       case 'ETAHA':
-        return etahaSites;
+        return liveEtaha;
       case 'TAHAWOL':
         return TAHAWOL_EXCEL_SITES;
       case 'UPLOADED':
@@ -537,7 +686,7 @@ export const Dashboard: React.FC = () => {
       default:
         return combinedFttsSites;
     }
-  }, [activeScope, uploadedSites, combinedFttsSites, etahaSites]);
+  }, [activeScope, uploadedSites, combinedFttsSites, etahaSites, deletedSiteCodes]);
 
   // Apply Strict Role-Based Access Control (RBAC):
   // - Admin: All sectors appear in the dashboard
@@ -999,9 +1148,12 @@ export const Dashboard: React.FC = () => {
       vodafoneLinks: vodafoneSites.reduce((sum, s) => sum + s.linksCount, 0),
       orangeCount: orangeSites.length,
       orangeLinks: orangeSites.reduce((sum, s) => sum + s.linksCount, 0),
-      etahaCount: etahaSites.length,
+      etahaCount: (deletedSiteCodes.size === 0
+        ? etahaSites
+        : etahaSites.filter((s) => !deletedSiteCodes.has(String(s?.siteCode || '').trim().toUpperCase()) && !deletedSiteCodes.has(String(s?.id || '').trim().toUpperCase()))
+      ).length,
     };
-  }, [combinedFttsSites, etahaSites, user]);
+  }, [combinedFttsSites, etahaSites, user, deletedSiteCodes]);
 
   // Active filters count
   const activeFiltersCount = useMemo(() => {
@@ -2003,36 +2155,7 @@ export const Dashboard: React.FC = () => {
             }
           }}
           onDeleteBulkSites={async (siteCodes) => {
-            if (!siteCodes || siteCodes.length === 0) return;
-            try {
-              if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
-                await deleteEtahaRecordsBulk(siteCodes);
-                await refetchEtahaRecords();
-                setToastMessage(`تم حذف ${siteCodes.length} مشروع بنجاح من قاعدة بيانات الإتاحة ✅`);
-              } else if (filters.company === 'Orange') {
-                await deleteOrangeRecordsBulk(siteCodes);
-                await refetchOrangeRecords();
-                setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Orange ✅`);
-              } else if (filters.company === 'Vodafone') {
-                await deleteVodafoneRecordsBulk(siteCodes);
-                await refetchVodafoneRecords();
-                setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Vodafone ✅`);
-              } else {
-                await deleteRecordsBulk(siteCodes);
-                removeRecordsLocally(siteCodes);
-                await refetchWeRecords();
-                await refetchWeCodes();
-                setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من قاعدة بيانات Supabase ✅`);
-              }
-              setDeletedSiteCodes((prev) => {
-                const next = new Set(prev);
-                siteCodes.forEach((c) => next.add(String(c).trim().toUpperCase()));
-                persistDeletedSiteCodes(next);
-                return next;
-              });
-            } catch (err: any) {
-              setToastMessage(`حدث خطأ أثناء حذف المواقع: ${err?.message || ''}`);
-            }
+            await handleBulkDeleteSites(siteCodes);
           }}
         />
       </ModalErrorBoundary>
@@ -2419,39 +2542,10 @@ export const Dashboard: React.FC = () => {
               : 'مواقع FTTS'
         }
         onDeleteBulk={async (siteCodes) => {
-          if (!siteCodes || siteCodes.length === 0) return;
-          try {
-            const targetCompany = quickDeleteTargetCompany || filters.company;
-            if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
-              await deleteEtahaRecordsBulk(siteCodes);
-              await refetchEtahaRecords();
-              setToastMessage(`تم حذف ${siteCodes.length} مشروع بنجاح من قاعدة بيانات الإتاحة ✅`);
-            } else if (targetCompany === 'Orange') {
-              await deleteOrangeRecordsBulk(siteCodes);
-              await refetchOrangeRecords();
-              setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Orange ✅`);
-            } else if (targetCompany === 'Vodafone') {
-              await deleteVodafoneRecordsBulk(siteCodes);
-              await refetchVodafoneRecords();
-              setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من مواقع Vodafone ✅`);
-            } else {
-              await deleteRecordsBulk(siteCodes);
-              removeRecordsLocally(siteCodes);
-              await refetchWeRecords();
-              await refetchWeCodes();
-              setToastMessage(`تم حذف ${siteCodes.length} موقع بنجاح من قاعدة بيانات Supabase ✅`);
-            }
-            setDeletedSiteCodes((prev) => {
-              const next = new Set(prev);
-              siteCodes.forEach((c) => next.add(String(c).trim().toUpperCase()));
-              persistDeletedSiteCodes(next);
-              return next;
-            });
-            setIsQuickDeleteModalOpen(false);
-            setQuickDeleteTargetCompany(undefined);
-          } catch (err: any) {
-            setToastMessage(`حدث خطأ أثناء الحذف: ${err?.message || ''}`);
-          }
+          await handleBulkDeleteSites(siteCodes, quickDeleteTargetCompany || filters.company);
+          setIsQuickDeleteModalOpen(false);
+          setQuickDeleteSelectedCode('');
+          setQuickDeleteTargetCompany(undefined);
         }}
       />
 

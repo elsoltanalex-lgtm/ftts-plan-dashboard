@@ -56,9 +56,11 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({
   // Reset state when opening/closing
   React.useEffect(() => {
     if (isOpen) {
-      if (initialSelectedCodes.length > 0) {
-        setSelectedCodes(new Set(initialSelectedCodes));
-      }
+      setSelectedCodes(new Set(initialSelectedCodes.map((c) => String(c || '').trim().toUpperCase())));
+      setManualSearch('');
+      setParsedCodes([]);
+      setUploadedFileName(null);
+      setExcelError(null);
       setIsConfirming(false);
       setIsDeleting(false);
     }
@@ -69,7 +71,23 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({
     const map = new Map<string, SiteRecord>();
     sites.forEach((s) => {
       const code = String(s?.siteCode || '').trim().toUpperCase();
-      if (code) map.set(code, s);
+      const id = String(s?.id || '').trim().toUpperCase();
+      if (code) {
+        map.set(code, s);
+        if (code.startsWith('VDF-')) map.set(code.slice(4), s);
+        if (code.startsWith('ORG-')) map.set(code.slice(4), s);
+        if (code.startsWith('ORANGE-')) map.set(code.slice(7), s);
+        if (code.startsWith('WE-')) map.set(code.slice(3), s);
+        if (code.startsWith('ETAH-')) map.set(code.slice(5), s);
+      }
+      if (id) {
+        map.set(id, s);
+        if (id.startsWith('VDF-')) map.set(id.slice(4), s);
+        if (id.startsWith('ORG-')) map.set(id.slice(4), s);
+        if (id.startsWith('ORANGE-')) map.set(id.slice(7), s);
+        if (id.startsWith('WE-')) map.set(id.slice(3), s);
+        if (id.startsWith('ETAH-')) map.set(id.slice(5), s);
+      }
     });
     return map;
   }, [sites]);
@@ -249,9 +267,14 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({
     if (activeTab === 'manual') {
       return Array.from(selectedCodes);
     } else {
-      return excelMatching.matched.map((s) => s.siteCode);
+      const set = new Set<string>();
+      excelMatching.matched.forEach((s) => {
+        if (s.siteCode) set.add(s.siteCode);
+      });
+      parsedCodes.forEach((c) => set.add(c));
+      return Array.from(set);
     }
-  }, [activeTab, selectedCodes, excelMatching.matched]);
+  }, [activeTab, selectedCodes, excelMatching.matched, parsedCodes]);
 
   // Execute Deletion
   const handleExecuteDelete = async () => {
@@ -259,12 +282,15 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({
     setIsDeleting(true);
     try {
       await onDeleteBulk(activeCodesToDelete);
+      setSelectedCodes(new Set());
+      setParsedCodes([]);
+      setUploadedFileName(null);
+      setIsConfirming(false);
       onClose();
     } catch (err: any) {
       alert('حدث خطأ أثناء الحذف: ' + (err?.message || 'يرجى المحاولة لاحقاً'));
     } finally {
       setIsDeleting(false);
-      setIsConfirming(false);
     }
   };
 

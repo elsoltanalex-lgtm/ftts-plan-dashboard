@@ -391,18 +391,40 @@ export function useEtahaAPI() {
   const deleteEtahaRecord = useCallback(async (code: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const norm = (code || '').trim().toUpperCase();
+      const targetCodes = new Set([norm, code]);
+      if (norm.startsWith('ETAH-')) targetCodes.add(norm.slice(5));
+
       const current = loadStoredEtahaRecords();
-      const filtered = current.filter((r) => String(r.Code || r.code || '').trim().toUpperCase() !== norm);
+      const filtered = current.filter((r) => {
+        const c = String(r.Code || r.code || (r as any).id || '').trim().toUpperCase();
+        return !targetCodes.has(c);
+      });
       saveStoredEtahaRecords(filtered);
       setEtahaRecords(filtered);
 
+      const targetList = Array.from(targetCodes);
       // Attempt deletion in Supabase if etaha table exists across all clients
       for (const client of supabaseClients) {
         for (const table of ['etaha', 'etaha_records', 'availability']) {
           try {
-            await client.from(table).delete().or(`Code.eq."${norm}",code.eq."${norm}",id.eq."${norm}"`);
+            await client.from(table).delete().in('Code', targetList);
+            await client.from(table).delete().in('code', targetList);
+            await client.from(table).delete().in('id', targetList);
           } catch { }
         }
+      }
+
+      if (typeof window !== 'undefined') {
+        try {
+          const k1 = 'ftts_deleted_site_codes_v3';
+          const k2 = 'we_deleted_codes_cache';
+          const raw1 = localStorage.getItem(k1);
+          const set = new Set(raw1 ? JSON.parse(raw1) : []);
+          targetList.forEach((c) => set.add(c));
+          const arr = Array.from(set);
+          localStorage.setItem(k1, JSON.stringify(arr));
+          localStorage.setItem(k2, JSON.stringify(arr));
+        } catch { }
       }
 
       return { success: true };
@@ -414,10 +436,19 @@ export function useEtahaAPI() {
   const deleteEtahaRecordsBulk = useCallback(async (codes: string[]): Promise<{ success: boolean; count?: number; error?: string }> => {
     try {
       if (!codes || codes.length === 0) return { success: true, count: 0 };
-      const codeSet = new Set(codes.map((c) => String(c || '').trim().toUpperCase()));
+      const codeSet = new Set<string>();
+      codes.forEach((c) => {
+        const str = String(c || '').trim();
+        if (!str) return;
+        const upper = str.toUpperCase();
+        codeSet.add(str);
+        codeSet.add(upper);
+        if (upper.startsWith('ETAH-')) codeSet.add(upper.slice(5));
+      });
+
       const current = loadStoredEtahaRecords();
       const filtered = current.filter((r) => {
-        const c = String(r.Code || r.code || '').trim().toUpperCase();
+        const c = String(r.Code || r.code || (r as any).id || '').trim().toUpperCase();
         return !codeSet.has(c);
       });
       saveStoredEtahaRecords(filtered);
@@ -430,8 +461,22 @@ export function useEtahaAPI() {
           try {
             await client.from(table).delete().in('Code', codeArray);
             await client.from(table).delete().in('code', codeArray);
+            await client.from(table).delete().in('id', codeArray);
           } catch { }
         }
+      }
+
+      if (typeof window !== 'undefined') {
+        try {
+          const k1 = 'ftts_deleted_site_codes_v3';
+          const k2 = 'we_deleted_codes_cache';
+          const raw1 = localStorage.getItem(k1);
+          const set = new Set(raw1 ? JSON.parse(raw1) : []);
+          codeArray.forEach((c) => set.add(c));
+          const arr = Array.from(set);
+          localStorage.setItem(k1, JSON.stringify(arr));
+          localStorage.setItem(k2, JSON.stringify(arr));
+        } catch { }
       }
 
       return { success: true, count: current.length - filtered.length };

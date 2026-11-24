@@ -808,7 +808,9 @@ export async function deleteRecord(idOrCode: string): Promise<{ success: boolean
         const set = new Set(raw ? JSON.parse(raw) : []);
         set.add(cleanNorm);
         set.add(clean);
-        localStorage.setItem(key, JSON.stringify(Array.from(set)));
+        const arr = Array.from(set);
+        localStorage.setItem(key, JSON.stringify(arr));
+        localStorage.setItem('ftts_deleted_site_codes_v3', JSON.stringify(arr));
       } catch { }
     }
 
@@ -855,6 +857,7 @@ export async function deleteRecordsBulk(idsOrCodes: string[]): Promise<{ success
           try {
             await client.from(table).delete().in('site_code', batch);
             await client.from(table).delete().in('site code', batch);
+            await client.from(table).delete().in('Site code', batch);
             await client.from(table).delete().in('id', batch);
           } catch { }
         }
@@ -877,7 +880,9 @@ export async function deleteRecordsBulk(idsOrCodes: string[]): Promise<{ success
         const raw = localStorage.getItem(key);
         const set = new Set(raw ? JSON.parse(raw) : []);
         combinedList.forEach((c) => set.add(c));
-        localStorage.setItem(key, JSON.stringify(Array.from(set)));
+        const arr = Array.from(set);
+        localStorage.setItem(key, JSON.stringify(arr));
+        localStorage.setItem('ftts_deleted_site_codes_v3', JSON.stringify(arr));
       } catch { }
     }
 

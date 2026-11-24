@@ -1854,11 +1854,10 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                       <select
                         value={formData['موقف التسليم'] || 'لم يتم'}
                         onChange={(e) => handleDeliveryChange(e.target.value)}
-                        className={`w-full px-3 py-2 border rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer ${
-                          formData['موقف التسليم'] === 'تم التسليم'
+                        className={`w-full px-3 py-2 border rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer ${formData['موقف التسليم'] === 'تم التسليم'
                             ? 'bg-purple-50 border-purple-300 text-purple-900 font-black'
                             : 'bg-slate-50 border-slate-300 text-slate-800'
-                        }`}
+                          }`}
                       >
                         {APPROVED_DELIVERY_STATUSES.map((item) => (
                           <option key={item} value={item}>
@@ -1881,11 +1880,10 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                           handleInputChange('تاريخ التسليم', e.target.value);
                           handleInputChange('deliveryDate', e.target.value);
                         }}
-                        className={`w-full px-3 py-2 border rounded-xl text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 text-slate-800 ${
-                          formData['موقف التسليم'] === 'تم التسليم'
+                        className={`w-full px-3 py-2 border rounded-xl text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 text-slate-800 ${formData['موقف التسليم'] === 'تم التسليم'
                             ? 'bg-purple-50/60 border-purple-300 text-purple-950 ring-1 ring-purple-200'
                             : 'bg-slate-50 border-slate-300'
-                        }`}
+                          }`}
                       />
                     </div>
 

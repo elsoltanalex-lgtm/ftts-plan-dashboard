@@ -368,27 +368,43 @@ export function useVodafoneAPI() {
   const deleteVodafoneRecord = useCallback(async (code: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const norm = (code || '').trim().toUpperCase();
+      const cleanNorm = norm.startsWith('VDF-') ? norm.slice(4) : norm;
+      const targetCodes = new Set([norm, cleanNorm, code]);
+
       const current = loadStoredVodafoneRecords();
       const filtered = current.filter((r) => {
-        const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
-        return c !== norm;
+        const c = String(r[' Site code'] || r['Site code'] || r['site code'] || (r as any).site_code || (r as any).code || (r as any).id || '').trim().toUpperCase();
+        return !targetCodes.has(c);
       });
       saveStoredVodafoneRecords(filtered);
       setVodafoneRecords(filtered);
 
       // Delete from Supabase tables across active clients (Client 2 Fallback hosts active live dataset)
+      const targetList = Array.from(targetCodes);
       for (const client of supabaseClients) {
         for (const table of VODAFONE_TABLE_CANDIDATES) {
           try {
-            const { error: err1 } = await client.from(table).delete().eq('site_code', norm);
-            const { error: err2 } = await client.from(table).delete().eq('site code', norm);
-            if (err1 && err2) {
-              console.error(`[Vodafone Supabase] Delete error on table ${table}:`, err1 || err2);
-            }
+            await client.from(table).delete().in('site_code', targetList);
+            await client.from(table).delete().in('site code', targetList);
+            await client.from(table).delete().in('Site code', targetList);
+            await client.from(table).delete().in('id', targetList);
           } catch (delErr) {
             console.error(`[Vodafone Supabase] Delete exception on table ${table}:`, delErr);
           }
         }
+      }
+
+      if (typeof window !== 'undefined') {
+        try {
+          const k1 = 'ftts_deleted_site_codes_v3';
+          const k2 = 'we_deleted_codes_cache';
+          const raw1 = localStorage.getItem(k1);
+          const set = new Set(raw1 ? JSON.parse(raw1) : []);
+          targetList.forEach((c) => set.add(c));
+          const arr = Array.from(set);
+          localStorage.setItem(k1, JSON.stringify(arr));
+          localStorage.setItem(k2, JSON.stringify(arr));
+        } catch { }
       }
 
       return { success: true };
@@ -400,10 +416,21 @@ export function useVodafoneAPI() {
   const deleteVodafoneRecordsBulk = useCallback(async (codes: string[]): Promise<{ success: boolean; count?: number; error?: string }> => {
     try {
       if (!codes || codes.length === 0) return { success: true, count: 0 };
-      const codeSet = new Set(codes.map((c) => String(c || '').trim().toUpperCase()));
+      const codeSet = new Set<string>();
+      codes.forEach((c) => {
+        const str = String(c || '').trim();
+        if (!str) return;
+        const upper = str.toUpperCase();
+        codeSet.add(str);
+        codeSet.add(upper);
+        if (upper.startsWith('VDF-')) {
+          codeSet.add(upper.slice(4));
+        }
+      });
+
       const current = loadStoredVodafoneRecords();
       const filtered = current.filter((r) => {
-        const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
+        const c = String(r[' Site code'] || r['Site code'] || r['site code'] || (r as any).site_code || (r as any).code || (r as any).id || '').trim().toUpperCase();
         return !codeSet.has(c);
       });
       saveStoredVodafoneRecords(filtered);
@@ -416,10 +443,25 @@ export function useVodafoneAPI() {
           try {
             await client.from(table).delete().in('site_code', codeArray);
             await client.from(table).delete().in('site code', codeArray);
+            await client.from(table).delete().in('Site code', codeArray);
+            await client.from(table).delete().in('id', codeArray);
           } catch (bulkErr) {
             console.error(`[Vodafone Supabase] Bulk delete exception on table ${table}:`, bulkErr);
           }
         }
+      }
+
+      if (typeof window !== 'undefined') {
+        try {
+          const k1 = 'ftts_deleted_site_codes_v3';
+          const k2 = 'we_deleted_codes_cache';
+          const raw1 = localStorage.getItem(k1);
+          const set = new Set(raw1 ? JSON.parse(raw1) : []);
+          codeArray.forEach((c) => set.add(c));
+          const arr = Array.from(set);
+          localStorage.setItem(k1, JSON.stringify(arr));
+          localStorage.setItem(k2, JSON.stringify(arr));
+        } catch { }
       }
 
       return { success: true, count: current.length - filtered.length };
