@@ -31,8 +31,7 @@ import {
   X,
   Download,
   FileSpreadsheet,
-  Eye,
-  ArrowUpDown
+  Eye
 } from 'lucide-react';
 import {
   OPERATOR_WEEKS,

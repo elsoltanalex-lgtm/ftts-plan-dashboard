@@ -231,6 +231,9 @@ export const Dashboard: React.FC = () => {
   const [activeScope, setActiveScope] = useState<ActiveProjectScope>('FTTS');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Active filters for all scopes and operators (declared upfront to prevent TDZ)
+  const [filters, setFilters] = useState<FilterState>(initialFilters);
+
   useEffect(() => {
     if (toastMessage) {
       const timer = setTimeout(() => setToastMessage(null), 3500);
@@ -634,7 +637,6 @@ export const Dashboard: React.FC = () => {
     return [...weSites, ...vdfSites, ...orgSites];
   }, [liveWeSites, vodafoneSites, orangeSites, deletedSiteCodes]);
 
-  const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [donutResetKey, setDonutResetKey] = useState(0);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [modalFilterStatus, setModalFilterStatus] = useState<string | undefined>(undefined);
