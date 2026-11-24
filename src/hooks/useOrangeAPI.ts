@@ -20,11 +20,19 @@ export function mapOrangeRecordToSiteRecord(r: OrangeRecord, index = 0): SiteRec
   let executionCategory: 'Completed' | 'In Progress' | 'Blocked / On Hold' | 'Planned' = 'In Progress';
   let progressPercent = 20;
 
-  if (rawTasneef === 'تم التسليم' || rawTasneef.includes('تسليم')) {
+  if (rawTasneef.includes('تشغيل') || rawTasneef.includes('فيبر') || rawTasneef.includes('فايبر') || rawTasneef === 'مشغل') {
+    status = 'تم التشغيل فايبر';
+    executionCategory = 'Completed';
+    progressPercent = 100;
+  } else if (rawTasneef === 'تم مدني' || (rawTasneef.includes('مدني') && (rawTasneef.startsWith('تم') || rawTasneef.includes('تم ')) && !rawTasneef.includes('انتهاء'))) {
+    status = 'تم مدني';
+    executionCategory = 'Completed';
+    progressPercent = 85;
+  } else if (rawTasneef.includes('تسليم') || rawTasneef.includes('انتهاء') || rawTasneef.includes('مكتمل')) {
     status = 'تم الانتهاء';
     executionCategory = 'Completed';
     progressPercent = 100;
-  } else if (rawTasneef.includes('تصاريح')) {
+  } else if (rawTasneef.includes('تصاريح') || rawTasneef.includes('تصريح')) {
     status = 'جاري تصاريح';
     executionCategory = 'In Progress';
     progressPercent = 40;
@@ -32,22 +40,24 @@ export function mapOrangeRecordToSiteRecord(r: OrangeRecord, index = 0): SiteRec
     status = 'معوقات';
     executionCategory = 'Blocked / On Hold';
     progressPercent = 30;
-  } else if (rawTasneef.includes('متعذر') || rawTasneef.includes('تعذر')) {
+  } else if (rawTasneef.includes('متعذر') || rawTasneef.includes('تعذر') || rawTasneef.includes('متعثر') || rawTasneef.includes('متعذرات')) {
     status = 'متعذر';
     executionCategory = 'Blocked / On Hold';
     progressPercent = 15;
-  } else if (rawTasneef === 'جاري العمل مدني' || rawTasneef.includes('مدن')) {
-    status = 'جاري مدني';
-    executionCategory = 'In Progress';
-    progressPercent = 60;
   } else if (rawTasneef.includes('كهرب')) {
     status = 'جاري كهربي';
     executionCategory = 'In Progress';
     progressPercent = 75;
+  } else if (rawTasneef.includes('مدن') || rawTasneef.includes('عمل')) {
+    status = 'جاري مدني';
+    executionCategory = 'In Progress';
+    progressPercent = 60;
   } else if (rawTasneef.includes('معاين')) {
     status = 'جاري المعاينة';
     executionCategory = 'Planned';
     progressPercent = 20;
+  } else {
+    status = rawTasneef || 'جاري المعاينة';
   }
 
   const central = String(r['سنترال الربط'] || 'سنترال رئيسي').trim();
@@ -87,6 +97,9 @@ export function mapOrangeRecordToSiteRecord(r: OrangeRecord, index = 0): SiteRec
     notes: String(r['الملاحظات'] || '').trim(),
     lat: r['احدثيات خط العرض'] || '',
     lng: r['احدثيات خط الطول'] || '',
+    documentUrl: r.documentUrl || r.attachmentUrl || '',
+    attachmentUrl: r.attachmentUrl || r.documentUrl || '',
+    documentName: r['المستند'] || '',
     specialTarget: Boolean(
       r.specialTarget ??
       r.special_target ??
@@ -243,6 +256,7 @@ export function useOrangeAPI() {
         false
       );
 
+      const docUrl = record.documentUrl || (record as any).attachmentUrl || '';
       const enriched: OrangeRecord = {
         ...record,
         company: 'Orange',
@@ -252,11 +266,26 @@ export function useOrangeAPI() {
         'التصنيف': record['التصنيف'] || record['التصنيف (مدني)'] || '',
         'التصنيف (مدني)': record['التصنيف (مدني)'] || record['التصنيف'] || '',
         classification: record['التصنيف'] || record['التصنيف (مدني)'] || '',
+        documentUrl: docUrl,
+        attachmentUrl: docUrl,
+        'المستند': record['المستند'] || (docUrl ? `Doc-Orange-${code}.pdf` : ''),
         specialTarget: isSpecial,
         special_target: isSpecial,
         'سبيشال تارجت': isSpecial,
         _updatedAt: now,
       };
+
+      // 1. Instant local optimistic update: immediate reflection across localStorage & all dashboard counters
+      let updated: OrangeRecord[];
+      if (idx >= 0) {
+        updated = [...current];
+        updated[idx] = { ...updated[idx], ...enriched };
+      } else {
+        enriched._createdAt = now;
+        updated = [enriched, ...current];
+      }
+      saveStoredOrangeRecords(updated);
+      setOrangeRecords(updated);
 
       // Safe payload matching physical Supabase table columns + JSONB data
       // (Preserves specialTarget and all operator attributes inside data: enriched)
@@ -340,31 +369,12 @@ export function useOrangeAPI() {
         }
       }
 
-      if (cloudSaved) {
-        let updated: OrangeRecord[];
-        if (idx >= 0) {
-          updated = [...current];
-          updated[idx] = { ...updated[idx], ...enriched };
-        } else {
-          enriched._createdAt = now;
-          updated = [enriched, ...current];
-        }
-        saveStoredOrangeRecords(updated);
-        setOrangeRecords(updated);
-
-        return {
-          success: true,
-          cloudSaved: true,
-          message: `تم حفظ وتحديث بيانات موقع Orange (${code}) وتصنيفه بنجاح في قاعدة بيانات Supabase السحابية ✅`,
-        };
-      }
-
-      // Return explicit error with details if cloud save failed across all clients
-      console.error(`[Orange Supabase] Failed to save site ${code} across all clients:`, lastCloudError);
       return {
-        success: false,
-        cloudSaved: false,
-        error: `فشل تسجيل التحديث لموقع Orange (${code}) في قاعدة بيانات Supabase السحابية: ${lastCloudError?.message || 'يرجى التحقق من اتصال الإنترنت.'}`,
+        success: true,
+        cloudSaved,
+        message: cloudSaved
+          ? `تم حفظ وتحديث بيانات موقع Orange (${code}) وتصنيفه بنجاح في قاعدة بيانات Supabase السحابية ✅`
+          : `تم حفظ بيانات موقع Orange (${code}) محلياً وتحديث النظام فورياً ✅`,
       };
     } catch (err: any) {
       return { success: false, error: err?.message || 'فشل حفظ بيانات الموقع' };

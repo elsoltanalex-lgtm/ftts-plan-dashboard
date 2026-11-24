@@ -327,15 +327,15 @@ export function normalizeToCanonicalClassification(raw: string): string {
     .replace(/ى/g, 'ي');
 
   // 1. تم التشغيل فايبر
-  if (s.includes('تشغيل') || s.includes('فيبر') || s.includes('فايبر')) {
+  if (s.includes('تشغيل') || s.includes('فيبر') || s.includes('فايبر') || s === 'مشغل') {
     return 'تم التشغيل فايبر';
   }
   // 2. تم مدني
-  if (s.includes('تم مدني') || s.includes('تم خارجي') || s.includes('متوقف علي العميل') || s.includes('مدنى') || s.includes('مدني')) {
-    if (s.startsWith('تم') || s.includes('تم')) return 'تم مدني';
+  if (s === 'تم مدني' || s.includes('تم مدني') || (s.includes('مدن') && s.startsWith('تم') && !s.includes('انتهاء'))) {
+    return 'تم مدني';
   }
   // 3. تم الانتهاء / تم التسليم
-  if (s.includes('تم الانتهاء') || s.includes('تم التسليم') || s.includes('تسليم')) {
+  if (s.includes('انتهاء') || s.includes('تسليم') || s.includes('مكتمل') || s === 'تم الانتهاء' || s === 'تم التسليم') {
     return 'تم الانتهاء';
   }
   // 4. معوقات
@@ -343,7 +343,7 @@ export function normalizeToCanonicalClassification(raw: string): string {
     return 'معوقات';
   }
   // 5. متعذر
-  if (s.includes('متعذر') || s.includes('تعذر') || s.includes('متعثر')) {
+  if (s.includes('متعذر') || s.includes('تعذر') || s.includes('متعثر') || s.includes('متعذرات')) {
     return 'متعذر';
   }
   // 6. جاري تصريح
@@ -584,8 +584,8 @@ export const BASELINE_TOTAL_LINKS = 185;
  */
 export function getSiteClassification(site: SiteRecord): string {
   let raw = '';
-  if (site.rawRecord && site.rawRecord['التصنيف']) {
-    raw = String(site.rawRecord['التصنيف']).trim();
+  if (site.rawRecord && (site.rawRecord['التصنيف'] || site.rawRecord['التصنيف (مدني)'])) {
+    raw = String(site.rawRecord['التصنيف'] || site.rawRecord['التصنيف (مدني)']).trim();
   } else if (site.classification && typeof site.classification === 'string') {
     const trimmed = site.classification.trim();
     if (trimmed && trimmed !== 'Sharing' && trimmed !== 'New' && trimmed !== 'GD') {

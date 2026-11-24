@@ -106,6 +106,13 @@ function mapWeRecordToSiteRecord(r: WeRecord, index = 0): SiteRecord {
 
   const tasneef = rawTasneef || 'غير محدد';
   let status: StatusType = (tasneef as StatusType) || 'غير محدد';
+  if (tasneef.includes('تشغيل') || tasneef.includes('فيبر') || tasneef.includes('فايبر') || tasneef === 'مشغل') {
+    status = 'تم التشغيل فايبر';
+  } else if (tasneef === 'تم مدني' || (tasneef.includes('مدني') && (tasneef.startsWith('تم') || tasneef.includes('تم ')) && !tasneef.includes('انتهاء'))) {
+    status = 'تم مدني';
+  } else if (tasneef.includes('انتهاء') || tasneef.includes('تسليم') || tasneef.includes('مكتمل')) {
+    status = 'تم الانتهاء';
+  }
 
   let executionCategory: ExecutionCategory = 'In Progress';
   if (isClassificationCompleted(tasneef)) {
@@ -164,6 +171,9 @@ function mapWeRecordToSiteRecord(r: WeRecord, index = 0): SiteRecord {
     responsibility: String(r['مسئولية التنفيذ'] || 'WE').trim(),
     lat: r['NLatitude'] || '',
     lng: r['NLongitude'] || '',
+    documentUrl: r.documentUrl || (r as any).attachmentUrl || '',
+    attachmentUrl: (r as any).attachmentUrl || r.documentUrl || '',
+    documentName: r['المستند'] || '',
     specialTarget: Boolean(
       (r as any).specialTarget ??
       (r as any).special_target ??

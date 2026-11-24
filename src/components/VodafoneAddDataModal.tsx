@@ -39,6 +39,9 @@ export interface VodafoneAddDataModalProps {
 }
 
 export const VODAFONE_OFFICIAL_CLASSIFICATIONS = [
+  'تم الانتهاء',
+  'تم التشغيل فايبر',
+  'تم مدني',
   'تم التسليم',
   'تم الانتهاء كهربي',
   'تم الانتهاء كهربي ولم يتم التسليم للمنطقة',
@@ -46,7 +49,7 @@ export const VODAFONE_OFFICIAL_CLASSIFICATIONS = [
   'جاري العمل مدني',
   'جاري العمل كهربي',
   'جاري المعاينة',
-  'متعذرات',
+  'متعذر',
   'معوقات',
 ];
 
@@ -91,6 +94,7 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [successMessage, setSuccessMessage] = useState('');
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Master records list for Vodafone (official dataset + any live loaded records)
@@ -252,6 +256,7 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setPendingFile(file);
     const fileName = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
     handleInputChange('المستند', fileName);
     handleInputChange('موقف المرفقات', 'تم الارفاق');
@@ -265,7 +270,9 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
   };
 
   const handleRemoveDocument = () => {
+    setPendingFile(null);
     handleInputChange('المستند', '');
+    handleInputChange('documentUrl', '');
     handleInputChange('موقف المرفقات', 'لم يتم الارفاق');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -310,12 +317,16 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
           (initialRecord as any)?.['سبيشال_تارجت'] ??
           false
         );
+        const docUrl = initialRecord.documentUrl || (initialRecord as any).attachmentUrl || '';
         setFormData({
           ...initialRecord,
           specialTarget: isSpecial,
           special_target: isSpecial,
           'سبيشال تارجت': isSpecial,
           'اسباب المعوق': obstacleVal,
+          documentUrl: docUrl,
+          attachmentUrl: docUrl,
+          'المستند': initialRecord['المستند'] || (docUrl ? `Doc-${initialRecord['Site code'] || ''}.pdf` : ''),
         });
         setStep('fill-form');
       } else if (initialSiteCode) {
@@ -356,12 +367,16 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
     if (raw) {
       setMasterRecord(raw);
       const obstacleVal = raw['اسباب المعوق'] || (raw['التصنيف']?.includes('معوق') ? (raw['اسباب التعذر'] || raw['اسباب التعّذر'] || '') : '');
+      const docUrl = raw?.documentUrl || (raw as any)?.attachmentUrl || site?.documentUrl || site?.attachmentUrl || '';
       setFormData({
         ...raw,
         specialTarget: isSpecial,
         special_target: isSpecial,
         'سبيشال تارجت': isSpecial,
         'اسباب المعوق': obstacleVal,
+        documentUrl: docUrl,
+        attachmentUrl: docUrl,
+        'المستند': raw['المستند'] || site?.documentName || (docUrl ? `Doc-${norm}.pdf` : ''),
       });
     } else {
       setFormData((prev) => ({
@@ -528,8 +543,21 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
         formData['سبيشال تارجت']
       );
 
+      let docUrl = formData.documentUrl || '';
+      if (pendingFile && !docUrl) {
+        try {
+          const uploadRes = await uploadAttachment(pendingFile, 'documents');
+          if (uploadRes.success && uploadRes.url) {
+            docUrl = uploadRes.url;
+          }
+        } catch (uploadErr) {
+          console.warn('Vodafone attachment upload fallback warning:', uploadErr);
+        }
+      }
+
       const payload: VodafoneRecord = {
         ...formData,
+        documentUrl: docUrl,
         specialTarget: isSpecial,
         special_target: isSpecial,
         'سبيشال تارجت': isSpecial,

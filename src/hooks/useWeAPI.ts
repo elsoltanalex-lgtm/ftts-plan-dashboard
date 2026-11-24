@@ -41,8 +41,8 @@ export function normalizeRecord(row: Record<string, any>): WeRecord {
   );
 
   return {
-    ...base,
     ...row,
+    ...base,
     specialTarget: isSpecial,
     special_target: isSpecial,
     'سبيشال تارجت': isSpecial,
@@ -492,8 +492,12 @@ export async function saveRecord(
       false
     );
 
+    const docUrl = record.documentUrl || (record as any).attachmentUrl || '';
     const fullData: WeRecord = {
       ...record,
+      documentUrl: docUrl,
+      attachmentUrl: docUrl,
+      'المستند': record['المستند'] || (docUrl ? `Doc-${siteCode}.pdf` : ''),
       specialTarget: isSpecial,
       special_target: isSpecial,
       'سبيشال تارجت': isSpecial,
@@ -504,6 +508,22 @@ export async function saveRecord(
       _createdAt: record._createdAt || now,
       _createdBy: record._createdBy || 'user',
     };
+
+    // Instant local optimistic update to guarantee persistence in we_records_live_v3 immediately
+    const currentStored = loadStoredWeRecords();
+    const cleanCode = (siteCode || '').trim().toUpperCase();
+    const sIdx = currentStored.findIndex((r) => {
+      const c = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
+      return c === cleanCode;
+    });
+    let nextStored: WeRecord[];
+    if (sIdx >= 0) {
+      nextStored = [...currentStored];
+      nextStored[sIdx] = { ...nextStored[sIdx], ...fullData };
+    } else {
+      nextStored = [fullData, ...currentStored];
+    }
+    saveStoredWeRecords(nextStored);
 
     // Safe payload matching physical Supabase table columns + JSONB data
     // (Note: specialTarget / special_target is preserved inside fullData -> data JSONB column)

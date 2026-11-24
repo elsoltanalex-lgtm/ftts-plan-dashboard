@@ -518,6 +518,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     message: string;
     existingRecord: WeRecord;
   } | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   // Admin Toggle for full field editing (defaults to TRUE for admin)
   const [adminFullEditMode, setAdminFullEditMode] = useState(true);
@@ -602,6 +603,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setPendingFile(file);
     const fileName = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
     handleFieldChange('المستند', fileName);
     // Background upload to Supabase Storage (with fallback to resilient Base64 Data URL)
@@ -616,6 +618,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
   };
 
   const handleRemoveDocument = () => {
+    setPendingFile(null);
     handleFieldChange('المستند', '');
     handleFieldChange('documentUrl', '');
     handleFieldChange('attachmentUrl', '');
@@ -1675,6 +1678,19 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
         dataToSave['Exc sector'] = user.sector;
         dataToSave['Sectores'] = user.sector;
         dataToSave['Exc Sectores'] = user.sector;
+      }
+
+      // Ensure pending attachment is uploaded/read before saving without blocking record update
+      if (pendingFile && (!dataToSave['documentUrl'] || !dataToSave['attachmentUrl'])) {
+        try {
+          const uploadRes = await uploadAttachment(pendingFile, 'documents');
+          if (uploadRes.success && uploadRes.url) {
+            dataToSave['documentUrl'] = uploadRes.url;
+            dataToSave['attachmentUrl'] = uploadRes.url;
+          }
+        } catch (uploadErr) {
+          console.warn('Supabase attachment upload fallback warning:', uploadErr);
+        }
       }
 
       const result = await saveRecord(dataToSave, forceUpdate, isEdit);

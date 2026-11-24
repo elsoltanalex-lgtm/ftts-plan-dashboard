@@ -1318,9 +1318,12 @@ export function getOperatorWeeklyRollout(
         s.status === 'تم التسليم' ||
         s.status === 'تم التشغيل فايبر' ||
         s.status === 'مشغل' ||
+        s.status === 'تم مدني' ||
         s.executionCategory === 'Completed' ||
         s.classification === 'تم الانتهاء والتسليم' ||
         s.classification === 'تم التسليم' ||
+        s.classification === 'تم الانتهاء' ||
+        s.classification === 'تم التشغيل فايبر' ||
         s.deliveryStatus === 'تم التسليم' ||
         s.progressPercent === 100;
 
@@ -1403,6 +1406,10 @@ export function getOperatorWeeklyRollout(
             delivered += val.delivered;
           }
         });
+        if (activeDepts.length === 0) {
+          totalSites = liveTotalAll;
+          delivered = liveDeliveredAll;
+        }
       } else {
         // Calibrate historical progress smoothly if total changed
         const ratio = totalSites > 0 ? liveTotalAll / totalSites : 1;

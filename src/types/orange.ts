@@ -117,8 +117,10 @@ export function isOrangeFieldImmutable(colName: string): boolean {
 
 // Approved Classifications for Orange
 export const ORANGE_APPROVED_CLASSIFICATIONS = [
-  'تم الانتهاء مدني',
+  'تم الانتهاء',
   'تم التشغيل فايبر',
+  'تم مدني',
+  'تم الانتهاء مدني',
   'جاري تصاريح',
   'جاري مدني',
   'جاري المعاينة',
@@ -157,11 +159,20 @@ export const ORANGE_SUPPORT_ENTITIES = [
 export function normalizeOrangeClassification(raw?: string | null): string {
   if (!raw) return 'جاري المعاينة';
   const trimmed = String(raw).trim();
-  if (trimmed.includes('تم الانتهاء') || trimmed.includes('انتهاء') || trimmed.includes('تسليم')) {
+  if (trimmed === 'تم الانتهاء') {
+    return 'تم الانتهاء';
+  }
+  if (trimmed.includes('تشغيل') || trimmed.includes('فايبر') || trimmed.includes('فيبر') || trimmed === 'تم التشغيل') {
+    return 'تم التشغيل فايبر';
+  }
+  if (trimmed === 'تم مدني' || (trimmed.includes('مدني') && trimmed.startsWith('تم') && !trimmed.includes('انتهاء'))) {
+    return 'تم مدني';
+  }
+  if (trimmed === 'تم الانتهاء مدني' || trimmed.includes('الانتهاء مدني')) {
     return 'تم الانتهاء مدني';
   }
-  if (trimmed.includes('تشغيل') || trimmed.includes('فايبر') || trimmed.includes('فيبر')) {
-    return 'تم التشغيل فايبر';
+  if (trimmed.includes('انتهاء') || trimmed.includes('تسليم')) {
+    return 'تم الانتهاء';
   }
   if (trimmed.includes('تصاريح') || trimmed.includes('تصريح')) {
     return 'جاري تصاريح';
@@ -175,7 +186,7 @@ export function normalizeOrangeClassification(raw?: string | null): string {
   if (trimmed.includes('مدن') || trimmed.includes('عمل')) {
     return 'جاري مدني';
   }
-  if (trimmed.includes('متعذر') || trimmed.includes('متعثر')) {
+  if (trimmed.includes('متعذر') || trimmed.includes('متعثر') || trimmed.includes('تعذر')) {
     return 'متعذر';
   }
   if (trimmed.includes('معوق')) {

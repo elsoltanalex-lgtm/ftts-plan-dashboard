@@ -79,6 +79,7 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [successMessage, setSuccessMessage] = useState('');
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Computed Values
@@ -108,6 +109,7 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setPendingFile(file);
     const fileName = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
     setFormData((prev) => ({
       ...prev,
@@ -130,9 +132,11 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
   };
 
   const handleRemoveDocument = () => {
+    setPendingFile(null);
     setFormData((prev) => ({
       ...prev,
       المستند: '',
+      documentUrl: '',
       'موقف المرفقات': 'لم يتم الارفاق',
     }));
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -182,7 +186,8 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
         'موقف التسليم لاورنچ': matchedSite.deliveryOrange || 'لم يتم التسليم لاورنچ',
         'ملاحظات التسليمات': matchedSite.deliveryNotes || '',
         'موقف المرفقات': matchedSite.documentStatus || 'لم يتم الارفاق',
-        المستند: matchedSite.documentRef || (matchedSite.documentStatus === 'تم الارفاق' ? `Doc-Orange-${matchedSite.siteCode}.pdf` : ''),
+        المستند: matchedSite.documentRef || matchedSite.documentName || (matchedSite.documentUrl ? `Doc-Orange-${matchedSite.siteCode}.pdf` : ''),
+        documentUrl: matchedSite.documentUrl || matchedSite.attachmentUrl || '',
         'التاريخ المتوقع للانتهاء': matchedSite.expectedDate || '',
         الملاحظات: matchedSite.notes || '',
         _id: matchedSite.id,
@@ -324,8 +329,22 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
         formData.special_target ||
         formData['سبيشال تارجت']
       );
+
+      let docUrl = formData.documentUrl || '';
+      if (pendingFile && !docUrl) {
+        try {
+          const uploadRes = await uploadAttachment(pendingFile, 'documents');
+          if (uploadRes.success && uploadRes.url) {
+            docUrl = uploadRes.url;
+          }
+        } catch (uploadErr) {
+          console.warn('Orange attachment upload fallback warning:', uploadErr);
+        }
+      }
+
       const payload: OrangeRecord = {
         ...formData,
+        documentUrl: docUrl,
         specialTarget: isSpecial,
         special_target: isSpecial,
         'سبيشال تارجت': isSpecial,

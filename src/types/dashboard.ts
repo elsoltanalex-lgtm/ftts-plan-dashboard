@@ -68,6 +68,9 @@ export interface SiteRecord {
   paymentAndStartDate?: string;
   specialTarget?: boolean;
   special_target?: boolean;
+  documentUrl?: string;
+  attachmentUrl?: string;
+  documentName?: string;
   rawRecord?: any;
 }
 
