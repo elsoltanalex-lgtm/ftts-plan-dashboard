@@ -22,8 +22,49 @@ export function normalizeArabicText(str?: string | null): string {
 }
 
 /**
+ * Normalizes Internal Path (المسار الداخلي) values:
+ * Unifies "تم الانتهاء بالكامل" and "تم الانتهاء" into the single canonical label "تم الانتهاء".
+ */
+export function normalizeEtahaInternalPath(str?: string | null): string {
+  if (!str) return '';
+  const trimmed = String(str).replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/g, ' ').trim();
+  if (!trimmed) return '';
+  const norm = normalizeArabicText(trimmed);
+  if (
+    !norm.includes('لم يتم') &&
+    !norm.includes('لم ينته') &&
+    !norm.includes('معوق') &&
+    !norm.includes('تعذر') &&
+    (norm === 'تم الانتهاء بالكامل' || norm === 'تم الانتهاء' || norm.startsWith('تم الانتهاء بالكامل'))
+  ) {
+    return 'تم الانتهاء';
+  }
+  return trimmed;
+}
+
+/**
+ * Normalizes Delivery Status (موقف التسليم) values:
+ * Replaces "مؤجل من العميل" (and spelling variants of "متوقف علي العميل") with "متوقف على العميل".
+ */
+export function normalizeEtahaDeliveryStatus(str?: string | null): string {
+  if (!str) return '';
+  const trimmed = String(str).replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/g, ' ').trim();
+  if (!trimmed) return '';
+  const norm = normalizeArabicText(trimmed);
+  if (
+    norm === 'مؤجل من العميل' ||
+    norm.includes('مؤجل من العميل') ||
+    norm === 'متوقف علي العميل' ||
+    norm === 'متوقف على العميل'
+  ) {
+    return 'متوقف على العميل';
+  }
+  return trimmed;
+}
+
+/**
  * Checks if the internal path (المسار الداخلي) is completed:
- * Matches "تم الانتهاء", "تم الانتهاء بالكامل", "منتهي" in internal path fields
+ * Matches "تم الانتهاء" (including legacy "تم الانتهاء بالكامل") in internal path fields
  */
 export function isEtahaInternalDone(site: any): boolean {
   if (!site) return false;
@@ -37,11 +78,55 @@ export function isEtahaInternalDone(site: any): boolean {
     raw['المسار_الداخلي'] ||
     raw['المسار_الداخلى'] ||
     '';
-  const norm = normalizeArabicText(val);
+  const norm = normalizeArabicText(normalizeEtahaInternalPath(val));
   if (!norm || norm.includes('لم يتم') || norm.includes('لم ينته') || norm.includes('معوق') || norm.includes('تعذر')) {
     return false;
   }
   return norm.includes('تم الانتهاء') || norm === 'منتهي' || norm === 'تم';
+}
+
+/**
+ * Checks strictly whether the external path field (المسار الخارجي) itself is "تم الانتهاء"
+ */
+export function isEtahaExternalPathOnlyDone(site: any): boolean {
+  if (!site) return false;
+  const raw = site.rawRecord || site;
+  const ext =
+    site.externalPath ||
+    raw.externalPath ||
+    raw.external_path ||
+    raw['المسار الخارجي'] ||
+    raw['المسار_الخارجي'] ||
+    '';
+  const normExt = normalizeArabicText(ext);
+  if (!normExt || normExt.includes('لم يتم') || normExt.includes('لم ينته') || normExt.includes('معوق') || normExt.includes('تعذر')) {
+    return false;
+  }
+  return normExt.includes('تم الانتهاء') || normExt === 'منتهي' || normExt === 'تم';
+}
+
+/**
+ * Checks if BOTH Internal Path === "تم الانتهاء" AND External Path === "تم الانتهاء"
+ */
+export function isEtahaBothPathsDone(site: any): boolean {
+  return isEtahaInternalDone(site) && isEtahaExternalPathOnlyDone(site);
+}
+
+/**
+ * Checks if Delivery Status (موقف التسليم) === "متوقف على العميل" (including legacy "مؤجل من العميل")
+ */
+export function isEtahaPausedOnClient(site: any): boolean {
+  if (!site) return false;
+  const raw = site.rawRecord || site;
+  const del =
+    site.deliveryStatus ||
+    site.deliveryArea ||
+    raw.deliveryStatus ||
+    raw.delivery_status ||
+    raw['موقف التسليم'] ||
+    raw['موقف_التسليم'] ||
+    '';
+  return normalizeEtahaDeliveryStatus(del) === 'متوقف على العميل';
 }
 
 /**
@@ -113,6 +198,7 @@ export function isEtahaDelivered(site: any): boolean {
     !normDel.includes('معوق') &&
     !normDel.includes('تعذر') &&
     !normDel.includes('مؤجل') &&
+    !normDel.includes('متوقف') &&
     !normDel.includes('منتظر') &&
     (normDel.includes('تم التسليم') || normDel === 'مسلم' || normDel === 'تم')
   ) {
@@ -125,6 +211,7 @@ export function isEtahaDelivered(site: any): boolean {
     !normCls.includes('معوق') &&
     !normCls.includes('تعذر') &&
     !normCls.includes('مؤجل') &&
+    !normCls.includes('متوقف') &&
     (normCls.includes('تم الانتهاء والتسليم') || normCls.includes('تم التسليم') || normCls === 'تسليم')
   ) {
     return true;
@@ -141,11 +228,17 @@ export function computeEtahaKpis(sites: any[]) {
   let internalDone = 0;
   let externalDone = 0;
   let delivered = 0;
+  let bothPathsDone = 0;
+  let pausedOnClient = 0;
 
   for (const s of sites) {
-    if (isEtahaInternalDone(s)) internalDone++;
-    if (isEtahaExternalDone(s)) externalDone++;
+    const intDone = isEtahaInternalDone(s);
+    const extDone = isEtahaExternalDone(s);
+    if (intDone) internalDone++;
+    if (extDone) externalDone++;
     if (isEtahaDelivered(s)) delivered++;
+    if (intDone && isEtahaExternalPathOnlyDone(s)) bothPathsDone++;
+    if (isEtahaPausedOnClient(s)) pausedOnClient++;
   }
 
   return {
@@ -153,5 +246,7 @@ export function computeEtahaKpis(sites: any[]) {
     internalDone,
     externalDone,
     delivered,
+    bothPathsDone,
+    pausedOnClient,
   };
 }

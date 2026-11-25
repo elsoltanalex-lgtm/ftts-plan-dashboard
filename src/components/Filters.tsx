@@ -21,6 +21,10 @@ import type { FilterState, SiteRecord } from '../types/dashboard';
 import { useAuth } from '../context/AuthContext';
 import { isRecordInSector, toCanonicalSector } from '../utils/sectorPermissions';
 import {
+  normalizeEtahaInternalPath,
+  normalizeEtahaDeliveryStatus,
+} from '../utils/etahaMetrics';
+import {
   SECTORS,
   COMPETENT_ADMINS,
   getSiteClassification,
@@ -584,11 +588,15 @@ export const Filters: React.FC<FiltersProps> = ({
     const list = Array.from(
       new Set(
         baseSites
-          .map((s) => String(s.internalPath || s.rawRecord?.['المسار الداخلى'] || s.rawRecord?.['المسار الداخلي'] || s.rawRecord?.['موقف اللحامات'] || s.rawRecord?.['موقف_اللحامات'] || '').trim())
+          .map((s) =>
+            normalizeEtahaInternalPath(
+              String(s.internalPath || s.rawRecord?.['المسار الداخلى'] || s.rawRecord?.['المسار الداخلي'] || s.rawRecord?.['موقف اللحامات'] || s.rawRecord?.['موقف_اللحامات'] || '').trim()
+            )
+          )
           .filter(Boolean)
       )
     );
-    const order = ['تم الانتهاء بالكامل', 'لم يتم', 'لم يتم الانتهاء من المسار الخارجي', 'مسار خارجي متعذرات او معوقات', 'تم الانتهاء'];
+    const order = ['تم الانتهاء', 'لم يتم', 'لم يتم الانتهاء من المسار الخارجي', 'مسار خارجي متعذرات او معوقات', 'جاري العمل'];
     return list.sort((a, b) => {
       const idxA = order.indexOf(a);
       const idxB = order.indexOf(b);
@@ -628,11 +636,15 @@ export const Filters: React.FC<FiltersProps> = ({
     const list = Array.from(
       new Set(
         baseSites
-          .map((s) => String(s.deliveryStatus || s.deliveryArea || s.rawRecord?.['موقف التسليم'] || '').trim())
+          .map((s) =>
+            normalizeEtahaDeliveryStatus(
+              String(s.deliveryStatus || s.deliveryArea || s.rawRecord?.['موقف التسليم'] || '').trim()
+            )
+          )
           .filter(Boolean)
       )
     );
-    const order = ['تم التسليم', 'لم يتم'];
+    const order = ['تم التسليم', 'متوقف على العميل', 'لم يتم', 'منتظر التسليم'];
     return list.sort((a, b) => {
       const idxA = order.indexOf(a);
       const idxB = order.indexOf(b);

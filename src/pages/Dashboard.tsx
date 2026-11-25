@@ -55,8 +55,11 @@ import {
   isEtahaInternalDone,
   isEtahaExternalDone,
   isEtahaDelivered,
+  isEtahaBothPathsDone,
   computeEtahaKpis,
   normalizeArabicText,
+  normalizeEtahaInternalPath,
+  normalizeEtahaDeliveryStatus,
 } from '../utils/etahaMetrics';
 import { WeExecutiveReportView } from '../components/WeExecutiveReportView';
 import { SiteActionDropdown } from '../components/SiteActionDropdown';
@@ -807,6 +810,9 @@ export const Dashboard: React.FC = () => {
             if (fs === 'تم الانتهاء خارجي') {
               return isEtahaExternalDone(site);
             }
+            if (fs === 'الموقف العام') {
+              return isEtahaBothPathsDone(site);
+            }
             if (fs === 'تم التسليم') {
               return isEtahaDelivered(site);
             }
@@ -917,8 +923,8 @@ export const Dashboard: React.FC = () => {
 
         const activeInts = toFilterArray(filters.internalPath);
         if (activeInts.length > 0) {
-          const siteInt = String(site.internalPath || site.rawRecord?.['المسار الداخلى'] || site.rawRecord?.['المسار الداخلي'] || site.rawRecord?.['موقف اللحامات'] || '').trim();
-          if (!activeInts.includes(siteInt)) return false;
+          const siteInt = normalizeEtahaInternalPath(String(site.internalPath || site.rawRecord?.['المسار الداخلى'] || site.rawRecord?.['المسار الداخلي'] || site.rawRecord?.['موقف اللحامات'] || '').trim());
+          if (!activeInts.some((ai) => normalizeEtahaInternalPath(ai) === siteInt)) return false;
         }
 
         const activeExcels = toFilterArray(filters.excelStatus);
@@ -934,8 +940,8 @@ export const Dashboard: React.FC = () => {
 
         const activeDels = toFilterArray(filters.deliveryStatus);
         if (activeDels.length > 0) {
-          const siteDel = String(site.deliveryStatus || site.deliveryArea || site.rawRecord?.['موقف التسليم'] || '').trim();
-          if (!activeDels.includes(siteDel)) return false;
+          const siteDel = normalizeEtahaDeliveryStatus(String(site.deliveryStatus || site.deliveryArea || site.rawRecord?.['موقف التسليم'] || '').trim());
+          if (!activeDels.some((ad) => normalizeEtahaDeliveryStatus(ad) === siteDel)) return false;
         }
       }
 
@@ -1057,8 +1063,8 @@ export const Dashboard: React.FC = () => {
 
         const activeInts = toFilterArray(filters.internalPath);
         if (activeInts.length > 0) {
-          const siteInt = String(site.internalPath || site.rawRecord?.['المسار الداخلى'] || site.rawRecord?.['المسار الداخلي'] || site.rawRecord?.['موقف اللحامات'] || '').trim();
-          if (!activeInts.includes(siteInt)) return false;
+          const siteInt = normalizeEtahaInternalPath(String(site.internalPath || site.rawRecord?.['المسار الداخلى'] || site.rawRecord?.['المسار الداخلي'] || site.rawRecord?.['موقف اللحامات'] || '').trim());
+          if (!activeInts.some((ai) => normalizeEtahaInternalPath(ai) === siteInt)) return false;
         }
 
         const activeExcels = toFilterArray(filters.excelStatus);
@@ -1074,8 +1080,8 @@ export const Dashboard: React.FC = () => {
 
         const activeDels = toFilterArray(filters.deliveryStatus);
         if (activeDels.length > 0) {
-          const siteDel = String(site.deliveryStatus || site.deliveryArea || site.rawRecord?.['موقف التسليم'] || '').trim();
-          if (!activeDels.includes(siteDel)) return false;
+          const siteDel = normalizeEtahaDeliveryStatus(String(site.deliveryStatus || site.deliveryArea || site.rawRecord?.['موقف التسليم'] || '').trim());
+          if (!activeDels.some((ad) => normalizeEtahaDeliveryStatus(ad) === siteDel)) return false;
         }
       }
 
@@ -1499,6 +1505,8 @@ export const Dashboard: React.FC = () => {
                   internalDone={etahaKpis.internalDone}
                   externalDone={etahaKpis.externalDone}
                   delivered={etahaKpis.delivered}
+                  bothPathsDone={etahaKpis.bothPathsDone}
+                  pausedOnClient={etahaKpis.pausedOnClient}
                   activeStatusFilter={filters.status}
                   onSelectStatusFilter={handleStatusSelect}
                   onClearStatusFilters={() => handleFilterChange('status', 'All')}

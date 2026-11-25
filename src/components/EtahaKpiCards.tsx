@@ -14,6 +14,8 @@ export interface EtahaKpiCardsProps {
   internalDone: number;
   externalDone: number;
   delivered: number;
+  bothPathsDone?: number;
+  pausedOnClient?: number;
   activeStatusFilter: string | string[];
   onSelectStatusFilter: (status: string) => void;
   onClearStatusFilters?: () => void;
@@ -24,11 +26,14 @@ export const EtahaKpiCards: React.FC<EtahaKpiCardsProps> = ({
   internalDone,
   externalDone,
   delivered,
+  bothPathsDone,
+  pausedOnClient = 0,
   activeStatusFilter,
   onSelectStatusFilter,
   onClearStatusFilters,
 }) => {
   const total = totalSites || 1;
+  const generalStatusCount = bothPathsDone ?? delivered;
   const activeList = useMemo(() => toFilterArray(activeStatusFilter), [activeStatusFilter]);
   const isAllActive = activeList.length === 0 || activeList.includes('All');
 
@@ -79,19 +84,20 @@ export const EtahaKpiCards: React.FC<EtahaKpiCardsProps> = ({
       isActive: activeList.includes('تم الانتهاء خارجي'),
     },
     {
-      id: 'etaha-kpi-delivered',
-      title: 'تم التسليم',
-      titleEn: 'Delivered',
-      value: delivered,
-      subValue: `${((delivered / total) * 100).toFixed(1)}% من الإجمالي`,
+      id: 'etaha-kpi-general-status',
+      title: 'الموقف العام',
+      titleEn: 'General Status (Internal & External Done)',
+      value: generalStatusCount,
+      subValue: `${((generalStatusCount / total) * 100).toFixed(1)}% من الإجمالي (تم داخلي + خارجي)`,
+      extraFooter: `متوقف على العميل: ${pausedOnClient.toLocaleString()} موقع`,
       icon: Award,
       color: 'from-purple-500 to-indigo-600',
       textColor: 'text-purple-700',
       bgColor: 'bg-purple-50/80',
       borderColor: 'border-purple-200',
       ringColor: 'ring-purple-500',
-      filterTarget: 'تم التسليم',
-      isActive: activeList.includes('تم التسليم'),
+      filterTarget: 'الموقف العام',
+      isActive: activeList.includes('الموقف العام'),
     },
   ];
 
@@ -188,6 +194,11 @@ export const EtahaKpiCards: React.FC<EtahaKpiCardsProps> = ({
                 <p className="text-xs text-slate-500 mt-1 font-semibold truncate" title={card.subValue}>
                   {card.subValue}
                 </p>
+                {'extraFooter' in card && card.extraFooter && (
+                  <div className="mt-2 pt-1.5 border-t border-purple-200/80 flex items-center justify-between gap-1.5 text-[11px] font-bold text-amber-800 bg-amber-50/80 px-2 py-1 rounded-lg border border-amber-200/70">
+                    <span className="truncate">{card.extraFooter}</span>
+                  </div>
+                )}
               </div>
             </div>
           );

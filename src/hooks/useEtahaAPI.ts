@@ -7,6 +7,10 @@ import { ETAHA_RAW_RECORDS, type EtahaRecord } from '../data/etahaSites';
 import { supabase, supabaseFallback, supabaseClients } from '../lib/supabase';
 import { parseToDateInputValue } from '../utils/filterUtils';
 import {
+  normalizeEtahaInternalPath,
+  normalizeEtahaDeliveryStatus,
+} from '../utils/etahaMetrics';
+import {
   fetchCloudDeletedCodes,
   addCloudDeletedCodes,
   removeCloudDeletedCode,
@@ -20,6 +24,39 @@ const STORAGE_KEY = 'availability_etaha_records_v7_368';
 
 let inMemoryEtahaRecords: EtahaRecord[] = [];
 
+function normalizeEtahaRecordFields(r: EtahaRecord): EtahaRecord {
+  const rowData = (r as any).data && typeof (r as any).data === 'object' ? (r as any).data : {};
+  const merged: any = { ...r, ...rowData };
+  const rawInt = merged['المسار الداخلي'] || merged['المسار الداخلى'] || merged['المسار_الداخلي'] || merged['المسار_الداخلى'] || merged.internalPath || '';
+  const normInt = normalizeEtahaInternalPath(rawInt);
+  const rawDel = merged['موقف التسليم'] || merged['موقف_التسليم'] || merged.deliveryStatus || '';
+  const normDel = normalizeEtahaDeliveryStatus(rawDel);
+  let rawExt = String(merged['المسار الخارجي'] || merged['المسار_الخارجي'] || merged.externalPath || '').trim();
+  if (rawExt === 'تعذر' || rawExt === 'متعذرات' || rawExt === 'متعذر') rawExt = 'متعذر';
+  let rawCls = String(merged['التصنيف'] || merged.classification || '').trim();
+  if (rawCls === 'تعذر' || rawCls === 'متعذرات' || rawCls === 'متعذر') rawCls = 'متعذر';
+
+  const result: EtahaRecord = { ...merged };
+  if (normInt) {
+    result['المسار الداخلي'] = normInt;
+    result['المسار الداخلى'] = normInt;
+    result.internalPath = normInt;
+  }
+  if (normDel) {
+    result['موقف التسليم'] = normDel;
+    result.deliveryStatus = normDel;
+  }
+  if (rawExt) {
+    result['المسار الخارجي'] = rawExt;
+    result.externalPath = rawExt;
+  }
+  if (rawCls) {
+    result['التصنيف'] = rawCls;
+    result.classification = rawCls;
+  }
+  return result;
+}
+
 function loadStoredEtahaRecords(): EtahaRecord[] {
   if (inMemoryEtahaRecords.length > 0) return inMemoryEtahaRecords;
   try {
@@ -27,14 +64,14 @@ function loadStoredEtahaRecords(): EtahaRecord[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        inMemoryEtahaRecords = parsed;
+        inMemoryEtahaRecords = parsed.map(normalizeEtahaRecordFields);
         return inMemoryEtahaRecords;
       }
     }
   } catch {
     // fallback
   }
-  inMemoryEtahaRecords = [...ETAHA_RAW_RECORDS];
+  inMemoryEtahaRecords = ETAHA_RAW_RECORDS.map(normalizeEtahaRecordFields);
   return inMemoryEtahaRecords;
 }
 
@@ -59,12 +96,25 @@ export function mapEtahaRecordToSiteRecord(r: EtahaRecord, index = 0): SiteRecor
   if (rawStatus === 'تعذر' || rawStatus === 'متعذرات' || rawStatus === 'متعذر') {
     rawStatus = 'متعذر';
   }
-  const internalPath = String(d['المسار الداخلي'] || d['المسار الداخلى'] || d['المسار_الداخلى'] || d['المسار_الداخلي'] || d.internalPath || '').trim();
+  const internalPath = normalizeEtahaInternalPath(
+    String(d['المسار الداخلي'] || d['المسار الداخلى'] || d['المسار_الداخلى'] || d['المسار_الداخلي'] || d.internalPath || '').trim()
+  );
   let externalPath = String(d['المسار الخارجي'] || d['المسار_الخارجي'] || d.externalPath || '').trim();
   if (externalPath === 'تعذر' || externalPath === 'متعذرات' || externalPath === 'متعذر') {
     externalPath = 'متعذر';
   }
-  const deliveryStatus = String(d['موقف التسليم'] || d['موقف_التسليم'] || d.deliveryStatus || '').trim();
+  const deliveryStatus = normalizeEtahaDeliveryStatus(
+    String(d['موقف التسليم'] || d['موقف_التسليم'] || d.deliveryStatus || '').trim()
+  );
+  if (internalPath) {
+    d['المسار الداخلي'] = internalPath;
+    d['المسار الداخلى'] = internalPath;
+    d.internalPath = internalPath;
+  }
+  if (deliveryStatus) {
+    d['موقف التسليم'] = deliveryStatus;
+    d.deliveryStatus = deliveryStatus;
+  }
   const splicingStatus = String(d['موقف اللحامات'] || d['موقف_اللحامات'] || d.splicingStatus || '').trim();
   const rawDelDate = String(d['تاريخ التسليم '] || d['تاريخ التسليم'] || d.deliveryDate || d.delivery_date || d['تاريخ_التسليم'] || '').trim();
   const deliveryDate = parseToDateInputValue(rawDelDate);
@@ -217,7 +267,7 @@ export function useEtahaAPI() {
                 const code = String(row.Code || row.code || row.id || rowData.Code || rowData.code || '').trim().toUpperCase();
                 if (code && code !== SYNC_DELETED_CODES_SITE_CODE && !deletedCodes.has(code)) {
                   const prev = baseMap.get(code) || {};
-                  baseMap.set(code, { ...prev, ...rowData, ...row, Code: code });
+                  baseMap.set(code, normalizeEtahaRecordFields({ ...prev, ...rowData, ...row, Code: code }));
                 }
               });
               const merged = Array.from(baseMap.values()).filter((r) => {
@@ -295,13 +345,13 @@ export function useEtahaAPI() {
       let updated: EtahaRecord[];
 
       const now = new Date().toISOString();
-      const intVal = String(record['المسار الداخلي'] || record['المسار الداخلى'] || record.internalPath || '').trim();
+      const intVal = normalizeEtahaInternalPath(String(record['المسار الداخلي'] || record['المسار الداخلى'] || record.internalPath || '').trim());
       let extVal = String(record['المسار الخارجي'] || record.externalPath || '').trim();
       if (extVal === 'تعذر' || extVal === 'متعذرات' || extVal === 'متعذر') {
         extVal = 'متعذر';
       }
       const spliceVal = String(record['موقف اللحامات'] || record.splicingStatus || '').trim();
-      const delVal = String(record['موقف التسليم'] || record.deliveryStatus || '').trim();
+      const delVal = normalizeEtahaDeliveryStatus(String(record['موقف التسليم'] || record.deliveryStatus || '').trim());
       let clsVal = String(record['التصنيف'] || record.classification || '').trim();
       if (clsVal === 'تعذر' || clsVal === 'متعذرات' || clsVal === 'متعذر' || clsVal.includes('تعذر')) {
         clsVal = 'متعذر';
@@ -561,6 +611,17 @@ export function useEtahaAPI() {
         if (finalRec['المسار الخارجي'] === 'تعذر' || finalRec['المسار الخارجي'] === 'متعذرات') {
           finalRec['المسار الخارجي'] = 'متعذر';
           finalRec.externalPath = 'متعذر';
+        }
+        const bulkInt = normalizeEtahaInternalPath(String(finalRec['المسار الداخلي'] || finalRec['المسار الداخلى'] || finalRec.internalPath || '').trim());
+        if (bulkInt) {
+          finalRec['المسار الداخلي'] = bulkInt;
+          finalRec['المسار الداخلى'] = bulkInt;
+          finalRec.internalPath = bulkInt;
+        }
+        const bulkDel = normalizeEtahaDeliveryStatus(String(finalRec['موقف التسليم'] || finalRec.deliveryStatus || '').trim());
+        if (bulkDel) {
+          finalRec['موقف التسليم'] = bulkDel;
+          finalRec.deliveryStatus = bulkDel;
         }
 
         const payload: any = {
