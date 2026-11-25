@@ -7,6 +7,15 @@ import type { OrangeRecord } from '../types/orange';
 import { normalizeOrangeClassification } from '../types/orange';
 import { ORANGE_RAW_RECORDS, ORANGE_SITES } from '../data/orangeSites';
 import { supabase, supabaseFallback, supabaseClients, isUUID } from '../lib/supabase';
+import {
+  fetchCloudDeletedCodes,
+  addCloudDeletedCodes,
+  removeCloudDeletedCode,
+  getLocalDeletedCodes,
+  normalizeSiteCode,
+  SYNC_DELETED_CODES_ID,
+  SYNC_DELETED_CODES_SITE_CODE,
+} from '../utils/deletedSitesSync';
 
 const STORAGE_KEY = 'ftts_orange_records_v3';
 const ORANGE_TABLE_CANDIDATES = ['orange_records', 'orange', 'we_records'];
@@ -169,6 +178,8 @@ export function useOrangeAPI() {
   const refetchOrangeRecords = useCallback(async () => {
     setLoading(true);
     try {
+      const deletedCodes = await fetchCloudDeletedCodes();
+
       // 1. Attempt to fetch live from Supabase tables across active clients
       for (const client of supabaseClients) {
         for (const table of ORANGE_TABLE_CANDIDATES) {
@@ -182,19 +193,22 @@ export function useOrangeAPI() {
               const baseMap = new Map<string, OrangeRecord>();
               loadStoredOrangeRecords().forEach((r) => {
                 const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
-                if (c) baseMap.set(c, r);
+                if (c && !deletedCodes.has(c)) baseMap.set(c, r);
               });
               data.forEach((row: any) => {
                 const rowData = row.data && typeof row.data === 'object' ? row.data : row;
                 const code = String(
                   row.site_code || row['site code'] || row['Site code'] || rowData['Site code'] || rowData['site code'] || row.id || ''
                 ).trim().toUpperCase();
-                if (code) {
+                if (code && code !== SYNC_DELETED_CODES_SITE_CODE && !deletedCodes.has(code)) {
                   const prev = baseMap.get(code) || {};
                   baseMap.set(code, { ...prev, ...rowData, ...row, 'Site code': code, 'site code': code });
                 }
               });
-              const merged = Array.from(baseMap.values());
+              const merged = Array.from(baseMap.values()).filter((r) => {
+                const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
+                return !deletedCodes.has(c);
+              });
               saveStoredOrangeRecords(merged);
               setOrangeRecords(merged);
               return;
@@ -203,8 +217,11 @@ export function useOrangeAPI() {
         }
       }
 
-      const records = loadStoredOrangeRecords();
-      setOrangeRecords([...records]);
+      const records = loadStoredOrangeRecords().filter((r) => {
+        const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
+        return !deletedCodes.has(c);
+      });
+      setOrangeRecords(records);
     } catch (err: any) {
       setError(err?.message || 'Error fetching Orange records');
     } finally {
@@ -214,6 +231,25 @@ export function useOrangeAPI() {
 
   useEffect(() => {
     refetchOrangeRecords();
+
+    // Supabase Realtime channel for instant cross-device updates
+    const channel = supabaseFallback
+      .channel('orange_realtime_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'we_records' },
+        (payload) => {
+          const newRow = payload.new as any;
+          const oldRow = payload.old as any;
+          if (
+            (newRow && (newRow.data?.company === 'Orange' || newRow.id === SYNC_DELETED_CODES_ID || newRow.site_code === SYNC_DELETED_CODES_SITE_CODE)) ||
+            (oldRow && (oldRow.data?.company === 'Orange' || oldRow.id === SYNC_DELETED_CODES_ID || oldRow.site_code === SYNC_DELETED_CODES_SITE_CODE))
+          ) {
+            refetchOrangeRecords();
+          }
+        }
+      )
+      .subscribe();
 
     // Force real-time refresh whenever mobile/desktop user switches back to the tab or unlocks screen
     const handleVisibilityChange = () => {
@@ -228,6 +264,7 @@ export function useOrangeAPI() {
     window.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
     return () => {
+      supabaseFallback.removeChannel(channel);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
@@ -369,6 +406,10 @@ export function useOrangeAPI() {
         }
       }
 
+      if (cloudSaved) {
+        await removeCloudDeletedCode(code);
+      }
+
       return {
         success: true,
         cloudSaved,
@@ -396,8 +437,12 @@ export function useOrangeAPI() {
       saveStoredOrangeRecords(filtered);
       setOrangeRecords(filtered);
 
-      // Delete from Supabase tables across active clients (Client 2 Fallback hosts active live dataset)
       const targetList = Array.from(targetCodes);
+
+      // Persist to authoritative Cloud Deleted Codes in Supabase for cross-device sync
+      await addCloudDeletedCodes(targetList);
+
+      // Delete from Supabase tables across active clients (Client 2 Fallback hosts active live dataset)
       for (const client of supabaseClients) {
         for (const table of ORANGE_TABLE_CANDIDATES) {
           try {
@@ -409,19 +454,6 @@ export function useOrangeAPI() {
             console.error(`[Orange Supabase] Delete exception on table ${table}:`, delErr);
           }
         }
-      }
-
-      if (typeof window !== 'undefined') {
-        try {
-          const k1 = 'ftts_deleted_site_codes_v3';
-          const k2 = 'we_deleted_codes_cache';
-          const raw1 = localStorage.getItem(k1);
-          const set = new Set(raw1 ? JSON.parse(raw1) : []);
-          targetList.forEach((c) => set.add(c));
-          const arr = Array.from(set);
-          localStorage.setItem(k1, JSON.stringify(arr));
-          localStorage.setItem(k2, JSON.stringify(arr));
-        } catch { }
       }
 
       return { success: true };
@@ -454,6 +486,10 @@ export function useOrangeAPI() {
 
       // Batch delete from Supabase tables across active clients
       const codeArray = Array.from(codeSet);
+
+      // Persist to authoritative Cloud Deleted Codes in Supabase for cross-device sync
+      await addCloudDeletedCodes(codeArray);
+
       for (const client of supabaseClients) {
         for (const table of ORANGE_TABLE_CANDIDATES) {
           try {

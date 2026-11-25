@@ -53,7 +53,12 @@ async function fetchSupabaseTableData(tableName: string): Promise<any[] | null> 
         .limit(10000);
 
       if (!error && data && data.length > 0) {
-        return data;
+        const sanitized = data.filter((r: any) => {
+          const sc = String(r.site_code || r['site code'] || '').trim().toUpperCase();
+          const id = String(r.id || '').trim().toUpperCase();
+          return sc !== '__FTTS_DELETED_CODES__' && id !== '00000000-0000-0000-0000-000000000001';
+        });
+        return sanitized;
       }
     } catch {
       // try next client

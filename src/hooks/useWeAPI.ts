@@ -7,6 +7,15 @@ import { isClassificationValue } from '../config/fieldConfig';
 import { supabase, supabaseFallback, supabaseClients } from '../lib/supabase';
 import { WE_EXCEL_SITES } from '../data/preloadedProjects';
 import { WE_MASTER_RECORDS } from '../data/weSites';
+import {
+  fetchCloudDeletedCodes,
+  addCloudDeletedCodes,
+  removeCloudDeletedCode,
+  getLocalDeletedCodes,
+  normalizeSiteCode,
+  SYNC_DELETED_CODES_ID,
+  SYNC_DELETED_CODES_SITE_CODE,
+} from '../utils/deletedSitesSync';
 
 export const API_BASE = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
   ? '/api'
@@ -86,7 +95,12 @@ async function fetchAllRowsFromCandidateTables(): Promise<{ rows: any[]; tableNa
         }
 
         if (!tableErr && allRows.length > 0) {
-          return { rows: allRows, tableName: table };
+          const validRows = allRows.filter((r) => {
+            const sc = String(r.site_code || r['site code'] || '').trim().toUpperCase();
+            const id = String(r.id || '').trim().toUpperCase();
+            return sc !== SYNC_DELETED_CODES_SITE_CODE && id !== SYNC_DELETED_CODES_ID;
+          });
+          return { rows: validRows, tableName: table };
         }
       } catch { }
     }
@@ -125,64 +139,36 @@ export function useWeRecords() {
     setLoading(true);
     setError(null);
     try {
-      // 1. Try Supabase candidate tables across active clients
+      // 1. Fetch authoritative cloud deleted codes first to guarantee multi-device sync
+      const deletedCodes = await fetchCloudDeletedCodes();
+
+      // 2. Fetch all live rows from Supabase
       const { rows } = await fetchAllRowsFromCandidateTables();
 
       if (rows.length > 0) {
-        const cloudRecords = rows.map(normalizeRecord);
-        const local = loadStoredWeRecords();
-        const cloudCodes = new Set(
-          cloudRecords.map((r) => String(r['site code'] || (r as any).site_code || '').trim().toUpperCase())
-        );
+        // Filter out deleted codes so deleted sites are never resurrected
+        const cloudRecords = rows
+          .map(normalizeRecord)
+          .filter((r) => {
+            const c = normalizeSiteCode(r['site code'] || (r as any).site_code);
+            const id = normalizeSiteCode(r._id || (r as any).id);
+            return !deletedCodes.has(c) && !deletedCodes.has(id);
+          });
 
-        // Find any unsynced records in local storage and push them to cloud
-        const unsynced = local.filter((r) => {
-          const c = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
-          return c && !cloudCodes.has(c);
-        });
-
-        if (unsynced.length > 0) {
-          for (const u of unsynced) {
-            saveRecord(u, true).catch(() => { });
-          }
-        }
-
-        const mergedMap = new Map<string, WeRecord>();
-        cloudRecords.forEach((r) => {
-          const c = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
-          if (c) mergedMap.set(c, r);
-        });
-        unsynced.forEach((r) => {
-          const c = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
-          if (c) mergedMap.set(c, r);
-        });
-        const finalRecords = Array.from(mergedMap.values());
-        saveStoredWeRecords(finalRecords);
-        setRecords(finalRecords);
+        saveStoredWeRecords(cloudRecords);
+        setRecords(cloudRecords);
         return;
       }
 
-      // 2. Try Vercel Serverless / Express API with cache-busting
-      try {
-        const res = await fetch(`${API_BASE}/records?_t=${Date.now()}`, {
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            Pragma: 'no-cache',
-          },
-        });
-        const localData = await res.json();
-        if (localData.success && localData.records && localData.records.length > 0) {
-          saveStoredWeRecords(localData.records);
-          setRecords(localData.records);
-          return;
-        }
-      } catch { }
-
-      // 3. Check localStorage if cloud returned 0 rows
+      // 3. Fallback to localStorage if cloud returned 0 rows (offline / network error)
       const local = loadStoredWeRecords();
       if (local.length > 0) {
-        setRecords(local);
+        const filteredLocal = local.filter((r) => {
+          const c = normalizeSiteCode(r['site code'] || (r as any).site_code);
+          const id = normalizeSiteCode(r._id || (r as any).id);
+          return !deletedCodes.has(c) && !deletedCodes.has(id);
+        });
+        setRecords(filteredLocal);
         return;
       }
 
@@ -248,6 +234,55 @@ export function useWeRecords() {
   useEffect(() => {
     fetchRecords();
 
+    // Supabase Realtime channel for instant cross-device and cross-user live updates
+    const channel = supabaseFallback
+      .channel('we_records_realtime_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'we_records' },
+        async (payload) => {
+          const newRow = payload.new as any;
+          const oldRow = payload.old as any;
+
+          // 1. Deleted codes metadata row change
+          if (
+            (newRow && (newRow.id === SYNC_DELETED_CODES_ID || newRow.site_code === SYNC_DELETED_CODES_SITE_CODE)) ||
+            (oldRow && (oldRow.id === SYNC_DELETED_CODES_ID || oldRow.site_code === SYNC_DELETED_CODES_SITE_CODE))
+          ) {
+            const updatedDeleted = await fetchCloudDeletedCodes();
+            setRecords((prev) =>
+              prev.filter((r) => {
+                const c = normalizeSiteCode(r['site code'] || (r as any).site_code);
+                const id = normalizeSiteCode(r._id || (r as any).id);
+                return !updatedDeleted.has(c) && !updatedDeleted.has(id);
+              })
+            );
+            return;
+          }
+
+          // 2. Row DELETE event
+          if (payload.eventType === 'DELETE') {
+            const delCode = oldRow?.site_code || oldRow?.['site code'] || oldRow?.id;
+            if (delCode) {
+              removeRecordLocally(delCode);
+            }
+            return;
+          }
+
+          // 3. Row INSERT or UPDATE event
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            if (!newRow) return;
+            const code = normalizeSiteCode(newRow.site_code || newRow['site code']);
+            const currentDeleted = getLocalDeletedCodes();
+            if (currentDeleted.has(code)) return; // Never show deleted site
+
+            const norm = normalizeRecord(newRow);
+            updateOrAddRecordLocally(norm);
+          }
+        }
+      )
+      .subscribe();
+
     // Force real-time refresh whenever mobile/desktop user switches back to the tab or unlocks screen
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -261,10 +296,11 @@ export function useWeRecords() {
     window.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
     return () => {
+      supabaseFallback.removeChannel(channel);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [fetchRecords]);
+  }, [fetchRecords, removeRecordLocally, updateOrAddRecordLocally]);
 
   return {
     records,
@@ -285,40 +321,46 @@ export function useWeSiteCodes() {
 
   const refreshCodes = useCallback(async () => {
     try {
-      // Try candidate tables in Supabase
-      for (const table of WE_TABLE_CANDIDATES) {
-        const pageSize = 1000;
-        let allCodeRows: any[] = [];
-        let from = 0;
-        let sbErr: any = null;
+      const deletedCodes = await fetchCloudDeletedCodes();
+      // Try candidate tables in Supabase across active clients
+      for (const client of supabaseClients) {
+        for (const table of WE_TABLE_CANDIDATES) {
+          const pageSize = 1000;
+          let allCodeRows: any[] = [];
+          let from = 0;
+          let sbErr: any = null;
 
-        while (true) {
-          const { data: pageData, error: pageErr } = await supabase
-            .from(table)
-            .select('*')
-            .range(from, from + pageSize - 1);
+          while (true) {
+            const { data: pageData, error: pageErr } = await client
+              .from(table)
+              .select('*')
+              .range(from, from + pageSize - 1);
 
-          if (pageErr) {
-            sbErr = pageErr;
-            break;
+            if (pageErr) {
+              sbErr = pageErr;
+              break;
+            }
+            if (!pageData || pageData.length === 0) break;
+            allCodeRows.push(...pageData);
+            if (pageData.length < pageSize) break;
+            from += pageSize;
           }
-          if (!pageData || pageData.length === 0) break;
-          allCodeRows.push(...pageData);
-          if (pageData.length < pageSize) break;
-          from += pageSize;
-        }
 
-        if (!sbErr && allCodeRows.length > 0) {
-          const unique = [
-            ...new Set(
-              allCodeRows
-                .map((r: any) => r.site_code || r['site code'] || r.data?.['site code'])
-                .filter(Boolean)
-            ),
-          ].sort();
-          if (unique.length > 0) {
-            setCodes(unique as string[]);
-            return;
+          if (!sbErr && allCodeRows.length > 0) {
+            const unique = [
+              ...new Set(
+                allCodeRows
+                  .map((r: any) => r.site_code || r['site code'] || r.data?.['site code'])
+                  .filter((c: any) => {
+                    const norm = normalizeSiteCode(c);
+                    return norm && norm !== SYNC_DELETED_CODES_SITE_CODE && !deletedCodes.has(norm);
+                  })
+              ),
+            ].sort();
+            if (unique.length > 0) {
+              setCodes(unique as string[]);
+              return;
+            }
           }
         }
       }
@@ -328,13 +370,14 @@ export function useWeSiteCodes() {
         const res = await fetch(`${LOCAL_API_BASE}/site-codes`);
         const localData = await res.json();
         if (localData.success && localData.codes && localData.codes.length > 0) {
-          setCodes(localData.codes);
+          const filtered = (localData.codes as string[]).filter(c => !deletedCodes.has(normalizeSiteCode(c)));
+          setCodes(filtered);
           return;
         }
       } catch { }
 
-      // Final fallback: use preloaded baseline site codes
-      const fallback = [...new Set(WE_EXCEL_SITES.map((s) => s.siteCode))].sort();
+      // Final fallback: use preloaded baseline site codes filtered by deletedCodes
+      const fallback = [...new Set(WE_EXCEL_SITES.map((s) => s.siteCode))].filter(c => !deletedCodes.has(normalizeSiteCode(c))).sort();
       setCodes(fallback);
     } catch {
       const fallback = [...new Set(WE_EXCEL_SITES.map((s) => s.siteCode))].sort();
@@ -362,20 +405,32 @@ export async function fetchSiteRecord(siteCode: string): Promise<WeRecord | null
   try {
     const cleanCode = siteCode.trim();
 
-    // 1. Try Supabase tables
-    for (const table of WE_TABLE_CANDIDATES) {
-      try {
-        const { data, error } = await supabase
-          .from(table)
-          .select('*')
-          .or(`site_code.eq."${cleanCode}",site code.eq."${cleanCode}"`)
-          .limit(1)
-          .maybeSingle();
+    // 1. Try Supabase tables across active clients
+    for (const client of supabaseClients) {
+      for (const table of WE_TABLE_CANDIDATES) {
+        try {
+          const { data, error } = await client
+            .from(table)
+            .select('*')
+            .eq('site_code', cleanCode)
+            .limit(1);
 
-        if (!error && data) {
-          return normalizeRecord(data);
-        }
-      } catch { }
+          if (!error && data && data.length > 0) {
+            return normalizeRecord(data[0]);
+          }
+
+          // Retry by 'site code' column
+          const retry = await client
+            .from(table)
+            .select('*')
+            .eq('site code', cleanCode)
+            .limit(1);
+
+          if (!retry.error && retry.data && retry.data.length > 0) {
+            return normalizeRecord(retry.data[0]);
+          }
+        } catch { }
+      }
     }
 
     // 2. Fallback to local server
@@ -657,6 +712,9 @@ export async function saveRecord(
     }
 
     if (cloudSaved && savedRow) {
+      // If site was previously in cloud deleted list, unmark it
+      await removeCloudDeletedCode(siteCode);
+
       // Save locally immediately to guarantee persistence on reload
       const currentStored = loadStoredWeRecords();
       const cleanCode = (siteCode || '').trim().toUpperCase();
@@ -801,7 +859,10 @@ export async function deleteRecord(idOrCode: string): Promise<{ success: boolean
     });
     saveStoredWeRecords(remaining);
 
-    // 2. Delete from all active Supabase clients and candidate tables
+    // 2. Persist to authoritative Cloud Deleted Codes in Supabase for cross-device sync
+    await addCloudDeletedCodes([cleanNorm, clean]);
+
+    // 3. Delete from all active Supabase clients and candidate tables
     let anySuccess = false;
     for (const client of supabaseClients) {
       for (const table of WE_TABLE_CANDIDATES) {
@@ -865,7 +926,10 @@ export async function deleteRecordsBulk(idsOrCodes: string[]): Promise<{ success
     });
     saveStoredWeRecords(remaining);
 
-    // 2. Delete across all active Supabase clients in batches
+    // 2. Persist to authoritative Cloud Deleted Codes in Supabase for cross-device sync
+    await addCloudDeletedCodes(combinedList);
+
+    // 3. Delete across all active Supabase clients in batches
     const batchSize = 50;
     const combinedList = Array.from(new Set([...cleanList, ...cleanNormList]));
 

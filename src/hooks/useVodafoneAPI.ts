@@ -6,6 +6,15 @@ import type { SiteRecord } from '../types/dashboard';
 import type { VodafoneRecord } from '../types/vodafone';
 import { VODAFONE_RAW_RECORDS } from '../data/vodafoneSites';
 import { supabase, supabaseFallback, supabaseClients, isUUID } from '../lib/supabase';
+import {
+  fetchCloudDeletedCodes,
+  addCloudDeletedCodes,
+  removeCloudDeletedCode,
+  getLocalDeletedCodes,
+  normalizeSiteCode,
+  SYNC_DELETED_CODES_ID,
+  SYNC_DELETED_CODES_SITE_CODE,
+} from '../utils/deletedSitesSync';
 
 const STORAGE_KEY = 'ftts_vodafone_records_v1';
 const VODAFONE_TABLE_CANDIDATES = ['vodafone_records', 'vodafone', 'we_records'];
@@ -164,6 +173,8 @@ export function useVodafoneAPI() {
   const refetchVodafoneRecords = useCallback(async () => {
     setLoading(true);
     try {
+      const deletedCodes = await fetchCloudDeletedCodes();
+
       // 1. Attempt to fetch live from Supabase tables across active clients
       for (const client of supabaseClients) {
         for (const table of VODAFONE_TABLE_CANDIDATES) {
@@ -177,19 +188,22 @@ export function useVodafoneAPI() {
               const baseMap = new Map<string, VodafoneRecord>();
               loadStoredVodafoneRecords().forEach((r) => {
                 const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
-                if (c) baseMap.set(c, r);
+                if (c && !deletedCodes.has(c)) baseMap.set(c, r);
               });
               data.forEach((row: any) => {
                 const rowData = row.data && typeof row.data === 'object' ? row.data : row;
                 const code = String(
                   row.site_code || row['site code'] || row['Site code'] || rowData['Site code'] || rowData['site code'] || row.id || ''
                 ).trim().toUpperCase();
-                if (code) {
+                if (code && code !== SYNC_DELETED_CODES_SITE_CODE && !deletedCodes.has(code)) {
                   const prev = baseMap.get(code) || {};
                   baseMap.set(code, { ...prev, ...rowData, ...row, 'Site code': code, 'site code': code });
                 }
               });
-              const merged = Array.from(baseMap.values());
+              const merged = Array.from(baseMap.values()).filter((r) => {
+                const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
+                return !deletedCodes.has(c);
+              });
               saveStoredVodafoneRecords(merged);
               setVodafoneRecords(merged);
               return;
@@ -198,8 +212,11 @@ export function useVodafoneAPI() {
         }
       }
 
-      const records = loadStoredVodafoneRecords();
-      setVodafoneRecords([...records]);
+      const records = loadStoredVodafoneRecords().filter((r) => {
+        const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
+        return !deletedCodes.has(c);
+      });
+      setVodafoneRecords(records);
     } catch (err: any) {
       setError(err?.message || 'Error fetching Vodafone records');
     } finally {
@@ -209,6 +226,25 @@ export function useVodafoneAPI() {
 
   useEffect(() => {
     refetchVodafoneRecords();
+
+    // Supabase Realtime channel for instant cross-device updates
+    const channel = supabaseFallback
+      .channel('vodafone_realtime_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'we_records' },
+        (payload) => {
+          const newRow = payload.new as any;
+          const oldRow = payload.old as any;
+          if (
+            (newRow && (newRow.data?.company === 'Vodafone' || newRow.id === SYNC_DELETED_CODES_ID || newRow.site_code === SYNC_DELETED_CODES_SITE_CODE)) ||
+            (oldRow && (oldRow.data?.company === 'Vodafone' || oldRow.id === SYNC_DELETED_CODES_ID || oldRow.site_code === SYNC_DELETED_CODES_SITE_CODE))
+          ) {
+            refetchVodafoneRecords();
+          }
+        }
+      )
+      .subscribe();
 
     // Force real-time refresh whenever mobile/desktop user switches back to the tab or unlocks screen
     const handleVisibilityChange = () => {
@@ -223,6 +259,7 @@ export function useVodafoneAPI() {
     window.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
     return () => {
+      supabaseFallback.removeChannel(channel);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
@@ -363,6 +400,10 @@ export function useVodafoneAPI() {
         }
       }
 
+      if (cloudSaved) {
+        await removeCloudDeletedCode(code);
+      }
+
       return {
         success: true,
         cloudSaved,
@@ -389,8 +430,12 @@ export function useVodafoneAPI() {
       saveStoredVodafoneRecords(filtered);
       setVodafoneRecords(filtered);
 
-      // Delete from Supabase tables across active clients (Client 2 Fallback hosts active live dataset)
       const targetList = Array.from(targetCodes);
+
+      // Persist to authoritative Cloud Deleted Codes in Supabase for cross-device sync
+      await addCloudDeletedCodes(targetList);
+
+      // Delete from Supabase tables across active clients (Client 2 Fallback hosts active live dataset)
       for (const client of supabaseClients) {
         for (const table of VODAFONE_TABLE_CANDIDATES) {
           try {
@@ -402,19 +447,6 @@ export function useVodafoneAPI() {
             console.error(`[Vodafone Supabase] Delete exception on table ${table}:`, delErr);
           }
         }
-      }
-
-      if (typeof window !== 'undefined') {
-        try {
-          const k1 = 'ftts_deleted_site_codes_v3';
-          const k2 = 'we_deleted_codes_cache';
-          const raw1 = localStorage.getItem(k1);
-          const set = new Set(raw1 ? JSON.parse(raw1) : []);
-          targetList.forEach((c) => set.add(c));
-          const arr = Array.from(set);
-          localStorage.setItem(k1, JSON.stringify(arr));
-          localStorage.setItem(k2, JSON.stringify(arr));
-        } catch { }
       }
 
       return { success: true };
@@ -448,6 +480,10 @@ export function useVodafoneAPI() {
 
       // Batch delete from Supabase tables across active clients
       const codeArray = Array.from(codeSet);
+
+      // Persist to authoritative Cloud Deleted Codes in Supabase for cross-device sync
+      await addCloudDeletedCodes(codeArray);
+
       for (const client of supabaseClients) {
         for (const table of VODAFONE_TABLE_CANDIDATES) {
           try {

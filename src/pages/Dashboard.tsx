@@ -24,6 +24,16 @@ import { toFilterArray } from '../utils/filterUtils';
 import { getSiteCompetentAdmin } from '../data/siteAdminMapping';
 import { useWeRecords, useWeSiteCodes, exportToCSV, deleteRecord, deleteRecordsBulk } from '../hooks/useWeAPI';
 import { exportFullDatabaseBackup } from '../utils/backupExportService';
+import {
+  getLocalDeletedCodes,
+  persistLocalDeletedCodes,
+  fetchCloudDeletedCodes,
+  addCloudDeletedCodes,
+  removeCloudDeletedCode,
+  subscribeToDeletedCodes,
+  SYNC_DELETED_CODES_ID,
+  SYNC_DELETED_CODES_SITE_CODE,
+} from '../utils/deletedSitesSync';
 import type { WeRecord } from '../config/fieldConfig';
 import { normalizeClassification, isClassificationValue } from '../config/fieldConfig';
 import { useOrangeAPI } from '../hooks/useOrangeAPI';
@@ -200,28 +210,11 @@ function mapWeRecordToSiteRecord(r: WeRecord, index = 0): SiteRecord {
 const FTTS_DELETED_CODES_KEY = 'ftts_deleted_site_codes_v3';
 
 function loadDeletedSiteCodes(): Set<string> {
-  const set = new Set<string>();
-  try {
-    const raw1 = localStorage.getItem(FTTS_DELETED_CODES_KEY);
-    if (raw1) {
-      const arr1 = JSON.parse(raw1);
-      if (Array.isArray(arr1)) arr1.forEach((c: string) => set.add(String(c).trim().toUpperCase()));
-    }
-    const raw2 = localStorage.getItem('we_deleted_codes_cache');
-    if (raw2) {
-      const arr2 = JSON.parse(raw2);
-      if (Array.isArray(arr2)) arr2.forEach((c: string) => set.add(String(c).trim().toUpperCase()));
-    }
-  } catch { }
-  return set;
+  return getLocalDeletedCodes();
 }
 
 function persistDeletedSiteCodes(set: Set<string>) {
-  try {
-    const arr = Array.from(set);
-    localStorage.setItem(FTTS_DELETED_CODES_KEY, JSON.stringify(arr));
-    localStorage.setItem('we_deleted_codes_cache', JSON.stringify(arr));
-  } catch { }
+  persistLocalDeletedCodes(set);
 }
 
 export const Dashboard: React.FC = () => {
@@ -233,6 +226,17 @@ export const Dashboard: React.FC = () => {
 
   // Active filters for all scopes and operators (declared upfront to prevent TDZ)
   const [filters, setFilters] = useState<FilterState>(initialFilters);
+
+  // Cross-device authoritative deleted site codes sync
+  useEffect(() => {
+    fetchCloudDeletedCodes().then((cloudSet) => {
+      setDeletedSiteCodes(cloudSet);
+    });
+    const unsubscribe = subscribeToDeletedCodes((updatedSet) => {
+      setDeletedSiteCodes(updatedSet);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (toastMessage) {
@@ -345,6 +349,7 @@ export const Dashboard: React.FC = () => {
     const code = recordToSave['site code'] || (recordToSave as any).site_code;
     if (code) {
       addCodeLocally(code);
+      removeCloudDeletedCode(code);
       setDeletedSiteCodes((prev) => {
         const next = new Set(prev);
         next.delete(String(code).trim().toUpperCase());
@@ -366,7 +371,7 @@ export const Dashboard: React.FC = () => {
       const siteName = typeof siteOrCode === 'string' ? siteOrCode : (siteOrCode.siteName || siteCode);
 
       try {
-        // 1. Optimistic instant local removal
+        // 1. Optimistic instant local removal & cloud deleted codes persistence
         setDeletedSiteCodes((prev) => {
           const next = new Set(prev);
           if (siteCode) next.add(String(siteCode).trim().toUpperCase());
@@ -378,6 +383,8 @@ export const Dashboard: React.FC = () => {
         if (siteId && siteId !== siteCode) {
           _removeRecordLocally(siteId);
         }
+
+        await addCloudDeletedCodes([siteCode, siteId].filter(Boolean) as string[]);
 
         // 2. Database cloud deletion
         const res = await deleteRecord(siteId || siteCode);
@@ -450,7 +457,7 @@ export const Dashboard: React.FC = () => {
     const siteCodes = rawSiteCodes.map((c) => String(c).trim()).filter(Boolean);
     if (siteCodes.length === 0) return;
 
-    // 1. Optimistic instant UI update
+    // 1. Optimistic instant UI update & authoritative cloud deleted codes sync
     setDeletedSiteCodes((prev) => {
       const next = new Set(prev);
       siteCodes.forEach((c) => {
@@ -461,6 +468,8 @@ export const Dashboard: React.FC = () => {
       persistDeletedSiteCodes(next);
       return next;
     });
+
+    await addCloudDeletedCodes(siteCodes);
 
     try {
       const isAvailability = activeScope === 'ETAHA' || activeScope === 'AVAILABILITY';
@@ -567,30 +576,13 @@ export const Dashboard: React.FC = () => {
   const liveWeSites = useMemo<SiteRecord[]>(() => {
     let baseSites: SiteRecord[] = [];
     if (weCentralRecords && weCentralRecords.length > 0) {
-      if (weCentralRecords.length >= WE_EXCEL_SITES.length) {
-        baseSites = weCentralRecords.map((r, i) => mapWeRecordToSiteRecord(r, i));
-      } else {
-        // Merge Supabase records with baseline so partial edits/additions don't hide remaining sites
-        const liveMap = new Map<string, SiteRecord>();
-        weCentralRecords.forEach((r, i) => {
-          const s = mapWeRecordToSiteRecord(r, i);
-          const c = String(s?.siteCode || '').trim().toUpperCase();
-          if (c) liveMap.set(c, s);
-        });
-        const merged: SiteRecord[] = [];
-        const seen = new Set<string>();
-        for (const [code, site] of liveMap.entries()) {
-          merged.push(site);
-          seen.add(code);
-        }
-        for (const site of WE_EXCEL_SITES) {
-          const c = String(site?.siteCode || '').trim().toUpperCase();
-          if (c && !seen.has(c)) {
-            merged.push(site);
-          }
-        }
-        baseSites = merged;
-      }
+      baseSites = weCentralRecords
+        .filter((r) => {
+          const sc = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
+          const id = String(r._id || (r as any).id || '').trim().toUpperCase();
+          return sc !== SYNC_DELETED_CODES_SITE_CODE && id !== SYNC_DELETED_CODES_ID;
+        })
+        .map((r, i) => mapWeRecordToSiteRecord(r, i));
     } else {
       baseSites = WE_EXCEL_SITES;
     }

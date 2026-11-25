@@ -4,8 +4,17 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import type { SiteRecord } from '../types/dashboard';
 import { ETAHA_RAW_RECORDS, type EtahaRecord } from '../data/etahaSites';
-import { supabase, supabaseClients } from '../lib/supabase';
+import { supabase, supabaseFallback, supabaseClients } from '../lib/supabase';
 import { parseToDateInputValue } from '../utils/filterUtils';
+import {
+  fetchCloudDeletedCodes,
+  addCloudDeletedCodes,
+  removeCloudDeletedCode,
+  getLocalDeletedCodes,
+  normalizeSiteCode,
+  SYNC_DELETED_CODES_ID,
+  SYNC_DELETED_CODES_SITE_CODE,
+} from '../utils/deletedSitesSync';
 
 const STORAGE_KEY = 'availability_etaha_records_v7_368';
 
@@ -190,6 +199,8 @@ export function useEtahaAPI() {
   const refetchEtahaRecords = useCallback(async () => {
     setLoading(true);
     try {
+      const deletedCodes = await fetchCloudDeletedCodes();
+
       // Attempt live fetch from Supabase availability tables across all clients
       for (const client of supabaseClients) {
         for (const table of ['etaha_records', 'etaha', 'availability']) {
@@ -199,17 +210,20 @@ export function useEtahaAPI() {
               const baseMap = new Map<string, EtahaRecord>();
               loadStoredEtahaRecords().forEach((r) => {
                 const c = String(r.Code || r.code || '').trim().toUpperCase();
-                if (c) baseMap.set(c, r);
+                if (c && !deletedCodes.has(c)) baseMap.set(c, r);
               });
               data.forEach((row: any) => {
                 const rowData = row.data && typeof row.data === 'object' ? row.data : row;
                 const code = String(row.Code || row.code || row.id || rowData.Code || rowData.code || '').trim().toUpperCase();
-                if (code) {
+                if (code && code !== SYNC_DELETED_CODES_SITE_CODE && !deletedCodes.has(code)) {
                   const prev = baseMap.get(code) || {};
                   baseMap.set(code, { ...prev, ...rowData, ...row, Code: code });
                 }
               });
-              const merged = Array.from(baseMap.values());
+              const merged = Array.from(baseMap.values()).filter((r) => {
+                const c = String(r.Code || r.code || '').trim().toUpperCase();
+                return !deletedCodes.has(c);
+              });
               saveStoredEtahaRecords(merged);
               setEtahaRecords(merged);
               return;
@@ -218,8 +232,11 @@ export function useEtahaAPI() {
         }
       }
 
-      const records = loadStoredEtahaRecords();
-      setEtahaRecords([...records]);
+      const records = loadStoredEtahaRecords().filter((r) => {
+        const c = String(r.Code || r.code || '').trim().toUpperCase();
+        return !deletedCodes.has(c);
+      });
+      setEtahaRecords(records);
     } catch (err: any) {
       setError(err?.message || 'Error fetching Etaha records');
     } finally {
@@ -229,6 +246,25 @@ export function useEtahaAPI() {
 
   useEffect(() => {
     refetchEtahaRecords();
+
+    // Supabase Realtime channel for instant cross-device updates
+    const channel = supabaseFallback
+      .channel('etaha_realtime_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'we_records' },
+        (payload) => {
+          const newRow = payload.new as any;
+          const oldRow = payload.old as any;
+          if (
+            (newRow && (newRow.id === SYNC_DELETED_CODES_ID || newRow.site_code === SYNC_DELETED_CODES_SITE_CODE)) ||
+            (oldRow && (oldRow.id === SYNC_DELETED_CODES_ID || oldRow.site_code === SYNC_DELETED_CODES_SITE_CODE))
+          ) {
+            refetchEtahaRecords();
+          }
+        }
+      )
+      .subscribe();
 
     // Force real-time refresh whenever mobile/desktop user switches back to the tab or unlocks screen
     const handleVisibilityChange = () => {
@@ -243,6 +279,7 @@ export function useEtahaAPI() {
     window.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
     return () => {
+      supabaseFallback.removeChannel(channel);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
@@ -382,6 +419,7 @@ export function useEtahaAPI() {
         }
       }
 
+      await removeCloudDeletedCode(code);
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err?.message || 'فشل حفظ بيانات المشروع' };
@@ -403,6 +441,10 @@ export function useEtahaAPI() {
       setEtahaRecords(filtered);
 
       const targetList = Array.from(targetCodes);
+
+      // Persist to authoritative Cloud Deleted Codes in Supabase for cross-device sync
+      await addCloudDeletedCodes(targetList);
+
       // Attempt deletion in Supabase if etaha table exists across all clients
       for (const client of supabaseClients) {
         for (const table of ['etaha', 'etaha_records', 'availability']) {
@@ -412,19 +454,6 @@ export function useEtahaAPI() {
             await client.from(table).delete().in('id', targetList);
           } catch { }
         }
-      }
-
-      if (typeof window !== 'undefined') {
-        try {
-          const k1 = 'ftts_deleted_site_codes_v3';
-          const k2 = 'we_deleted_codes_cache';
-          const raw1 = localStorage.getItem(k1);
-          const set = new Set(raw1 ? JSON.parse(raw1) : []);
-          targetList.forEach((c) => set.add(c));
-          const arr = Array.from(set);
-          localStorage.setItem(k1, JSON.stringify(arr));
-          localStorage.setItem(k2, JSON.stringify(arr));
-        } catch { }
       }
 
       return { success: true };
@@ -456,6 +485,10 @@ export function useEtahaAPI() {
 
       // Attempt batch deletion in Supabase across all clients
       const codeArray = Array.from(codeSet);
+
+      // Persist to authoritative Cloud Deleted Codes in Supabase for cross-device sync
+      await addCloudDeletedCodes(codeArray);
+
       for (const client of supabaseClients) {
         for (const table of ['etaha', 'etaha_records', 'availability']) {
           try {
