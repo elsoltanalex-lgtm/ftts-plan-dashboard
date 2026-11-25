@@ -7,6 +7,7 @@ import type { OrangeRecord } from '../types/orange';
 import { normalizeOrangeClassification } from '../types/orange';
 import { ORANGE_RAW_RECORDS, ORANGE_SITES } from '../data/orangeSites';
 import { supabase, supabaseFallback, supabaseClients, isUUID } from '../lib/supabase';
+import { normalizeSectorName } from '../utils/sectorPermissions';
 import {
   fetchCloudDeletedCodes,
   addCloudDeletedCodes,
@@ -70,9 +71,9 @@ export function mapOrangeRecordToSiteRecord(r: OrangeRecord, index = 0): SiteRec
   }
 
   const central = String(r['سنترال الربط'] || 'سنترال رئيسي').trim();
-  const sector = String(r['رئاسة قطاعات التنفيذ'] || r['رئاسة القطاعات '] || r['رئاسة القطاعات'] || 'تنفيذ شبكات المنطقة الشرقية والغربية').trim();
+  const sector = normalizeSectorName(String(r['رئاسة قطاعات التنفيذ'] || r['رئاسة القطاعات '] || r['رئاسة القطاعات'] || 'قطاع الشرقية').trim()) || 'قطاع الشرقية';
   const generalAdmin = String(r['الادارة العامة لتنفيذ الشبكات'] || r['الادارة العامة للتنفيذ'] || r['الادارة العامة'] || 'الإدارة العامة لتنفيذ الشبكات').trim();
-  const subSector = String(r['قطاع التنفيذ'] || r['قطاع المناطق'] || r['القطاع'] || 'إدارة مختصة').trim();
+  const subSector = normalizeSectorName(String(r['قطاع التنفيذ'] || r['قطاع المناطق'] || r['القطاع'] || 'إدارة مختصة').trim()) || 'إدارة مختصة';
   const competentAdmin = String(r['ادارة التنفيذ الفرعية'] || r['الادارة العامة للمنطقة'] || r['المنطقة'] || 'إدارة المنطقة').trim();
   const obstacleReason = String(r['اسباب التعّذر'] || r['اسباب التعذر'] || r['نوع المعوق المدني'] || r['الملاحظات'] || 'لا يوجد تعذر').trim();
   const expectedDate = r['التاريخ المتوقع للانتهاء'] || (r['خطة'] ? `${r['خطة']}-12-31` : '2026-12-31');
@@ -90,7 +91,7 @@ export function mapOrangeRecordToSiteRecord(r: OrangeRecord, index = 0): SiteRec
     generalAdmin, // الإدارة العامة للتنفيذ
     subSector, // الإدارة المختصة
     competentAdmin, // إدارة المنطقة
-    executionSector: String(r['قطاع التنفيذ'] || '').trim(),
+    executionSector: normalizeSectorName(String(r['قطاع التنفيذ'] || '').trim()),
     governorate: String(r['المحافظه'] || '').trim(),
     central,
     civilContractor: String(r['مسئولية التنفيذ'] || r['مسئوليه التنفيذ'] || 'التنفيذ').trim(),
@@ -134,6 +135,16 @@ export function mapOrangeRecordToSiteRecord(r: OrangeRecord, index = 0): SiteRec
 // In-memory cache
 let inMemoryOrangeRecords: OrangeRecord[] = [];
 
+function normalizeOrangeSector(r: OrangeRecord): OrangeRecord {
+  const sec = normalizeSectorName(r['رئاسة قطاعات التنفيذ'] || r['رئاسة القطاعات '] || r['رئاسة القطاعات']);
+  const execSec = normalizeSectorName(r['قطاع التنفيذ']);
+  return {
+    ...r,
+    ...(sec ? { 'رئاسة قطاعات التنفيذ': sec, 'رئاسة القطاعات': sec } : {}),
+    ...(execSec ? { 'قطاع التنفيذ': execSec } : {}),
+  };
+}
+
 function loadStoredOrangeRecords(): OrangeRecord[] {
   if (inMemoryOrangeRecords.length > 0) return inMemoryOrangeRecords;
   try {
@@ -141,14 +152,14 @@ function loadStoredOrangeRecords(): OrangeRecord[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        inMemoryOrangeRecords = parsed;
+        inMemoryOrangeRecords = parsed.map(normalizeOrangeSector);
         return inMemoryOrangeRecords;
       }
     }
   } catch {
     // fallback
   }
-  inMemoryOrangeRecords = [...ORANGE_RAW_RECORDS];
+  inMemoryOrangeRecords = ORANGE_RAW_RECORDS.map(normalizeOrangeSector);
   return inMemoryOrangeRecords;
 }
 

@@ -6,6 +6,7 @@ import type { SiteRecord } from '../types/dashboard';
 import type { VodafoneRecord } from '../types/vodafone';
 import { VODAFONE_RAW_RECORDS } from '../data/vodafoneSites';
 import { supabase, supabaseFallback, supabaseClients, isUUID } from '../lib/supabase';
+import { normalizeSectorName } from '../utils/sectorPermissions';
 import {
   fetchCloudDeletedCodes,
   addCloudDeletedCodes,
@@ -69,7 +70,8 @@ export function mapVodafoneRecordToSiteRecord(r: VodafoneRecord, index = 0): Sit
   }
 
   const central = String(r['سنترال الربط'] || 'سنترال رئيسي').trim();
-  const sector = String(r['رئاسة قطاعات التنفيذ'] || 'قطاع عام').trim();
+  const sector = normalizeSectorName(String(r['رئاسة قطاعات التنفيذ'] || 'قطاع عام').trim()) || 'قطاع عام';
+  const executionSector = normalizeSectorName(String(r['قطاع التنفيذ'] || '').trim());
   const generalAdmin = String(r['الادارة العامة لتنفيذ الشبكات'] || r['الادارة العامة للمنطقة'] || 'الإدارة العامة لتنفيذ الشبكات').trim();
   const competentAdmin = String(r['ادارة التنفيذ الفرعية'] || 'إدارة التنفيذ والمسارات').trim();
   const obstacleReason = String(r['اسباب التعّذر'] || r['اسباب التعذر'] || r['الملاحظات'] || 'لا يوجد تعذر').trim();
@@ -84,7 +86,7 @@ export function mapVodafoneRecordToSiteRecord(r: VodafoneRecord, index = 0): Sit
     executionCategory,
     linksCount: 1,
     sector,
-    executionSector: String(r['قطاع التنفيذ'] || '').trim(),
+    executionSector,
     subSector: String(r['قطاع المناطق'] || '').trim(),
     generalAdmin,
     competentAdmin,
@@ -129,6 +131,17 @@ export function mapVodafoneRecordToSiteRecord(r: VodafoneRecord, index = 0): Sit
 
 let inMemoryVodafoneRecords: VodafoneRecord[] = [];
 
+function normalizeVodafoneSector(r: VodafoneRecord): VodafoneRecord {
+  const sec = normalizeSectorName(r['رئاسة قطاعات التنفيذ']);
+  const execSec = normalizeSectorName(r['قطاع التنفيذ']);
+  if (sec === r['رئاسة قطاعات التنفيذ'] && execSec === r['قطاع التنفيذ']) return r;
+  return {
+    ...r,
+    ...(sec ? { 'رئاسة قطاعات التنفيذ': sec } : {}),
+    ...(execSec ? { 'قطاع التنفيذ': execSec } : {}),
+  };
+}
+
 function loadStoredVodafoneRecords(): VodafoneRecord[] {
   if (inMemoryVodafoneRecords.length > 0) return inMemoryVodafoneRecords;
   try {
@@ -136,14 +149,14 @@ function loadStoredVodafoneRecords(): VodafoneRecord[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        inMemoryVodafoneRecords = parsed;
+        inMemoryVodafoneRecords = parsed.map(normalizeVodafoneSector);
         return inMemoryVodafoneRecords;
       }
     }
   } catch {
     // fallback
   }
-  inMemoryVodafoneRecords = [...VODAFONE_RAW_RECORDS];
+  inMemoryVodafoneRecords = VODAFONE_RAW_RECORDS.map(normalizeVodafoneSector);
   return inMemoryVodafoneRecords;
 }
 

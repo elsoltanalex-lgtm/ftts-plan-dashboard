@@ -23,7 +23,7 @@ import type { WeRecord } from '../config/fieldConfig';
 import type { SiteRecord } from '../types/dashboard';
 import { fetchSiteRecord, fetchDropdownValues, saveRecord } from '../hooks/useWeAPI';
 import { useAuth } from '../context/AuthContext';
-import { isRecordInSector } from '../utils/sectorPermissions';
+import { isRecordInSector, normalizeSectorName } from '../utils/sectorPermissions';
 import { uploadAttachment } from '../lib/supabase';
 import {
   Lock,
@@ -461,7 +461,7 @@ export const WE_ZONE_SECTOR_OPTIONS = [
 ];
 
 export const WE_EXECUTION_SECTOR_OPTIONS = [
-  'قطاع الإسكندرية والساحل',
+  'إسكندرية و الساحل',
   'قطاع الغربية',
   'قطاع الشرقية',
   'القاهرة الكبرى والجيزة',
@@ -735,7 +735,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       currentPresidency.includes('اسكندر') ||
       currentPresidency.includes('الساحل')
     ) {
-      return ['قطاع الإسكندرية والساحل', 'قطاع الغربية', 'قطاع الشرقية'];
+      return ['إسكندرية و الساحل', 'قطاع الغربية', 'قطاع الشرقية'];
     }
     if (
       currentPresidency === 'القاهرة الكبرى والجيزة' ||
@@ -752,7 +752,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     ) {
       return ['المنطقة الجنوبية'];
     }
-    return ['قطاع الإسكندرية والساحل', 'قطاع الغربية', 'قطاع الشرقية'];
+    return ['إسكندرية و الساحل', 'قطاع الغربية', 'قطاع الشرقية'];
   }, [currentPresidency]);
 
   // Current selected sector
@@ -1268,10 +1268,10 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       'Exc Sectores': 'المنطقة الشرقية والغربية',
       'رئاسة قطاعات التنفيذ': 'المنطقة الشرقية والغربية',
       'رئاسة القطاعات': 'المنطقة الشرقية والغربية',
-      'Exc sector': 'قطاع الإسكندرية والساحل',
-      'قطاع التنفيذ': 'قطاع الإسكندرية والساحل',
-      'Sectores': 'قطاع الإسكندرية والساحل',
-      'Sectore': 'قطاع الإسكندرية والساحل',
+      'Exc sector': 'إسكندرية و الساحل',
+      'قطاع التنفيذ': 'إسكندرية و الساحل',
+      'Sectores': 'إسكندرية و الساحل',
+      'Sectore': 'إسكندرية و الساحل',
       'Exc Zone': 'تنفيذ شبكات الاسكندريه',
       'Zone': 'الإسكندرية والساحل',
       'قطاع المناطق': 'الإسكندرية والساحل',
@@ -1736,11 +1736,16 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       dataToSave.special_target = isSpecialToSave;
       dataToSave['سبيشال تارجت'] = isSpecialToSave;
 
-      // Ensure consistent aliases for sector, zone, and administrations
+      // Ensure consistent canonical aliases for sector, zone, and administrations
       if (dataToSave['قطاع التنفيذ']) {
-        dataToSave['Exc sector'] = dataToSave['قطاع التنفيذ'];
-        dataToSave['Sectores'] = dataToSave['قطاع التنفيذ'];
-        dataToSave['Sectore'] = dataToSave['قطاع التنفيذ'];
+        const canonExec = normalizeSectorName(String(dataToSave['قطاع التنفيذ']));
+        dataToSave['قطاع التنفيذ'] = canonExec;
+        dataToSave['Exc sector'] = canonExec;
+        dataToSave['Sectores'] = canonExec;
+        dataToSave['Sectore'] = canonExec;
+      }
+      if (dataToSave['رئاسة قطاعات التنفيذ']) {
+        dataToSave['رئاسة قطاعات التنفيذ'] = normalizeSectorName(String(dataToSave['رئاسة قطاعات التنفيذ']));
       }
       if (dataToSave['قطاع المناطق']) {
         dataToSave['Zone'] = dataToSave['قطاع المناطق'];

@@ -19,7 +19,7 @@ import { WeBulkImportModal } from '../components/WeBulkImportModal';
 import { LoginModal } from '../components/LoginModal';
 import { useAuth } from '../context/AuthContext';
 import { ShieldCheck, Building2, Eye, LogIn, Lock, LogOut, Globe, Trash2, PlusCircle, Edit3, X, Search, AlertTriangle, Landmark, Mail, PieChart, ChevronRight, Download, Loader2, Database } from 'lucide-react';
-import { isRecordInSector, toCanonicalSector } from '../utils/sectorPermissions';
+import { isRecordInSector, toCanonicalSector, normalizeSectorName } from '../utils/sectorPermissions';
 import { toFilterArray } from '../utils/filterUtils';
 import { getSiteCompetentAdmin } from '../data/siteAdminMapping';
 import { useWeRecords, useWeSiteCodes, exportToCSV, deleteRecord, deleteRecordsBulk } from '../hooks/useWeAPI';
@@ -143,7 +143,7 @@ function mapWeRecordToSiteRecord(r: WeRecord, index = 0): SiteRecord {
 
   const central = String(r['سنترال الربط'] || r['السنترال'] || r['قطاع المناطق'] || 'سنترال رئيسي').trim();
   const rawSectore = r['رئاسة قطاعات التنفيذ'] || r['Sectore'] || r['Sectores'] || r['Exc sector'] || r['Zone'] || '';
-  const sector = String(rawSectore).trim() || 'قطاع عام';
+  const sector = normalizeSectorName(String(rawSectore).trim()) || 'قطاع عام';
 
   const generalAdmin = String(r['الادارة العامة لتنفيذ الشبكات'] || r['الادارة العامة للمنطقة'] || r['اداره التنفيذ المختصه'] || r['Exc Zone'] || 'الإدارة العامة لتنفيذ الشبكات').trim();
   const competentAdmin = String(r['ادارة التنفيذ الفرعية'] || r['إدارة التنفيذ المختصة'] || r['اداره التنفيذ المختصه'] || r['Area'] || 'إدارة التنفيذ والمسارات').trim();
@@ -179,7 +179,7 @@ function mapWeRecordToSiteRecord(r: WeRecord, index = 0): SiteRecord {
     civilContractor: String(r['مسئولية التنفيذ'] || r['المسئولية'] || 'WE').trim(),
     notes: String(r['الملاحظات'] || r['اسباب التعّذر'] || r['اسباب التعذر'] || r['الجهة المطلوب الدعم منها'] || '').trim(),
     subSector: String(r['قطاع المناطق'] || '').trim(),
-    executionSector: String(r['قطاع التنفيذ'] || '').trim(),
+    executionSector: normalizeSectorName(String(r['قطاع التنفيذ'] || '').trim()),
     address: String(r['Address'] || '').trim(),
     responsibility: String(r['مسئولية التنفيذ'] || 'WE').trim(),
     lat: r['NLatitude'] || '',
@@ -837,7 +837,8 @@ export const Dashboard: React.FC = () => {
             const siteSec = String(site.executionSector || site.rawRecord?.['قطاع التنفيذ'] || site.sector || '').replace(/\s+/g, ' ').trim();
             return normalizeArabicText(siteSec) === normalizeArabicText(sec) || siteSec === sec;
           }
-          return isRecordInSector(sec, site) || String(site.sector || site.rawRecord?.['رئاسة قطاعات التنفيذ'] || site.rawRecord?.['قطاع التنفيذ'] || site.rawRecord?.['القطاع'] || site.rawRecord?.['رئاسة القطاعات'] || '').trim() === sec;
+          const rawSiteSec = String(site.sector || site.rawRecord?.['رئاسة قطاعات التنفيذ'] || site.rawRecord?.['قطاع التنفيذ'] || site.rawRecord?.['القطاع'] || site.rawRecord?.['رئاسة القطاعات'] || '').trim();
+          return normalizeSectorName(rawSiteSec) === normalizeSectorName(sec) || rawSiteSec === sec || isRecordInSector(sec, site);
         });
         if (!matchSector) return false;
       }
@@ -1000,7 +1001,8 @@ export const Dashboard: React.FC = () => {
             const siteSec = String(site.executionSector || site.rawRecord?.['قطاع التنفيذ'] || site.sector || '').replace(/\s+/g, ' ').trim();
             return normalizeArabicText(siteSec) === normalizeArabicText(sec) || siteSec === sec;
           }
-          return isRecordInSector(sec, site) || String(site.sector || site.rawRecord?.['رئاسة قطاعات التنفيذ'] || site.rawRecord?.['قطاع التنفيذ'] || site.rawRecord?.['القطاع'] || site.rawRecord?.['رئاسة القطاعات'] || '').trim() === sec;
+          const rawSiteSec = String(site.sector || site.rawRecord?.['رئاسة قطاعات التنفيذ'] || site.rawRecord?.['قطاع التنفيذ'] || site.rawRecord?.['القطاع'] || site.rawRecord?.['رئاسة القطاعات'] || '').trim();
+          return normalizeSectorName(rawSiteSec) === normalizeSectorName(sec) || rawSiteSec === sec || isRecordInSector(sec, site);
         });
         if (!matchSector) return false;
       }

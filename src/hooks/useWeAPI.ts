@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { WeRecord } from '../config/fieldConfig';
 import { isClassificationValue } from '../config/fieldConfig';
 import { supabase, supabaseFallback, supabaseClients } from '../lib/supabase';
+import { normalizeSectorName } from '../utils/sectorPermissions';
 import { WE_EXCEL_SITES } from '../data/preloadedProjects';
 import { WE_MASTER_RECORDS } from '../data/weSites';
 import {
@@ -49,9 +50,18 @@ export function normalizeRecord(row: Record<string, any>): WeRecord {
     false
   );
 
+  const normExcSector = normalizeSectorName(base['Exc sector'] || row['Exc sector'] || base['قطاع التنفيذ'] || row['قطاع التنفيذ'] || '');
+  const normSectores = normalizeSectorName(base['Sectores'] || row['Sectores'] || normExcSector);
+  const normSectore = normalizeSectorName(base['Sectore'] || row['Sectore'] || normExcSector);
+  const normPresidency = normalizeSectorName(base['رئاسة قطاعات التنفيذ'] || row['رئاسة قطاعات التنفيذ'] || base['Exc Sectores'] || row['Exc Sectores'] || '');
+
   return {
     ...row,
     ...base,
+    ...(normExcSector ? { 'Exc sector': normExcSector, 'قطاع التنفيذ': normExcSector } : {}),
+    ...(normSectores ? { 'Sectores': normSectores } : {}),
+    ...(normSectore ? { 'Sectore': normSectore } : {}),
+    ...(normPresidency ? { 'رئاسة قطاعات التنفيذ': normPresidency, 'Exc Sectores': normPresidency } : {}),
     specialTarget: isSpecial,
     special_target: isSpecial,
     'سبيشال تارجت': isSpecial,

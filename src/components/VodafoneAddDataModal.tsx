@@ -8,6 +8,7 @@ import type { SiteRecord } from '../types/dashboard';
 import { VODAFONE_RAW_RECORDS } from '../data/vodafoneSites';
 import { useAuth } from '../context/AuthContext';
 import { uploadAttachment } from '../lib/supabase';
+import { normalizeSectorName } from '../utils/sectorPermissions';
 import {
   X,
   PlusCircle,
@@ -110,25 +111,25 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
     return list;
   }, [sitesData]);
 
-  // 1. قطاع التنفيذ Options
+  // 1. قطاع التنفيذ Options (deduplicated & canonicalized)
   const executionSectorOptions = useMemo(() => {
     const set = new Set<string>();
     vodafoneMasterList.forEach((r) => {
-      const v = (r['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim();
+      const v = normalizeSectorName((r['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim());
       if (v) set.add(v);
     });
-    const cur = (formData['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim();
+    const cur = normalizeSectorName((formData['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim());
     if (cur) set.add(cur);
-    return Array.from(set).sort();
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
   }, [vodafoneMasterList, formData['قطاع التنفيذ']]);
 
   // 2. قطاع المناطق Options (cascading from قطاع التنفيذ)
   const regionalSectorOptions = useMemo(() => {
     const set = new Set<string>();
-    const selectedExecSector = (formData['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim();
+    const selectedExecSector = normalizeSectorName((formData['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim());
 
     const pool = selectedExecSector
-      ? vodafoneMasterList.filter((r) => (r['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim() === selectedExecSector)
+      ? vodafoneMasterList.filter((r) => normalizeSectorName((r['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim()) === selectedExecSector)
       : vodafoneMasterList;
 
     pool.forEach((r) => {
@@ -637,8 +638,8 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
                   setMasterRecord(null);
                 }}
                 className={`px-3 py-1 text-xs font-bold rounded-lg transition ${activeMode === 'add'
-                    ? 'bg-rose-600 text-white shadow-sm'
-                    : 'text-slate-200 hover:text-white'
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'text-slate-200 hover:text-white'
                   }`}
               >
                 إضافة جديد
@@ -650,8 +651,8 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
                   setStep('select-site');
                 }}
                 className={`px-3 py-1 text-xs font-bold rounded-lg transition ${activeMode === 'edit'
-                    ? 'bg-rose-600 text-white shadow-sm'
-                    : 'text-slate-200 hover:text-white'
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'text-slate-200 hover:text-white'
                   }`}
               >
                 تعديل موقع
@@ -1079,10 +1080,10 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
               {isDocRequired && (
                 <div
                   className={`border-2 rounded-2xl p-4 sm:p-5 transition ${errors['المستند']
-                      ? 'bg-rose-50/70 border-rose-400 ring-2 ring-rose-200'
-                      : formData['المستند']
-                        ? 'bg-emerald-50/60 border-emerald-300'
-                        : 'bg-slate-50 border-slate-300'
+                    ? 'bg-rose-50/70 border-rose-400 ring-2 ring-rose-200'
+                    : formData['المستند']
+                      ? 'bg-emerald-50/60 border-emerald-300'
+                      : 'bg-slate-50 border-slate-300'
                     }`}
                 >
                   <div className="flex items-center justify-between pb-2 mb-3 border-b border-rose-200/60">

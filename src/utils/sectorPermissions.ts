@@ -16,6 +16,69 @@ export const CANONICAL_SECTORS = [
 export type CanonicalSector = typeof CANONICAL_SECTORS[number];
 
 /**
+ * Normalizes FTTS Sector (القطاع) display & storage names into single canonical labels:
+ * 1. Alexandria & North Coast variants -> "إسكندرية و الساحل"
+ * 2. Eastern Sector variants ("المنطقة الشرقية", "المنطقة الشرقية والغربية", "قطاع الشرقية") -> "قطاع الشرقية"
+ * 3. Western Sector variants ("قطاع الغربية", "المنطقة الغربية") -> "قطاع الغربية"
+ */
+export function normalizeSectorName(sector?: string | null): string {
+  if (!sector) return '';
+  const trimmed = String(sector)
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!trimmed) return '';
+
+  const norm = trimmed
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  // 1. Alexandria & North Coast variants -> "إسكندرية و الساحل"
+  if (
+    (norm.includes('اسكندر') && (norm.includes('ساحل') || norm.includes('مطروح'))) ||
+    norm === 'اسكندريه والساحل' ||
+    norm === 'اسكندريه و الساحل' ||
+    norm === 'الاسكندريه والساحل' ||
+    norm === 'الاسكندريه و الساحل' ||
+    norm === 'قطاع اسكندريه والساحل' ||
+    norm === 'قطاع الاسكندريه والساحل' ||
+    norm === 'قطاع اسكندريه والساحل الشمالي' ||
+    norm === 'قطاع الاسكندريه والساحل الشمالي'
+  ) {
+    return 'إسكندرية و الساحل';
+  }
+
+  // 2. Eastern Sector variants -> "قطاع الشرقية"
+  if (
+    norm === 'المنطقه الشرقيه' ||
+    norm === 'المنطقه الشرقيه والغربيه' ||
+    norm === 'المنطقه الشرقيه و الغربيه' ||
+    norm === 'تنفيذ شبكات المنطقه الشرقيه والغربيه' ||
+    norm === 'قطاع الشرقيه' ||
+    norm === 'قطاعات المنطقه الشرقيه' ||
+    norm === 'الشرقيه'
+  ) {
+    return 'قطاع الشرقية';
+  }
+
+  // 3. Western Sector variants -> "قطاع الغربية"
+  if (
+    norm === 'قطاع الغربيه' ||
+    norm === 'المنطقه الغربيه' ||
+    norm === 'قطاعات المنطقه الغربيه' ||
+    norm === 'الغربيه'
+  ) {
+    return 'قطاع الغربية';
+  }
+
+  return trimmed;
+}
+
+/**
  * Standardize Arabic text for fuzzy sector matching:
  * - Unifies Hamzas (أ, إ, آ -> ا)
  * - Unifies Taa Marbuta (ة -> ه)
@@ -176,6 +239,9 @@ export function isRecordInSector(userSector?: string | null, record?: any): bool
   // Fast check: Check record sector directly
   const recordSector = record.sector || record['Sectore'] || record['sector'] || record['رئاسة قطاعات التنفيذ'] || record['رئاسة القطاعات '] || record['رئاسة القطاعات'];
   if (recordSector) {
+    if (normalizeSectorName(recordSector) === normalizeSectorName(userSector)) {
+      return true;
+    }
     if (String(recordSector).trim().toLowerCase() === String(userSector).trim().toLowerCase()) {
       return true;
     }

@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import type { FilterState, SiteRecord } from '../types/dashboard';
 import { useAuth } from '../context/AuthContext';
-import { isRecordInSector, toCanonicalSector } from '../utils/sectorPermissions';
+import { isRecordInSector, toCanonicalSector, normalizeSectorName } from '../utils/sectorPermissions';
 import {
   normalizeEtahaInternalPath,
   normalizeEtahaDeliveryStatus,
@@ -396,10 +396,10 @@ export const Filters: React.FC<FiltersProps> = ({
     return count;
   }, [filters, isSectorLocked, isEtaha]);
 
-  // Level 1: Dynamic Sectors strictly from baseSites (no hardcoding)
+  // Level 1: Dynamic Sectors strictly from baseSites (deduplicated & normalized)
   const dynamicSectors = useMemo(() => {
     if (isSectorLocked && user?.sector) {
-      return [toCanonicalSector(user.sector)];
+      return [normalizeSectorName(toCanonicalSector(user.sector))];
     }
     return Array.from(
       new Set(
@@ -408,7 +408,8 @@ export const Filters: React.FC<FiltersProps> = ({
             if (isEtaha) {
               return String(s.executionSector || s.rawRecord?.['قطاع التنفيذ'] || s.sector || '').replace(/\s+/g, ' ').trim();
             }
-            return String(s.sector || s.rawRecord?.['رئاسة قطاعات التنفيذ'] || s.rawRecord?.['قطاع التنفيذ'] || '').trim();
+            const rawSec = String(s.sector || s.rawRecord?.['رئاسة قطاعات التنفيذ'] || s.rawRecord?.['قطاع التنفيذ'] || '').trim();
+            return normalizeSectorName(rawSec);
           })
           .filter(Boolean)
       )
@@ -425,8 +426,9 @@ export const Filters: React.FC<FiltersProps> = ({
           const normSec = normalizeArabicText(sec);
           return activeSectors.some((as) => normalizeArabicText(as) === normSec || as === sec);
         }
-        const sec = String(s.sector || s.rawRecord?.['رئاسة قطاعات التنفيذ'] || s.rawRecord?.['قطاع التنفيذ'] || '').trim();
-        return activeSectors.includes(sec) || activeSectors.some((as) => isRecordInSector(as, s));
+        const rawSec = String(s.sector || s.rawRecord?.['رئاسة قطاعات التنفيذ'] || s.rawRecord?.['قطاع التنفيذ'] || '').trim();
+        const normSec = normalizeSectorName(rawSec);
+        return activeSectors.some((as) => normalizeSectorName(as) === normSec || as === rawSec || isRecordInSector(as, s));
       });
     }
     return baseSites;

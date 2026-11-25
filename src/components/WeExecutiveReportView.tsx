@@ -290,8 +290,8 @@ export const WeExecutiveReportView: React.FC<WeExecutiveReportViewProps> = ({
   const [drilledSector, setDrilledSector] = useState<string | null>(null);
   const [drilledCategory, setDrilledCategory] = useState<ExecutiveCategoryKey>('all');
   const [expandedSectors, setExpandedSectors] = useState<Record<string, boolean>>({
-    'اسكندرية والساحل': true,
-    'المنطقة الشرقية': true,
+    'إسكندرية و الساحل': true,
+    'قطاع الشرقية': true,
   });
   const [expandedAdmins, setExpandedAdmins] = useState<Record<string, boolean>>({});
   const [tableSearch, setTableSearch] = useState('');
