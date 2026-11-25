@@ -2211,21 +2211,7 @@ export const Dashboard: React.FC = () => {
           initialRecord={editingRecord}
           mode={weModalMode}
           sitesData={authorizedScopeData}
-          onSaved={async (saved) => {
-            handleWeRecordSaved(saved);
-            await refetchWeRecords();
-            await refetchWeCodes();
-          }}
-          onSave={async (saved) => {
-            handleWeRecordSaved(saved);
-            await refetchWeRecords();
-            await refetchWeCodes();
-          }}
-          onSubmit={async (saved) => {
-            handleWeRecordSaved(saved);
-            await refetchWeRecords();
-            await refetchWeCodes();
-          }}
+          onSaved={handleWeRecordSaved}
           onSwitchToBulk={() => {
             setIsWeAddDataOpen(false);
             setIsBulkImportOpen(true);

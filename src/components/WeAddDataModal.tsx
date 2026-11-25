@@ -519,6 +519,20 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     existingRecord: WeRecord;
   } | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const sitesDataRef = useRef(sitesData);
+  sitesDataRef.current = sitesData;
+  const uploadPromiseRef = useRef<Promise<{
+    success: boolean;
+    url?: string;
+    path?: string;
+    fileName?: string;
+    fileSize?: number;
+    fileType?: string;
+    metadataOnly?: boolean;
+  }> | null>(null);
+  const uploadSeqRef = useRef(0);
+  const initKeyRef = useRef<string>('');
 
   // Admin Toggle for full field editing (defaults to TRUE for admin)
   const [adminFullEditMode, setAdminFullEditMode] = useState(true);
@@ -599,29 +613,78 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     return isDocumentRequired(currentClassification);
   }, [currentClassification]);
 
-  // Document file upload handler (with automatic cloud upload & Base64 Data URL fallback)
+  // Document file upload handler (with automatic cloud upload, image compression & safe metadata fallback)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const seq = ++uploadSeqRef.current;
     setPendingFile(file);
+    setUploadingDoc(true);
     const fileName = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
-    handleFieldChange('المستند', fileName);
-    // Background upload to Supabase Storage (with fallback to resilient Base64 Data URL)
-    uploadAttachment(file, 'documents')
+
+    // Immediately record the filename and clear any stale previous URL so handleSave always uses the new upload
+    setFormData((prev) => ({
+      ...prev,
+      'المستند': fileName,
+      documentUrl: '',
+      attachmentUrl: '',
+      attachmentMeta: {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        uploadedAt: new Date().toISOString(),
+      },
+    }));
+    setErrors((prev) => {
+      if (!prev['المستند']) return prev;
+      const next = { ...prev };
+      delete next['المستند'];
+      return next;
+    });
+
+    const uploadTask = uploadAttachment(file, 'documents')
       .then((res) => {
-        if (res.success && res.url) {
-          handleFieldChange('documentUrl', res.url);
-          handleFieldChange('attachmentUrl', res.url);
+        if (uploadSeqRef.current === seq) {
+          setFormData((prev) => ({
+            ...prev,
+            documentUrl: res.url || '',
+            attachmentUrl: res.url || '',
+            attachmentMeta: {
+              name: res.fileName || file.name,
+              size: res.fileSize ?? file.size,
+              type: res.fileType || file.type,
+              path: res.path || '',
+              metadataOnly: Boolean(res.metadataOnly),
+              uploadedAt: new Date().toISOString(),
+            },
+          }));
+          setPendingFile(null);
+          setUploadingDoc(false);
         }
+        return res;
       })
-      .catch((err) => console.warn('Supabase attachment upload:', err));
+      .catch((err) => {
+        console.warn('Supabase attachment upload fallback:', err);
+        if (uploadSeqRef.current === seq) {
+          setPendingFile(null);
+          setUploadingDoc(false);
+        }
+        return { success: true, url: '', fileName: file.name, fileSize: file.size, fileType: file.type, metadataOnly: true };
+      });
+
+    uploadPromiseRef.current = uploadTask;
   };
 
   const handleRemoveDocument = () => {
+    uploadSeqRef.current += 1;
+    uploadPromiseRef.current = null;
     setPendingFile(null);
-    handleFieldChange('المستند', '');
-    handleFieldChange('documentUrl', '');
-    handleFieldChange('attachmentUrl', '');
+    setUploadingDoc(false);
+    setFormData((prev) => {
+      const next = { ...prev, 'المستند': '', documentUrl: '', attachmentUrl: '' };
+      delete (next as any).attachmentMeta;
+      return next;
+    });
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -1186,6 +1249,10 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
   // Initialize a Blank Form for "Add New Entry"
   const initNewEntry = useCallback((customCode = '') => {
+    uploadSeqRef.current += 1;
+    uploadPromiseRef.current = null;
+    setPendingFile(null);
+    setUploadingDoc(false);
     setActiveMode('add');
     setStep('fill-form');
     setErrors({});
@@ -1229,13 +1296,17 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
   // Handle Selecting an Existing Site Code to Edit
   const handleSelectSiteCode = useCallback(async (code: string) => {
+    uploadSeqRef.current += 1;
+    uploadPromiseRef.current = null;
+    setPendingFile(null);
+    setUploadingDoc(false);
     setLoading(true);
     setErrors({});
     setSuccessMessage('');
     setDuplicateWarning(null);
 
     const normCode = (code || '').trim();
-    const inMemorySite = sitesData?.find((s) => String(s?.siteCode || '').toUpperCase() === normCode.toUpperCase());
+    const inMemorySite = sitesDataRef.current?.find((s) => String(s?.siteCode || '').toUpperCase() === normCode.toUpperCase());
 
     try {
       const record = await fetchSiteRecord(normCode);
@@ -1399,11 +1470,23 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [sortedFields, user, sitesData, userDefaultSector]);
+  }, [sortedFields, user, userDefaultSector]);
 
-  // Reset or Switch
+  // Reset or Switch (strictly guarded by initKeyRef so background refetches / OS file-picker focus events NEVER reset the active form)
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      initKeyRef.current = '';
+      return;
+    }
+
+    const recordIdentity = initialRecord
+      ? String(initialRecord._id || (initialRecord as any).id || initialRecord['site code'] || initialRecord.site_code || '')
+      : '';
+    const nextInitKey = `${mode}|${initialSiteCode || ''}|${recordIdentity}`;
+    if (initKeyRef.current === nextInitKey) {
+      return;
+    }
+    initKeyRef.current = nextInitKey;
 
     loadDropdownValues();
 
@@ -1419,11 +1502,15 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
         }
       }
 
+      uploadSeqRef.current += 1;
+      uploadPromiseRef.current = null;
+      setPendingFile(null);
+      setUploadingDoc(false);
       setMasterRecord(initialRecord);
       setActiveMode('edit');
 
       const normCode = String(initialRecord['site code'] || initialRecord.site_code || '').trim();
-      const inMemorySite = sitesData?.find(
+      const inMemorySite = sitesDataRef.current?.find(
         (s) => String(s?.siteCode || '').toUpperCase() === normCode.toUpperCase()
       );
       const recordedTasneef =
@@ -1506,7 +1593,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
       setSuccessMessage('');
       setDuplicateWarning(null);
     }
-  }, [isOpen, initialSiteCode, initialRecord, mode, isAdmin, loadDropdownValues, handleSelectSiteCode, initNewEntry, user, sitesData]);
+  }, [isOpen, initialSiteCode, initialRecord, mode, isAdmin, loadDropdownValues, handleSelectSiteCode, initNewEntry, user]);
 
   // Handle Field Change
   const handleFieldChange = (csvColumn: string, value: string) => {
@@ -1680,13 +1767,56 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
         dataToSave['Exc Sectores'] = user.sector;
       }
 
-      // Ensure pending attachment is uploaded/read before saving without blocking record update
-      if (pendingFile && (!dataToSave['documentUrl'] || !dataToSave['attachmentUrl'])) {
+      // Record actual completion date when status transitions to Completed / Fiber Active if not already set
+      const savedClassification = String(dataToSave['التصنيف'] || '').trim();
+      if (
+        (savedClassification === 'تم الانتهاء' || savedClassification === 'تم التشغيل فايبر') &&
+        !String(dataToSave['التاريخ الفعلى للانتهاء'] || '').trim()
+      ) {
+        dataToSave['التاريخ الفعلى للانتهاء'] = new Date().toISOString().slice(0, 10);
+      }
+
+      // Ensure any in-flight or pending attachment upload completes safely without ever blocking record save
+      if (uploadPromiseRef.current) {
+        try {
+          const uploadRes = await uploadPromiseRef.current;
+          if (uploadRes) {
+            if (uploadRes.url) {
+              dataToSave['documentUrl'] = uploadRes.url;
+              dataToSave['attachmentUrl'] = uploadRes.url;
+            }
+            if (uploadRes.fileName) {
+              dataToSave['attachmentMeta'] = {
+                name: uploadRes.fileName,
+                size: uploadRes.fileSize,
+                type: uploadRes.fileType,
+                path: uploadRes.path || '',
+                metadataOnly: Boolean(uploadRes.metadataOnly),
+                uploadedAt: new Date().toISOString(),
+              };
+            }
+          }
+        } catch (uploadErr) {
+          console.warn('Supabase attachment upload fallback warning:', uploadErr);
+        } finally {
+          uploadPromiseRef.current = null;
+        }
+      } else if (pendingFile && !dataToSave['documentUrl']) {
         try {
           const uploadRes = await uploadAttachment(pendingFile, 'documents');
-          if (uploadRes.success && uploadRes.url) {
+          if (uploadRes.url) {
             dataToSave['documentUrl'] = uploadRes.url;
             dataToSave['attachmentUrl'] = uploadRes.url;
+          }
+          if (uploadRes.fileName) {
+            dataToSave['attachmentMeta'] = {
+              name: uploadRes.fileName,
+              size: uploadRes.fileSize,
+              type: uploadRes.fileType,
+              path: uploadRes.path || '',
+              metadataOnly: Boolean(uploadRes.metadataOnly),
+              uploadedAt: new Date().toISOString(),
+            };
           }
         } catch (uploadErr) {
           console.warn('Supabase attachment upload fallback warning:', uploadErr);
@@ -1733,6 +1863,11 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
   };
 
   const resetForm = () => {
+    uploadSeqRef.current += 1;
+    uploadPromiseRef.current = null;
+    initKeyRef.current = '';
+    setPendingFile(null);
+    setUploadingDoc(false);
     setStep('select-site');
     setActiveMode('edit');
     setSiteCodeSearch('');
@@ -3037,7 +3172,9 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                               <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />
                             )}
                             <span className="truncate">
-                              {formData['المستند'] || 'لم يتم إرفاق مستند حتى الآن (يرجى الضغط على زر رفع مستند الإثبات)'}
+                              {uploadingDoc
+                                ? `جاري تجهيز ورفع المستند: ${formData['المستند'] || '...'}`
+                                : (formData['المستند'] || 'لم يتم إرفاق مستند حتى الآن (يرجى الضغط على زر رفع مستند الإثبات)')}
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
@@ -3478,7 +3615,9 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                               <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />
                             )}
                             <span className="truncate">
-                              {formData['المستند'] || 'لم يتم إرفاق مستند حتى الآن (يرجى الضغط على زر رفع مستند الإثبات)'}
+                              {uploadingDoc
+                                ? `جاري تجهيز ورفع المستند: ${formData['المستند'] || '...'}`
+                                : (formData['المستند'] || 'لم يتم إرفاق مستند حتى الآن (يرجى الضغط على زر رفع مستند الإثبات)')}
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">

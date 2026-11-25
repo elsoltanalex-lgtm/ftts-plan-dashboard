@@ -31,29 +31,83 @@ export const STORAGE_BUCKETS = {
   DATASETS: 'excel-uploads',
 } as const;
 
+// Max raw size (bytes) for direct Base64 Data URL fallback when Storage upload is unavailable
+const MAX_INLINE_DATA_URL_BYTES = 350 * 1024; // 350 KB
+
 /**
- * Upload a document or image to Supabase Storage with resilient fallback
+ * Compress an image File via HTMLCanvasElement so Base64 fallback stays lightweight & safe for JSONB
+ */
+async function compressImageToDataUrl(file: File, maxDim = 1280, quality = 0.72): Promise<string | null> {
+  if (typeof document === 'undefined' || !file.type.startsWith('image/')) return null;
+  try {
+    const rawUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = reject;
+      el.src = rawUrl;
+    });
+    let { width, height } = img;
+    if (width > maxDim || height > maxDim) {
+      const scale = maxDim / Math.max(width, height);
+      width = Math.max(1, Math.round(width * scale));
+      height = Math.max(1, Math.round(height * scale));
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, width, height);
+    const compressed = canvas.toDataURL('image/jpeg', quality);
+    return compressed.length <= MAX_INLINE_DATA_URL_BYTES * 1.45 ? compressed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Upload a document or image to Supabase Storage with resilient, size-safe fallback.
+ * Never throws or blocks saving the parent site record.
  */
 export async function uploadAttachment(
   file: File,
   folder = 'documents',
   bucket: string = STORAGE_BUCKETS.ATTACHMENTS
-): Promise<{ success: boolean; url?: string; path?: string; fileName?: string; fileSize?: number; error?: string }> {
+): Promise<{
+  success: boolean;
+  url?: string;
+  path?: string;
+  fileName?: string;
+  fileSize?: number;
+  fileType?: string;
+  metadataOnly?: boolean;
+  error?: string;
+}> {
   const timestamp = Date.now();
   const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const filePath = `${folder}/${timestamp}_${sanitizedName}`;
 
-  // 1. Attempt upload to Supabase Storage across clients and common bucket names
-  const candidateBuckets = [bucket, 'site-attachments', 'documents', 'attachments', 'public'];
+  // 1. Attempt upload to Supabase Storage across deduplicated candidate buckets (prioritizing active fallback client)
+  const candidateBuckets = Array.from(new Set([bucket, 'site-attachments', 'documents', 'attachments', 'public']));
   for (const client of [supabaseFallback, supabase]) {
     for (const b of candidateBuckets) {
       try {
-        const { data, error } = await client.storage
+        const uploadPromise = client.storage
           .from(b)
           .upload(filePath, file, {
             cacheControl: '3600',
             upsert: true,
           });
+        const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
+          setTimeout(() => resolve({ data: null, error: new Error('storage upload timeout') }), 5000)
+        );
+        const { data, error } = await Promise.race([uploadPromise, timeoutPromise]);
 
         if (!error && data) {
           const { data: publicData } = client.storage.from(b).getPublicUrl(data.path);
@@ -63,6 +117,7 @@ export async function uploadAttachment(
             path: data.path,
             fileName: file.name,
             fileSize: file.size,
+            fileType: file.type,
           };
         }
       } catch {
@@ -71,23 +126,63 @@ export async function uploadAttachment(
     }
   }
 
-  // 2. Resilient Fallback: Read file as Base64 Data URL so it is persistently stored in JSONB & readable offline/cloud
+  // 2. Resilient Size-Safe Fallback:
+  //    - Images: compress via canvas so JSONB payload remains small
+  //    - Small files (<= 350 KB): inline Base64 Data URL
+  //    - Larger PDFs/Office/scans: store safe metadata reference without bloating JSONB or aborting save
   try {
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+    if (file.type.startsWith('image/')) {
+      const compressed = await compressImageToDataUrl(file);
+      if (compressed) {
+        return {
+          success: true,
+          url: compressed,
+          path: filePath,
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: 'image/jpeg',
+        };
+      }
+    }
 
+    if (file.size <= MAX_INLINE_DATA_URL_BYTES) {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      return {
+        success: true,
+        url: dataUrl,
+        path: filePath,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+      };
+    }
+
+    // Large non-image file when Storage is unavailable: return safe metadata so record save ALWAYS succeeds
     return {
       success: true,
-      url: dataUrl,
+      url: '',
       path: filePath,
       fileName: file.name,
       fileSize: file.size,
+      fileType: file.type,
+      metadataOnly: true,
     };
   } catch (err: any) {
-    return { success: false, error: err?.message || 'فشل في حفظ وقراءة المستند' };
+    return {
+      success: true,
+      url: '',
+      path: filePath,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      metadataOnly: true,
+      error: err?.message || 'تم حفظ بيانات المستند بدون معاينة مباشرة',
+    };
   }
 }

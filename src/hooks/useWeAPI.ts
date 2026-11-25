@@ -123,10 +123,36 @@ export function loadStoredWeRecords(): WeRecord[] {
   return [];
 }
 
+function stripLargeInlineDataUrls(rec: WeRecord): WeRecord {
+  const docUrl = typeof rec.documentUrl === 'string' ? rec.documentUrl : '';
+  const attUrl = typeof (rec as any).attachmentUrl === 'string' ? (rec as any).attachmentUrl : '';
+  const hasLargeDoc = docUrl.startsWith('data:') && docUrl.length > 32 * 1024;
+  const hasLargeAtt = attUrl.startsWith('data:') && attUrl.length > 32 * 1024;
+  if (!hasLargeDoc && !hasLargeAtt) return rec;
+  const copy: WeRecord = { ...rec };
+  if (hasLargeDoc) copy.documentUrl = '';
+  if (hasLargeAtt) (copy as any).attachmentUrl = '';
+  return copy;
+}
+
 export function saveStoredWeRecords(records: WeRecord[]) {
   try {
-    localStorage.setItem(WE_STORAGE_KEY, JSON.stringify(records));
-  } catch { }
+    // Strip large inline Base64 Data URLs from localStorage cache to prevent QuotaExceededError
+    // while preserving all record fields, document filename ('المستند'), and HTTP(S) storage URLs.
+    const compact = records.map(stripLargeInlineDataUrls);
+    localStorage.setItem(WE_STORAGE_KEY, JSON.stringify(compact));
+  } catch {
+    try {
+      // Secondary fallback: strip all data: URLs if browser quota is tight
+      const minimal = records.map((r) => {
+        const copy: WeRecord = { ...r };
+        if (typeof copy.documentUrl === 'string' && copy.documentUrl.startsWith('data:')) copy.documentUrl = '';
+        if (typeof (copy as any).attachmentUrl === 'string' && (copy as any).attachmentUrl.startsWith('data:')) (copy as any).attachmentUrl = '';
+        return copy;
+      });
+      localStorage.setItem(WE_STORAGE_KEY, JSON.stringify(minimal));
+    } catch { }
+  }
 }
 
 // ── Fetch all records from Supabase ──
@@ -547,11 +573,14 @@ export async function saveRecord(
       false
     );
 
-    const docUrl = record.documentUrl || (record as any).attachmentUrl || '';
+    const docUrl = String(record.documentUrl || (record as any).attachmentUrl || '').trim();
+    const isInlineDataUrl = docUrl.startsWith('data:');
+    // Avoid duplicating large Base64 data URLs across two keys in the JSONB payload
+    const safeAttachmentUrl = isInlineDataUrl ? '' : docUrl;
     const fullData: WeRecord = {
       ...record,
       documentUrl: docUrl,
-      attachmentUrl: docUrl,
+      attachmentUrl: safeAttachmentUrl || docUrl,
       'المستند': record['المستند'] || (docUrl ? `Doc-${siteCode}.pdf` : ''),
       specialTarget: isSpecial,
       special_target: isSpecial,
@@ -580,9 +609,12 @@ export async function saveRecord(
     }
     saveStoredWeRecords(nextStored);
 
-    // Safe payload matching physical Supabase table columns + JSONB data
-    // (Note: specialTarget / special_target is preserved inside fullData -> data JSONB column)
-    const safePayload: Record<string, any> = {
+    // Build payload for Supabase (avoid storing duplicate Base64 copy inside JSONB)
+    const cloudData: WeRecord = isInlineDataUrl
+      ? { ...fullData, attachmentUrl: '' }
+      : fullData;
+
+    const buildSafePayload = (dataObj: WeRecord): Record<string, any> => ({
       site_code: siteCode,
       'site code': siteCode,
       'Exc Sectores': record['Exc Sectores'] || record['Exc sector'] || '',
@@ -595,118 +627,132 @@ export async function saveRecord(
       'Site Status': record['Site Status'] || record['التصنيف'] || '',
       'NLongitude': record['NLongitude'] || '',
       'NLatitude': record['NLatitude'] || '',
-      data: fullData,
+      data: dataObj,
       updated_at: now,
-    };
+    });
+
+    // Candidate payloads: first with full attachment, then without inline Base64 data URL if payload was rejected
+    const payloadVariants: Record<string, any>[] = [buildSafePayload(cloudData)];
+    if (isInlineDataUrl) {
+      payloadVariants.push(
+        buildSafePayload({
+          ...fullData,
+          documentUrl: '',
+          attachmentUrl: '',
+        })
+      );
+    }
 
     let cloudSaved = false;
     let savedRow: any = null;
     let actionType: 'updated' | 'created' = isEditMode || Boolean(targetId) ? 'updated' : 'created';
     let lastCloudError: any = null;
 
-    // Attempt save in Supabase candidate tables across active clients (Client 2 Fallback hosts active live dataset)
-    clientLoop: for (const client of supabaseClients) {
-      for (const table of WE_TABLE_CANDIDATES) {
-        try {
-          // 1. Direct UPDATE in Supabase by site_code or ID
-          let updateQuery = client.from(table).update(safePayload).eq('site_code', siteCode);
-          let { data: updated, error: updateErr } = await updateQuery.select();
+    // Attempt save in Supabase candidate tables across active clients (Client 1 = supabaseFallback hosting live dataset)
+    clientLoop: for (const safePayload of payloadVariants) {
+      for (const client of supabaseClients) {
+        for (const table of WE_TABLE_CANDIDATES) {
+          try {
+            // 1. Direct UPDATE in Supabase by site_code or 'site code'
+            let updateQuery = client.from(table).update(safePayload).eq('site_code', siteCode);
+            let { data: updated, error: updateErr } = await updateQuery.select();
 
-          // Retry by 'site code' if primary site_code column didn't match
-          if (updateErr || !updated || updated.length === 0) {
-            const retryByQuoted = await client.from(table).update(safePayload).eq('site code', siteCode).select();
-            if (!retryByQuoted.error && retryByQuoted.data && retryByQuoted.data.length > 0) {
-              updated = retryByQuoted.data;
-              updateErr = null;
-            } else if (retryByQuoted.error) {
-              lastCloudError = retryByQuoted.error;
+            // Retry by 'site code' if primary site_code column didn't match
+            if (updateErr || !updated || updated.length === 0) {
+              const retryByQuoted = await client.from(table).update(safePayload).eq('site code', siteCode).select();
+              if (!retryByQuoted.error && retryByQuoted.data && retryByQuoted.data.length > 0) {
+                updated = retryByQuoted.data;
+                updateErr = null;
+              } else if (retryByQuoted.error) {
+                lastCloudError = retryByQuoted.error;
+              }
             }
-          }
 
-          if (updateErr) {
-            lastCloudError = updateErr;
-            console.error(`[WE Supabase] Update error on table ${table}:`, updateErr);
-          }
+            if (updateErr) {
+              lastCloudError = updateErr;
+              console.error(`[WE Supabase] Update error on table ${table}:`, updateErr);
+            }
 
-          if (!updateErr && updated && updated.length > 0) {
-            cloudSaved = true;
-            savedRow = updated[0];
-            actionType = 'updated';
-            console.log(`[WE Supabase] Successfully updated site ${siteCode} in ${table}`);
-            break clientLoop;
-          }
+            if (!updateErr && updated && updated.length > 0) {
+              cloudSaved = true;
+              savedRow = updated[0];
+              actionType = 'updated';
+              console.log(`[WE Supabase] Successfully updated site ${siteCode} in ${table}`);
+              break clientLoop;
+            }
 
-          // 2. Search existing rows by siteCode to verify if row exists
-          const { data: existingRows, error: searchErr } = await client
-            .from(table)
-            .select('*')
-            .eq('site_code', siteCode);
-
-          if (searchErr) {
-            lastCloudError = searchErr;
-            console.error(`[WE Supabase] Search error on table ${table}:`, searchErr);
-          }
-
-          if (existingRows && existingRows.length > 0) {
-            const { data: updatedExisting, error: existingErr } = await client
+            // 2. Search existing rows by siteCode to verify if row exists
+            const { data: existingRows, error: searchErr } = await client
               .from(table)
-              .update(safePayload)
-              .eq('site_code', siteCode)
+              .select('*')
+              .eq('site_code', siteCode);
+
+            if (searchErr) {
+              lastCloudError = searchErr;
+              console.error(`[WE Supabase] Search error on table ${table}:`, searchErr);
+            }
+
+            if (existingRows && existingRows.length > 0) {
+              // Duplicate check for adding new entry
+              if (!forceUpdate && !isEditMode) {
+                const duplicate = existingRows[0];
+                return {
+                  success: false,
+                  error: 'DUPLICATE_RECORD',
+                  message: `سجل مكرر: الموقع ${siteCode} بالتصنيف "${activity}" موجود بالفعل`,
+                  existingRecord: normalizeRecord(duplicate),
+                };
+              }
+
+              const { data: updatedExisting, error: existingErr } = await client
+                .from(table)
+                .update(safePayload)
+                .eq('site_code', siteCode)
+                .select();
+
+              if (!existingErr && updatedExisting && updatedExisting.length > 0) {
+                cloudSaved = true;
+                savedRow = updatedExisting[0];
+                actionType = 'updated';
+                console.log(`[WE Supabase] Successfully updated existing site ${siteCode} in ${table}`);
+                break clientLoop;
+              } else if (existingErr) {
+                lastCloudError = existingErr;
+                console.error(`[WE Supabase] Re-update error on table ${table}:`, existingErr);
+              }
+            }
+
+            // 3. Insert new record
+            const insertPayload: Record<string, any> = {
+              ...safePayload,
+              created_at: fullData._createdAt || now,
+            };
+            if (targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(targetId))) {
+              insertPayload.id = targetId;
+            }
+
+            const { data: inserted, error: insertErr } = await client
+              .from(table)
+              .insert([insertPayload])
               .select();
 
-            if (!existingErr && updatedExisting && updatedExisting.length > 0) {
-              cloudSaved = true;
-              savedRow = updatedExisting[0];
-              actionType = 'updated';
-              console.log(`[WE Supabase] Successfully updated existing site ${siteCode} in ${table}`);
-              break clientLoop;
-            } else if (existingErr) {
-              lastCloudError = existingErr;
-              console.error(`[WE Supabase] Re-update error on table ${table}:`, existingErr);
+            if (insertErr) {
+              lastCloudError = insertErr;
+              console.error(`[WE Supabase] Insert error on table ${table}:`, insertErr);
             }
-          }
 
-          // 3. Duplicate check for adding new entry
-          if (!forceUpdate && !isEditMode && existingRows && existingRows.length > 0) {
-            const duplicate = existingRows[0];
-            return {
-              success: false,
-              error: 'DUPLICATE_RECORD',
-              message: `سجل مكرر: الموقع ${siteCode} بالتصنيف "${activity}" موجود بالفعل`,
-              existingRecord: normalizeRecord(duplicate),
-            };
+            if (!insertErr && inserted && inserted.length > 0) {
+              cloudSaved = true;
+              savedRow = inserted[0];
+              actionType = 'created';
+              console.log(`[WE Supabase] Successfully inserted site ${siteCode} in ${table}`);
+              break clientLoop;
+            }
+          } catch (tableEx: any) {
+            lastCloudError = tableEx;
+            console.error(`[WE Supabase] Exception saving site ${siteCode} to table ${table}:`, tableEx);
+            // Continue to next candidate table / client / payload variant
           }
-
-          // 4. Insert new record
-          const insertPayload: Record<string, any> = {
-            ...safePayload,
-            created_at: fullData._createdAt || now,
-          };
-          if (targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(targetId))) {
-            insertPayload.id = targetId;
-          }
-
-          const { data: inserted, error: insertErr } = await client
-            .from(table)
-            .insert([insertPayload])
-            .select();
-
-          if (insertErr) {
-            lastCloudError = insertErr;
-            console.error(`[WE Supabase] Insert error on table ${table}:`, insertErr);
-          }
-
-          if (!insertErr && inserted && inserted.length > 0) {
-            cloudSaved = true;
-            savedRow = inserted[0];
-            actionType = 'created';
-            console.log(`[WE Supabase] Successfully inserted site ${siteCode} in ${table}`);
-            break clientLoop;
-          }
-        } catch (tableEx: any) {
-          lastCloudError = tableEx;
-          console.error(`[WE Supabase] Exception saving site ${siteCode} to table ${table}:`, tableEx);
-          // Continue to next candidate table / client
         }
       }
     }
@@ -926,12 +972,13 @@ export async function deleteRecordsBulk(idsOrCodes: string[]): Promise<{ success
     });
     saveStoredWeRecords(remaining);
 
+    const combinedList = Array.from(new Set([...cleanList, ...cleanNormList]));
+
     // 2. Persist to authoritative Cloud Deleted Codes in Supabase for cross-device sync
     await addCloudDeletedCodes(combinedList);
 
     // 3. Delete across all active Supabase clients in batches
     const batchSize = 50;
-    const combinedList = Array.from(new Set([...cleanList, ...cleanNormList]));
 
     for (let i = 0; i < combinedList.length; i += batchSize) {
       const batch = combinedList.slice(i, i + batchSize);
