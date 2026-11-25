@@ -545,7 +545,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
   // Computed values
   const rawStatusVal = formData['Site Status'] || masterRecord?.['Site Status'] || '';
-  const currentStatus = rawStatusVal && !isClassificationValue(rawStatusVal) ? rawStatusVal.trim() : 'ON AIR';
+  const currentStatus = rawStatusVal && !isClassificationValue(rawStatusVal) ? String(rawStatusVal).trim() : 'ON AIR';
 
   // Distinct Site Status options matching WE Excel sheet and Supabase records, strictly decoupled from Classification
   const availableSiteStatuses = useMemo(() => {
@@ -565,7 +565,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     }
 
     // Always preserve current record status if set, provided it is a valid site status and NOT a classification value
-    const cur = (formData['Site Status'] || masterRecord?.['Site Status'] || '').replace(/\s+/g, ' ').trim();
+    const cur = String(formData['Site Status'] || masterRecord?.['Site Status'] || '').replace(/\s+/g, ' ').trim();
     if (cur && cur !== '0' && cur.toLowerCase() !== 'site status' && !isClassificationValue(cur)) {
       set.add(cur);
     }
@@ -1260,8 +1260,8 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     setDuplicateWarning(null);
 
     const blank: WeRecord = {
-      'site code': customCode.trim().toUpperCase(),
-      site_code: customCode.trim().toUpperCase(),
+      'site code': String(customCode ?? '').trim().toUpperCase(),
+      site_code: String(customCode ?? '').trim().toUpperCase(),
       specialTarget: false,
       special_target: false,
       'سبيشال تارجت': false,
@@ -1305,7 +1305,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     setSuccessMessage('');
     setDuplicateWarning(null);
 
-    const normCode = (code || '').trim();
+    const normCode = String(code ?? '').trim();
     const inMemorySite = sitesDataRef.current?.find((s) => String(s?.siteCode || '').toUpperCase() === normCode.toUpperCase());
 
     try {
@@ -1413,7 +1413,7 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
           }
         }
 
-        const rawStatus = (inMemorySite.rawRecord?.['Site Status'] || inMemorySite.rawRecord?.['حالة الموقع'] || '').replace(/\s+/g, ' ').trim();
+        const rawStatus = String(inMemorySite.rawRecord?.['Site Status'] || inMemorySite.rawRecord?.['حالة الموقع'] || '').replace(/\s+/g, ' ').trim();
         const cleanSiteStatus = rawStatus && !isClassificationValue(rawStatus) ? rawStatus : 'ON AIR';
 
         const isSpecialFallback = Boolean(
@@ -3251,11 +3251,10 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                             value={formData['site code'] || ''}
                             onChange={(e) => handleFieldChange('site code', e.target.value)}
                             placeholder="مثال: LALXN33439"
-                            className={`border rounded-lg px-3 py-2 text-sm font-mono font-bold focus:outline-none transition ${
-                              errors['site code']
+                            className={`border rounded-lg px-3 py-2 text-sm font-mono font-bold focus:outline-none transition ${errors['site code']
                                 ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
                                 : 'border-blue-300 bg-white text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-                            }`}
+                              }`}
                           />
                           {errors['site code'] && (
                             <span className="text-red-600 text-[11px] mt-1 font-semibold">{errors['site code']}</span>
@@ -3273,11 +3272,10 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                             id="field-Exc-Sectores"
                             value={currentPresidency}
                             onChange={(e) => handlePresidencyChange(e.target.value)}
-                            className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition cursor-pointer font-bold ${
-                              errors['Exc Sectores']
+                            className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition cursor-pointer font-bold ${errors['Exc Sectores']
                                 ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
                                 : 'border-blue-300 bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-                            }`}
+                              }`}
                           >
                             <option value="">-- اختر رئاسة القطاعات --</option>
                             {availablePresidencies.map((pres) => (
@@ -3303,11 +3301,10 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                             disabled={!currentPresidency}
                             value={currentSector}
                             onChange={(e) => handleSectorChange(e.target.value)}
-                            className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition cursor-pointer font-bold disabled:bg-slate-100 disabled:cursor-not-allowed ${
-                              errors['Exc sector']
+                            className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition cursor-pointer font-bold disabled:bg-slate-100 disabled:cursor-not-allowed ${errors['Exc sector']
                                 ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
                                 : 'border-blue-300 bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-                            }`}
+                              }`}
                           >
                             <option value="">
                               {currentPresidency ? '-- اختر قطاع التنفيذ --' : '-- اختر رئاسة القطاعات أولاً --'}
@@ -3360,11 +3357,10 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                             disabled={!currentSector}
                             value={currentCompAdmin}
                             onChange={(e) => handleCompAdminChange(e.target.value)}
-                            className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition cursor-pointer font-bold disabled:bg-slate-100 disabled:cursor-not-allowed ${
-                              errors['اداره التنفيذ المختصه']
+                            className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition cursor-pointer font-bold disabled:bg-slate-100 disabled:cursor-not-allowed ${errors['اداره التنفيذ المختصه']
                                 ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
                                 : 'border-blue-300 bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-                            }`}
+                              }`}
                           >
                             <option value="">
                               {currentSector ? '-- اختر إدارة التنفيذ المختصة --' : '-- اختر قطاع التنفيذ أولاً --'}

@@ -424,8 +424,8 @@ export function useWeSiteCodes() {
   }, []);
 
   const addCodeLocally = useCallback((newCode: string) => {
-    if (!newCode || !newCode.trim()) return;
-    const clean = newCode.trim();
+    const clean = String(newCode ?? '').trim();
+    if (!clean) return;
     setCodes((prev) => (prev.includes(clean) ? prev : [...prev, clean].sort()));
   }, []);
 
@@ -439,7 +439,7 @@ export function useWeSiteCodes() {
 // ── Fetch single record by site code ──
 export async function fetchSiteRecord(siteCode: string): Promise<WeRecord | null> {
   try {
-    const cleanCode = siteCode.trim();
+    const cleanCode = String(siteCode ?? '').trim();
 
     // 1. Try Supabase tables across active clients
     for (const client of supabaseClients) {
@@ -539,7 +539,7 @@ export async function fetchDropdownValues(
     if (column === 'Site Status' || column === 'حالة الموقع') {
       const excelVals = [...new Set(
         WE_MASTER_RECORDS
-          .map((r) => (r['Site Status'] || r['حالة الموقع'] || '').replace(/\s+/g, ' ').trim())
+          .map((r) => String(r['Site Status'] || r['حالة الموقع'] || '').replace(/\s+/g, ' ').trim())
           .filter((v) => v && v !== '0' && v.toLowerCase() !== 'site status' && !isClassificationValue(v))
       )].sort();
       if (excelVals.length > 0) return excelVals;
@@ -563,7 +563,7 @@ export async function saveRecord(
   isEditMode = false
 ): Promise<{ success: boolean; action?: string; error?: string; message?: string; existingRecord?: WeRecord; record?: WeRecord }> {
   try {
-    const siteCode = (record['site code'] || (record as any).site_code || '').trim();
+    const siteCode = String(record['site code'] || (record as any).site_code || (record as any)['Site code'] || (record as any).Site_code || '').trim();
     if (!siteCode) {
       return { success: false, error: 'كود الموقع مطلوب' };
     }
@@ -901,7 +901,7 @@ export function exportCleanCSV(
 // ── Delete a single record (by UUID id or siteCode) ──
 export async function deleteRecord(idOrCode: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const clean = (idOrCode || '').trim();
+    const clean = String(idOrCode ?? '').trim();
     if (!clean) return { success: false, error: 'معرف أو كود الموقع مطلوب' };
 
     const cleanNorm = clean.toUpperCase();

@@ -87,7 +87,7 @@ export const CANONICAL_DEPARTMENTS: { raw: string; canonical: string; short: str
 ];
 
 export function toCanonicalDepartment(dept: string): string {
-  const norm = dept.trim().replace(/[إأآا]/g, 'ا').replace(/ة/g, 'ه').replace(/ي/g, 'ى');
+  const norm = String(dept ?? '').trim().replace(/[إأآا]/g, 'ا').replace(/ة/g, 'ه').replace(/ي/g, 'ى');
   if (norm.includes('شرق الدلتا 1') || norm.includes('شرق دلتا 1')) return 'الإدارة العامة لتنفيذ شرق الدلتا 1';
   if (norm.includes('شرق الدلتا 2') || norm.includes('شرق دلتا 2')) return 'الإدارة العامة لتنفيذ شرق الدلتا 2';
   if (norm.includes('القناه') || norm.includes('سيناء') || norm.includes('سينا')) return 'الإدارة العامة لتنفيذ مدن القناة وسيناء';
@@ -95,7 +95,7 @@ export function toCanonicalDepartment(dept: string): string {
   if (norm.includes('وسط الدلتا') || norm.includes('وسط دلتا')) return 'الإدارة العامة لتنفيذ شبكات وسط الدلتا';
   if (norm.includes('اسكندر') || norm.includes('الاسكندر')) return 'الإدارة العامة لتنفيذ شبكات الإسكندرية';
   if (norm.includes('ساحل') || norm.includes('مطروح')) return 'الإدارة العامة لتنفيذ شبكات الساحل ومطروح';
-  return dept.trim();
+  return String(dept ?? '').trim();
 }
 
 export const OPERATOR_WEEKLY_DATA: OperatorWeeklyRow[] = [

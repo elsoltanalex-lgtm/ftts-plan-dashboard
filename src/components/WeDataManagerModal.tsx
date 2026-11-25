@@ -98,7 +98,7 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
 
       // 2. Category Filter
       if (selectedFilter === 'incomplete') {
-        const hasMissingCode = !r['site code'] || r['site code'].trim() === '';
+        const hasMissingCode = !r['site code'] || String(r['site code']).trim() === '';
         const hasMissingStatus = !r['التصنيف'] && !r['Site Status'];
         return hasMissingCode || hasMissingStatus;
       }
@@ -336,8 +336,8 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
             <button
               onClick={() => setSelectedFilter('all')}
               className={`px-3 py-1.5 rounded-lg font-medium transition ${selectedFilter === 'all'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                 }`}
             >
               الكل ({records.length})
@@ -345,8 +345,8 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
             <button
               onClick={() => setSelectedFilter('obstacles')}
               className={`px-3 py-1.5 rounded-lg font-medium transition ${selectedFilter === 'obstacles'
-                  ? 'bg-amber-600 text-white shadow-sm'
-                  : 'bg-white text-amber-700 hover:bg-amber-50 border border-slate-200'
+                ? 'bg-amber-600 text-white shadow-sm'
+                : 'bg-white text-amber-700 hover:bg-amber-50 border border-slate-200'
                 }`}
             >
               معوقات
@@ -354,8 +354,8 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
             <button
               onClick={() => setSelectedFilter('stalled')}
               className={`px-3 py-1.5 rounded-lg font-medium transition ${selectedFilter === 'stalled'
-                  ? 'bg-rose-600 text-white shadow-sm'
-                  : 'bg-white text-rose-700 hover:bg-rose-50 border border-slate-200'
+                ? 'bg-rose-600 text-white shadow-sm'
+                : 'bg-white text-rose-700 hover:bg-rose-50 border border-slate-200'
                 }`}
             >
               متعثرات
@@ -363,8 +363,8 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
             <button
               onClick={() => setSelectedFilter('completed')}
               className={`px-3 py-1.5 rounded-lg font-medium transition ${selectedFilter === 'completed'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'bg-white text-emerald-700 hover:bg-emerald-50 border border-slate-200'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'bg-white text-emerald-700 hover:bg-emerald-50 border border-slate-200'
                 }`}
             >
               تم التشغيل
@@ -372,8 +372,8 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
             <button
               onClick={() => setSelectedFilter('incomplete')}
               className={`px-3 py-1.5 rounded-lg font-medium transition ${selectedFilter === 'incomplete'
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'bg-white text-purple-700 hover:bg-purple-50 border border-slate-200'
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'bg-white text-purple-700 hover:bg-purple-50 border border-slate-200'
                 }`}
               title="سجلات تفتقد لكود الموقع أو الحالة"
             >
@@ -548,14 +548,14 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
                       <td className="p-3">
                         <span
                           className={`px-2 py-0.5 rounded text-[11px] font-medium ${tasneef.includes('تشغيل')
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : tasneef.includes('معوق')
-                                ? 'bg-amber-100 text-amber-800'
-                                : tasneef.includes('متعذر') || tasneef.includes('متعثر')
-                                  ? 'bg-rose-100 text-rose-800'
-                                  : tasneef.includes('تصاريح')
-                                    ? 'bg-blue-100 text-blue-800'
-                                    : 'bg-slate-100 text-slate-700'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : tasneef.includes('معوق')
+                              ? 'bg-amber-100 text-amber-800'
+                              : tasneef.includes('متعذر') || tasneef.includes('متعثر')
+                                ? 'bg-rose-100 text-rose-800'
+                                : tasneef.includes('تصاريح')
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-slate-100 text-slate-700'
                             }`}
                         >
                           {tasneef || 'غير محدد'}

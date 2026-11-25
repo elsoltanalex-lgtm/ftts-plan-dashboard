@@ -115,10 +115,10 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
   const executionSectorOptions = useMemo(() => {
     const set = new Set<string>();
     vodafoneMasterList.forEach((r) => {
-      const v = normalizeSectorName((r['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim());
+      const v = normalizeSectorName(String(r['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim());
       if (v) set.add(v);
     });
-    const cur = normalizeSectorName((formData['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim());
+    const cur = normalizeSectorName(String(formData['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim());
     if (cur) set.add(cur);
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
   }, [vodafoneMasterList, formData['قطاع التنفيذ']]);
@@ -126,10 +126,10 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
   // 2. قطاع المناطق Options (cascading from قطاع التنفيذ)
   const regionalSectorOptions = useMemo(() => {
     const set = new Set<string>();
-    const selectedExecSector = normalizeSectorName((formData['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim());
+    const selectedExecSector = normalizeSectorName(String(formData['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim());
 
     const pool = selectedExecSector
-      ? vodafoneMasterList.filter((r) => normalizeSectorName((r['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim()) === selectedExecSector)
+      ? vodafoneMasterList.filter((r) => normalizeSectorName(String(r['قطاع التنفيذ'] || '').replace(/\s+/g, ' ').trim()) === selectedExecSector)
       : vodafoneMasterList;
 
     pool.forEach((r) => {

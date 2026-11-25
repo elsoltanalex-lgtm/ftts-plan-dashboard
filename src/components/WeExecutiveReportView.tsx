@@ -350,9 +350,9 @@ export const WeExecutiveReportView: React.FC<WeExecutiveReportViewProps> = ({
     >();
 
     sites.forEach((site) => {
-      const sec = (site.sector || 'قطاع عام').trim();
-      const admin = (site.generalAdmin || 'الإدارة العامة المختصة').trim();
-      const comp = (site.competentAdmin || 'إدارة التنفيذ المختصة').trim();
+      const sec = String(site.sector || 'قطاع عام').trim();
+      const admin = String(site.generalAdmin || 'الإدارة العامة المختصة').trim();
+      const comp = String(site.competentAdmin || 'إدارة التنفيذ المختصة').trim();
 
       if (!sectorMap.has(sec)) {
         sectorMap.set(sec, { sites: [], adminMap: new Map() });

@@ -114,7 +114,7 @@ const initialFilters: FilterState = {
 
 // Helper: Map a dynamic WeRecord from Supabase to SiteRecord format for dashboard strictly based on Excel
 function mapWeRecordToSiteRecord(r: WeRecord, index = 0): SiteRecord {
-  const siteCode = (r[' Site code'] || r['site code'] || r['Site code'] || (r as any).site_code || `SITE-${index + 1}`).trim();
+  const siteCode = String(r[' Site code'] || r['site code'] || r['Site code'] || (r as any).Site_code || (r as any).site_code || `SITE-${index + 1}`).trim();
   const rawTasneef = String(r['التصنيف'] || '').trim();
 
   const tasneef = rawTasneef || 'غير محدد';
@@ -606,10 +606,10 @@ export const Dashboard: React.FC = () => {
     const vdfSites = (deletedSiteCodes.size === 0
       ? vodafoneSites
       : vodafoneSites.filter((s) => {
-          const c = String(s?.siteCode || '').trim().toUpperCase();
-          const id = String(s?.id || '').trim().toUpperCase();
-          return !deletedSiteCodes.has(c) && !deletedSiteCodes.has(id);
-        })
+        const c = String(s?.siteCode || '').trim().toUpperCase();
+        const id = String(s?.id || '').trim().toUpperCase();
+        return !deletedSiteCodes.has(c) && !deletedSiteCodes.has(id);
+      })
     ).map((s) => ({
       ...s,
       company: 'Vodafone' as const,
@@ -619,10 +619,10 @@ export const Dashboard: React.FC = () => {
     const orgSites = (deletedSiteCodes.size === 0
       ? orangeSites
       : orangeSites.filter((s) => {
-          const c = String(s?.siteCode || '').trim().toUpperCase();
-          const id = String(s?.id || '').trim().toUpperCase();
-          return !deletedSiteCodes.has(c) && !deletedSiteCodes.has(id);
-        })
+        const c = String(s?.siteCode || '').trim().toUpperCase();
+        const id = String(s?.id || '').trim().toUpperCase();
+        return !deletedSiteCodes.has(c) && !deletedSiteCodes.has(id);
+      })
     ).map((s) => ({
       ...s,
       company: 'Orange' as const,
@@ -675,10 +675,10 @@ export const Dashboard: React.FC = () => {
     const liveEtaha = deletedSiteCodes.size === 0
       ? etahaSites
       : etahaSites.filter((s) => {
-          const c = String(s?.siteCode || '').trim().toUpperCase();
-          const id = String(s?.id || '').trim().toUpperCase();
-          return !deletedSiteCodes.has(c) && !deletedSiteCodes.has(id);
-        });
+        const c = String(s?.siteCode || '').trim().toUpperCase();
+        const id = String(s?.id || '').trim().toUpperCase();
+        return !deletedSiteCodes.has(c) && !deletedSiteCodes.has(id);
+      });
 
     switch (activeScope) {
       case 'FTTS':
@@ -2064,7 +2064,7 @@ export const Dashboard: React.FC = () => {
                 const weRaw = (matched?.rawRecord as WeRecord) || weCentralRecords.find(
                   (r) => String(r?.['site code'] || r?.['Site code'] || (r as any)?.site_code || '').trim().toUpperCase() === targetCode
                 );
-                const rawSiteStatus = (weRaw?.['Site Status'] || weRaw?.['حالة الموقع'] || (matched.rawRecord?.['Site Status']) || '').replace(/\s+/g, ' ').trim();
+                const rawSiteStatus = String(weRaw?.['Site Status'] || weRaw?.['حالة الموقع'] || (matched.rawRecord?.['Site Status']) || '').replace(/\s+/g, ' ').trim();
                 const cleanSiteStatus = rawSiteStatus && !isClassificationValue(rawSiteStatus) ? rawSiteStatus : 'ON AIR';
                 const rawTasneef = weRaw?.['التصنيف'] || matched.classification || 'جاري مدني';
 

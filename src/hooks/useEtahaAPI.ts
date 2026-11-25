@@ -478,7 +478,7 @@ export function useEtahaAPI() {
 
   const deleteEtahaRecord = useCallback(async (code: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const norm = (code || '').trim().toUpperCase();
+      const norm = String(code ?? '').trim().toUpperCase();
       const targetCodes = new Set([norm, code]);
       if (norm.startsWith('ETAH-')) targetCodes.add(norm.slice(5));
 

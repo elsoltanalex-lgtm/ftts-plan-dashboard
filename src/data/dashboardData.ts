@@ -358,7 +358,7 @@ export function normalizeToCanonicalClassification(raw: string): string {
   if (s.includes('عمل') || s.includes('تنفيذ') || s.includes('خارجي') || s.includes('كهرب') || s.includes('جاري') || s.includes('جار')) {
     return 'جاري العمل';
   }
-  return raw.trim() || 'جاري العمل';
+  return String(raw ?? '').trim() || 'جاري العمل';
 }
 
 export const OBSTACLE_REASONS = [

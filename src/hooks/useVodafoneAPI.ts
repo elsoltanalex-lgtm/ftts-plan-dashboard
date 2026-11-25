@@ -170,7 +170,7 @@ function saveStoredVodafoneRecords(records: VodafoneRecord[]): void {
 }
 
 export function fetchVodafoneSiteRecord(code: string): VodafoneRecord | null {
-  const norm = (code || '').trim().toUpperCase();
+  const norm = String(code ?? '').trim().toUpperCase();
   const records = loadStoredVodafoneRecords();
   return records.find((r) => {
     const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
@@ -431,7 +431,7 @@ export function useVodafoneAPI() {
 
   const deleteVodafoneRecord = useCallback(async (code: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const norm = (code || '').trim().toUpperCase();
+      const norm = String(code ?? '').trim().toUpperCase();
       const cleanNorm = norm.startsWith('VDF-') ? norm.slice(4) : norm;
       const targetCodes = new Set([norm, cleanNorm, code]);
 

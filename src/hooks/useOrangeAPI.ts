@@ -173,7 +173,7 @@ function saveStoredOrangeRecords(records: OrangeRecord[]): void {
 }
 
 export function fetchOrangeSiteRecord(code: string): OrangeRecord | null {
-  const norm = (code || '').trim().toUpperCase();
+  const norm = String(code ?? '').trim().toUpperCase();
   const records = loadStoredOrangeRecords();
   return records.find((r) => {
     const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
@@ -435,7 +435,7 @@ export function useOrangeAPI() {
 
   const deleteOrangeRecord = useCallback(async (code: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const norm = (code || '').trim().toUpperCase();
+      const norm = String(code ?? '').trim().toUpperCase();
       const targetCodes = new Set([norm, code]);
       if (norm.startsWith('ORG-')) targetCodes.add(norm.slice(4));
       if (norm.startsWith('ORANGE-')) targetCodes.add(norm.slice(7));

@@ -66,7 +66,7 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
   const orangeRawMap = useMemo(() => {
     const map = new Map<string, any>();
     ORANGE_RAW_RECORDS.forEach((r) => {
-      const code = (r.HUBID || r['Site code'] || '').trim();
+      const code = String(r.HUBID || r['Site code'] || '').trim();
       if (code) map.set(code, r);
     });
     return map;
