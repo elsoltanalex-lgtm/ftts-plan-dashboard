@@ -213,7 +213,7 @@ export function useOrangeAPI() {
                 ).trim().toUpperCase();
                 if (code && code !== SYNC_DELETED_CODES_SITE_CODE && !deletedCodes.has(code)) {
                   const prev = baseMap.get(code) || {};
-                  baseMap.set(code, { ...prev, ...rowData, ...row, 'Site code': code, 'site code': code });
+                  baseMap.set(code, normalizeOrangeSector({ ...prev, ...rowData, ...row, 'Site code': code, 'site code': code }));
                 }
               });
               const merged = Array.from(baseMap.values()).filter((r) => {
@@ -305,12 +305,21 @@ export function useOrangeAPI() {
       );
 
       const docUrl = record.documentUrl || (record as any).attachmentUrl || '';
+      const canonSec = normalizeSectorName(
+        record['رئاسة قطاعات التنفيذ'] || record['رئاسة القطاعات '] || record['رئاسة القطاعات'] || record['قطاع التنفيذ'] || ''
+      );
       const enriched: OrangeRecord = {
         ...record,
         company: 'Orange',
         'Site code': code,
         'site code': code,
         site_code: code,
+        ...(canonSec ? {
+          'رئاسة قطاعات التنفيذ': canonSec,
+          'رئاسة القطاعات ': canonSec,
+          'رئاسة القطاعات': canonSec,
+          'قطاع التنفيذ': canonSec,
+        } : {}),
         'التصنيف': record['التصنيف'] || record['التصنيف (مدني)'] || '',
         'التصنيف (مدني)': record['التصنيف (مدني)'] || record['التصنيف'] || '',
         classification: record['التصنيف'] || record['التصنيف (مدني)'] || '',
@@ -340,6 +349,9 @@ export function useOrangeAPI() {
       const safePayload: any = {
         site_code: code,
         'site code': code,
+        'Exc sector': canonSec || enriched['قطاع التنفيذ'] || '',
+        'Sectores': canonSec || enriched['قطاع التنفيذ'] || '',
+        'Sectore': canonSec || enriched['قطاع التنفيذ'] || '',
         'Site Status': enriched['التصنيف (مدني)'] || enriched['التصنيف'] || 'جاري',
         data: enriched,
         updated_at: now,

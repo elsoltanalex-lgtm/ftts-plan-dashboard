@@ -13,6 +13,7 @@ import {
 } from '../types/orange';
 import { isDocumentRequired } from '../config/fieldConfig';
 import { uploadAttachment } from '../lib/supabase';
+import { normalizeSectorName } from '../utils/sectorPermissions';
 import {
   Lock,
   CheckCircle2,
@@ -81,6 +82,85 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
   const [successMessage, setSuccessMessage] = useState('');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const sitesDataRef = useRef(sitesData);
+  sitesDataRef.current = sitesData;
+  const initKeyRef = useRef<string>('');
+
+  const isAddMode = activeMode === 'add';
+  const isBaselineLocked = !isAddMode;
+
+  // Canonical sector options + distinct suggestions from live Orange sites
+  const canonicalSectorOptions = useMemo(() => {
+    const base = [
+      'إسكندرية و الساحل',
+      'قطاع الشرقية',
+      'قطاع الغربية',
+      'القاهرة الكبرى',
+      'المنطقة الجنوبية',
+    ];
+    const set = new Set<string>(base);
+    (sitesData || []).forEach((s) => {
+      const sec = normalizeSectorName(s.sector || s.executionSector || '');
+      if (sec) set.add(sec);
+    });
+    const cur = normalizeSectorName(
+      String(formData['رئاسة قطاعات التنفيذ'] || formData['رئاسة القطاعات '] || formData['رئاسة القطاعات'] || formData['قطاع التنفيذ'] || '')
+    );
+    if (cur) set.add(cur);
+    return Array.from(set);
+  }, [sitesData, formData]);
+
+  const generalAdminSuggestions = useMemo(() => {
+    const set = new Set<string>();
+    (sitesData || []).forEach((s) => {
+      const v = String(s.generalAdmin || '').trim();
+      if (v) set.add(v);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [sitesData]);
+
+  const subSectorSuggestions = useMemo(() => {
+    const set = new Set<string>();
+    (sitesData || []).forEach((s) => {
+      const v = String(s.subSector || '').trim();
+      if (v) set.add(v);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [sitesData]);
+
+  const competentAdminSuggestions = useMemo(() => {
+    const set = new Set<string>();
+    (sitesData || []).forEach((s) => {
+      const v = String(s.competentAdmin || '').trim();
+      if (v) set.add(v);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [sitesData]);
+
+  const centralSuggestions = useMemo(() => {
+    const set = new Set<string>();
+    (sitesData || []).forEach((s) => {
+      const v = String(s.central || '').trim();
+      if (v) set.add(v);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [sitesData]);
+
+  const governorateSuggestions = useMemo(() => {
+    const defaults = [
+      'القاهرة', 'الجيزة', 'الإسكندرية', 'القليوبية', 'الشرقية', 'الدقهلية',
+      'الغربية', 'المنوفية', 'البحيرة', 'كفر الشيخ', 'دمياط', 'بورسعيد',
+      'الإسماعيلية', 'السويس', 'مطروح', 'الفيوم', 'بني سويف', 'المنيا',
+      'أسيوط', 'سوهاج', 'قنا', 'الأقصر', 'أسوان', 'البحر الأحمر',
+      'الوادي الجديد', 'شمال سيناء', 'جنوب سيناء',
+    ];
+    const set = new Set<string>(defaults);
+    (sitesData || []).forEach((s) => {
+      const v = String(s.governorate || '').trim();
+      if (v) set.add(v);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [sitesData]);
 
   // Computed Values
   const currentClassification = useMemo(() => {
@@ -146,7 +226,7 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
   const handleSelectSiteCode = useCallback(
     (code: string) => {
       const norm = String(code || '').trim().toUpperCase();
-      const matchedSite = sitesData.find((s) => String(s?.siteCode || '').trim().toUpperCase() === norm);
+      const matchedSite = (sitesDataRef.current || []).find((s) => String(s?.siteCode || '').trim().toUpperCase() === norm);
 
       if (!matchedSite) {
         setErrors({ _general: `لم يتم العثور على بيانات الموقع: ${code}` });
@@ -162,23 +242,28 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
         false
       );
 
+      const canonSec = normalizeSectorName(matchedSite.sector || matchedSite.executionSector || '');
       const rec: OrangeRecord = {
         'Site code': matchedSite.siteCode,
         specialTarget: isSpecial,
         special_target: isSpecial,
         'سبيشال تارجت': isSpecial,
         HUBID: matchedSite.siteCode,
-        'رئاسة القطاعات ': matchedSite.sector,
+        'رئاسة قطاعات التنفيذ': canonSec,
+        'رئاسة القطاعات ': canonSec,
+        'رئاسة القطاعات': canonSec,
         'الادارة العامة': matchedSite.generalAdmin,
         'الادارة العامة للتنفيذ': matchedSite.generalAdmin,
         'القطاع': matchedSite.subSector || '',
         'قطاع المناطق': matchedSite.subSector || '',
-        'قطاع التنفيذ': matchedSite.executionSector || matchedSite.sector,
+        'قطاع التنفيذ': canonSec || matchedSite.executionSector || matchedSite.sector,
         'المنطقة': matchedSite.competentAdmin,
         'المحافظه': matchedSite.governorate || '',
         'سنترال الربط': matchedSite.central,
         'مسئوليه التنفيذ': matchedSite.responsibility || matchedSite.civilContractor || '',
         العنوان: matchedSite.siteName || '',
+        'احدثيات خط العرض': matchedSite.lat || '',
+        'احدثيات خط الطول': matchedSite.lng || '',
         'التصنيف (مدني)': matchedSite.classification || 'جاري المعاينة',
         'نوع المعوق المدني': matchedSite.obstacleReason || '',
         'توضيح تفاصيل المعوق و المتعذر ': matchedSite.obstacleDetails || '',
@@ -199,42 +284,69 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
       setStep('fill-form');
       setErrors({});
     },
-    [sitesData]
+    []
   );
 
-  // Initialize Blank Form for New Orange Site
+  // Initialize Blank Form for New Orange Site (all basic fields unlocked & ready)
   const initNewEntry = useCallback(() => {
+    setPendingFile(null);
     setActiveMode('add');
     setStep('fill-form');
     setErrors({});
     setSuccessMessage('');
 
+    const defaultSec = user && user.role !== 'admin' && user.sector && user.sector !== 'ALL'
+      ? normalizeSectorName(user.sector)
+      : 'إسكندرية و الساحل';
+
     const blank: OrangeRecord = {
       'Site code': '',
+      'site code': '',
+      HUBID: '',
       specialTarget: false,
       special_target: false,
       'سبيشال تارجت': false,
-      'رئاسة القطاعات ': 'القاهرة الكبرى',
-      'قطاع المناطق': 'قطاع مناطق القاهرة الجديدة ',
-      'قطاع التنفيذ': 'القاهرة الكبرى',
-      'الادارة العامة للتنفيذ': 'الادارة العامة الاولى لتنفيذ شبكات القاهرة',
-      'المنطقة': 'المنطقة الأولى القاهرة الجديدة',
-      'المحافظه': 'القاهرة',
-      'سنترال الربط': 'سنترال رئيسي',
-      'مسئوليه التنفيذ': 'المناطق',
+      'رئاسة قطاعات التنفيذ': defaultSec,
+      'رئاسة القطاعات ': defaultSec,
+      'رئاسة القطاعات': defaultSec,
+      'قطاع المناطق': '',
+      'القطاع': '',
+      'قطاع التنفيذ': defaultSec,
+      'الادارة العامة': '',
+      'الادارة العامة للتنفيذ': '',
+      'المنطقة': '',
+      'المحافظه': '',
+      'سنترال الربط': '',
+      'مسئوليه التنفيذ': 'التنفيذ',
+      العنوان: '',
+      'احدثيات خط العرض': '',
+      'احدثيات خط الطول': '',
+      'التاريخ المتوقع للانتهاء': `${new Date().getFullYear()}-12-31`,
       'التصنيف (مدني)': 'جاري المعاينة',
+      'التصنيف': 'جاري المعاينة',
       'تاكيد التسليم للمنطقه': 'لم يتم التسليم',
       'موقف التسليم لاورنچ': 'لم يتم التسليم لاورنچ',
       'موقف المرفقات': 'لم يتم الارفاق',
       المستند: '',
+      documentUrl: '',
       الملاحظات: '',
     };
     setMasterRecord(blank);
     setFormData(blank);
-  }, []);
+  }, [user]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      initKeyRef.current = '';
+      return;
+    }
+    const recKey = initialRecord
+      ? String(initialRecord._id || initialRecord['Site code'] || initialRecord['site code'] || '')
+      : '';
+    const nextKey = `${mode}|${initialSiteCode || ''}|${recKey}`;
+    if (initKeyRef.current === nextKey) return;
+    initKeyRef.current = nextKey;
+
     if (initialRecord) {
       setMasterRecord(initialRecord);
       const isSpecial = Boolean(
@@ -244,8 +356,17 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
         (initialRecord as any)?.['سبيشال_تارجت'] ??
         false
       );
+      const canonSec = normalizeSectorName(
+        initialRecord['رئاسة قطاعات التنفيذ'] || initialRecord['رئاسة القطاعات '] || initialRecord['رئاسة القطاعات'] || initialRecord['قطاع التنفيذ'] || ''
+      );
       setFormData({
         ...initialRecord,
+        ...(canonSec ? {
+          'رئاسة قطاعات التنفيذ': canonSec,
+          'رئاسة القطاعات ': canonSec,
+          'رئاسة القطاعات': canonSec,
+          'قطاع التنفيذ': canonSec,
+        } : {}),
         specialTarget: isSpecial,
         special_target: isSpecial,
         'سبيشال تارجت': isSpecial,
@@ -342,8 +463,26 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
         }
       }
 
+      const canonSector = normalizeSectorName(
+        String(formData['رئاسة قطاعات التنفيذ'] || formData['رئاسة القطاعات '] || formData['رئاسة القطاعات'] || formData['قطاع التنفيذ'] || '').trim()
+      );
+      const cleanCode = String(formData['Site code'] || formData.HUBID || '').trim().toUpperCase();
+
       const payload: OrangeRecord = {
         ...formData,
+        'Site code': cleanCode,
+        'site code': cleanCode,
+        HUBID: cleanCode,
+        ...(canonSector ? {
+          'رئاسة قطاعات التنفيذ': canonSector,
+          'رئاسة القطاعات ': canonSector,
+          'رئاسة القطاعات': canonSector,
+          'قطاع التنفيذ': canonSector,
+        } : {}),
+        'الادارة العامة': formData['الادارة العامة للتنفيذ'] || formData['الادارة العامة'] || '',
+        'الادارة العامة للتنفيذ': formData['الادارة العامة للتنفيذ'] || formData['الادارة العامة'] || '',
+        'الادارة العامة لتنفيذ الشبكات': formData['الادارة العامة للتنفيذ'] || formData['الادارة العامة'] || '',
+        'التصنيف': formData['التصنيف (مدني)'] || formData['التصنيف'] || 'جاري المعاينة',
         documentUrl: docUrl,
         specialTarget: isSpecial,
         special_target: isSpecial,
@@ -457,130 +596,313 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
 
-              {/* SECTION 1: Locked Baseline Constants */}
-              <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 sm:p-5">
-                <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-200">
+              {/* SECTION 1: Baseline Data (Fully Unlocked in Add Mode, Protected in Edit Mode) */}
+              <div className={`border rounded-2xl p-4 sm:p-5 ${isAddMode ? 'bg-orange-50/40 border-orange-200' : 'bg-slate-50/80 border-slate-200'}`}>
+                <div className={`flex items-center justify-between pb-2 mb-3 border-b ${isAddMode ? 'border-orange-200' : 'border-slate-200'}`}>
                   <div className="flex items-center gap-2">
-                    <Lock className="w-4 h-4 text-slate-600" />
-                    <h3 className="font-extrabold text-slate-800 text-xs sm:text-sm">
-                      🔒 البيانات الأساسية الثابتة للموقع (Read-Only - غير مسموح بتعديلها من القطاع):
+                    {isAddMode ? (
+                      <PlusCircle className="w-4 h-4 text-orange-600" />
+                    ) : (
+                      <Lock className="w-4 h-4 text-slate-600" />
+                    )}
+                    <h3 className={`font-extrabold text-xs sm:text-sm ${isAddMode ? 'text-orange-950' : 'text-slate-800'}`}>
+                      {isAddMode
+                        ? '➕ البيانات الأساسية لموقع Orange الجديد (مفتوحة بالكامل للإدخال):'
+                        : '🔒 البيانات الأساسية الثابتة للموقع (Read-Only - غير مسموح بتعديلها من القطاع):'}
                     </h3>
                   </div>
-                  <span className="text-[11px] font-bold text-slate-500 bg-slate-200/80 px-2 py-0.5 rounded-md">
-                    محمية بالنظام 🔒
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${isAddMode ? 'text-emerald-800 bg-emerald-100 border border-emerald-300' : 'text-slate-500 bg-slate-200/80'}`}>
+                    {isAddMode ? 'مفتوح للإضافة ✨' : 'محمية بالنظام 🔒'}
                   </span>
                 </div>
 
+                {/* Datalists for fast autocomplete in Add Mode */}
+                <datalist id="orange-ga-list">
+                  {generalAdminSuggestions.map((v) => <option key={v} value={v} />)}
+                </datalist>
+                <datalist id="orange-subsector-list">
+                  {subSectorSuggestions.map((v) => <option key={v} value={v} />)}
+                </datalist>
+                <datalist id="orange-comp-list">
+                  {competentAdminSuggestions.map((v) => <option key={v} value={v} />)}
+                </datalist>
+                <datalist id="orange-gov-list">
+                  {governorateSuggestions.map((v) => <option key={v} value={v} />)}
+                </datalist>
+                <datalist id="orange-central-list">
+                  {centralSuggestions.map((v) => <option key={v} value={v} />)}
+                </datalist>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                  {/* كود الموقع */}
                   <div>
-                    <label className="text-slate-500 font-bold block mb-1">كود الموقع (HUBID)</label>
+                    <label className="text-slate-700 font-bold block mb-1">
+                      كود الموقع (Site Code / HUBID) {isAddMode && <span className="text-red-500">*</span>}
+                    </label>
                     <input
                       type="text"
-                      readOnly
-                      disabled
-                      value={formData.HUBID || formData['Site code'] || ''}
-                      className="w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold font-mono text-slate-700 cursor-not-allowed"
+                      readOnly={isBaselineLocked}
+                      disabled={isBaselineLocked}
+                      placeholder="مثال: 0009AL أو ORG-101"
+                      value={formData['Site code'] || formData.HUBID || ''}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setFormData((prev) => ({
+                          ...prev,
+                          'Site code': val,
+                          'site code': val,
+                          HUBID: val,
+                        }));
+                        setErrors((prev) => {
+                          const next = { ...prev };
+                          delete next['Site code'];
+                          delete next._general;
+                          return next;
+                        });
+                      }}
+                      className={isBaselineLocked
+                        ? 'w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold font-mono text-slate-700 cursor-not-allowed'
+                        : `w-full bg-white border-2 ${errors['Site code'] ? 'border-red-400 ring-1 ring-red-200' : 'border-orange-300'} rounded-lg px-3 py-1.5 font-bold font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-400`}
+                    />
+                    {errors['Site code'] && (
+                      <p className="text-[11px] font-bold text-red-600 mt-1">{errors['Site code']}</p>
+                    )}
+                  </div>
+
+                  {/* القطاع / رئاسة القطاعات */}
+                  <div>
+                    <label className="text-slate-700 font-bold block mb-1">القطاع / رئاسة القطاعات</label>
+                    {isBaselineLocked ? (
+                      <input
+                        type="text"
+                        readOnly
+                        disabled
+                        value={normalizeSectorName(formData['رئاسة قطاعات التنفيذ'] || formData['رئاسة القطاعات '] || formData['رئاسة القطاعات'] || '')}
+                        className="w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed"
+                      />
+                    ) : (
+                      <select
+                        value={normalizeSectorName(formData['رئاسة قطاعات التنفيذ'] || formData['رئاسة القطاعات '] || formData['رئاسة القطاعات'] || formData['قطاع التنفيذ'] || '')}
+                        onChange={(e) => {
+                          const val = normalizeSectorName(e.target.value);
+                          setFormData((prev) => ({
+                            ...prev,
+                            'رئاسة قطاعات التنفيذ': val,
+                            'رئاسة القطاعات ': val,
+                            'رئاسة القطاعات': val,
+                            'قطاع التنفيذ': val,
+                          }));
+                        }}
+                        className="w-full bg-white border border-orange-300 rounded-lg px-3 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-400 cursor-pointer"
+                      >
+                        {canonicalSectorOptions.map((sec) => (
+                          <option key={sec} value={sec}>{sec}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* الإدارة العامة للتنفيذ */}
+                  <div>
+                    <label className="text-slate-700 font-bold block mb-1">الإدارة العامة للتنفيذ</label>
+                    <input
+                      type="text"
+                      list="orange-ga-list"
+                      readOnly={isBaselineLocked}
+                      disabled={isBaselineLocked}
+                      placeholder="اختر أو اكتب الإدارة العامة..."
+                      value={formData['الادارة العامة للتنفيذ'] || formData['الادارة العامة'] || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormData((prev) => ({
+                          ...prev,
+                          'الادارة العامة للتنفيذ': val,
+                          'الادارة العامة': val,
+                          'الادارة العامة لتنفيذ الشبكات': val,
+                        }));
+                      }}
+                      className={isBaselineLocked
+                        ? 'w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed'
+                        : 'w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-400'}
                     />
                   </div>
 
+                  {/* الإدارة المختصة (قطاع المناطق) */}
                   <div>
-                    <label className="text-slate-500 font-bold block mb-1">رئاسة القطاعات</label>
+                    <label className="text-slate-700 font-bold block mb-1">الإدارة المختصة / قطاع المناطق</label>
                     <input
                       type="text"
-                      readOnly
-                      disabled
-                      value={formData['رئاسة القطاعات '] || ''}
-                      className="w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-slate-500 font-bold block mb-1">الإدارة العامة للتنفيذ</label>
-                    <input
-                      type="text"
-                      readOnly
-                      disabled
-                      value={formData['الادارة العامة'] || formData['الادارة العامة للتنفيذ'] || ''}
-                      className="w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-slate-500 font-bold block mb-1">الإدارة المختصة (القطاع)</label>
-                    <input
-                      type="text"
-                      readOnly
-                      disabled
+                      list="orange-subsector-list"
+                      readOnly={isBaselineLocked}
+                      disabled={isBaselineLocked}
+                      placeholder="اختر أو اكتب الإدارة المختصة..."
                       value={formData['القطاع'] || formData['قطاع المناطق'] || ''}
-                      className="w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormData((prev) => ({
+                          ...prev,
+                          'القطاع': val,
+                          'قطاع المناطق': val,
+                        }));
+                      }}
+                      className={isBaselineLocked
+                        ? 'w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed'
+                        : 'w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-400'}
                     />
                   </div>
 
+                  {/* إدارة المنطقة (المنطقة) */}
                   <div>
-                    <label className="text-slate-500 font-bold block mb-1">إدارة المنطقة (المنطقة)</label>
+                    <label className="text-slate-700 font-bold block mb-1">إدارة المنطقة (المنطقة)</label>
                     <input
                       type="text"
-                      readOnly
-                      disabled
+                      list="orange-comp-list"
+                      readOnly={isBaselineLocked}
+                      disabled={isBaselineLocked}
+                      placeholder="اختر أو اكتب إدارة المنطقة..."
                       value={formData['المنطقة'] || ''}
-                      className="w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormData((prev) => ({
+                          ...prev,
+                          'المنطقة': val,
+                          'ادارة التنفيذ الفرعية': val,
+                        }));
+                      }}
+                      className={isBaselineLocked
+                        ? 'w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed'
+                        : 'w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-400'}
                     />
                   </div>
 
+                  {/* المحافظة */}
                   <div>
-                    <label className="text-slate-500 font-bold block mb-1">المحافظة</label>
+                    <label className="text-slate-700 font-bold block mb-1">المحافظة</label>
                     <input
                       type="text"
-                      readOnly
-                      disabled
+                      list="orange-gov-list"
+                      readOnly={isBaselineLocked}
+                      disabled={isBaselineLocked}
+                      placeholder="اختر أو اكتب المحافظة..."
                       value={formData['المحافظه'] || ''}
-                      className="w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed"
+                      onChange={(e) => handleFieldChange('المحافظه', e.target.value)}
+                      className={isBaselineLocked
+                        ? 'w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed'
+                        : 'w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-400'}
                     />
                   </div>
 
+                  {/* سنترال الربط */}
                   <div>
-                    <label className="text-slate-500 font-bold block mb-1">سنترال الربط</label>
+                    <label className="text-slate-700 font-bold block mb-1">سنترال الربط</label>
                     <input
                       type="text"
-                      readOnly
-                      disabled
+                      list="orange-central-list"
+                      readOnly={isBaselineLocked}
+                      disabled={isBaselineLocked}
+                      placeholder="اختر أو اكتب السنترال..."
                       value={formData['سنترال الربط'] || ''}
-                      className="w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed"
+                      onChange={(e) => handleFieldChange('سنترال الربط', e.target.value)}
+                      className={isBaselineLocked
+                        ? 'w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed'
+                        : 'w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-400'}
                     />
                   </div>
 
+                  {/* مسؤولية التنفيذ */}
                   <div>
-                    <label className="text-slate-500 font-bold block mb-1">مسؤولية التنفيذ</label>
+                    <label className="text-slate-700 font-bold block mb-1">مسؤولية التنفيذ</label>
                     <input
                       type="text"
-                      readOnly
-                      disabled
-                      value={formData['مسئوليه التنفيذ'] || ''}
-                      className="w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed"
+                      readOnly={isBaselineLocked}
+                      disabled={isBaselineLocked}
+                      placeholder="مثال: التنفيذ أو المناطق"
+                      value={formData['مسئوليه التنفيذ'] || formData['مسئولية التنفيذ'] || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormData((prev) => ({
+                          ...prev,
+                          'مسئوليه التنفيذ': val,
+                          'مسئولية التنفيذ': val,
+                        }));
+                      }}
+                      className={isBaselineLocked
+                        ? 'w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed'
+                        : 'w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-400'}
                     />
                   </div>
 
+                  {/* اسم الموقع / العنوان */}
                   <div>
-                    <label className="text-slate-500 font-bold block mb-1">العنوان</label>
+                    <label className="text-slate-700 font-bold block mb-1">اسم الموقع / العنوان</label>
                     <input
                       type="text"
-                      readOnly
-                      disabled
+                      readOnly={isBaselineLocked}
+                      disabled={isBaselineLocked}
+                      placeholder="اكتب اسم الموقع أو العنوان..."
                       value={formData['العنوان'] || ''}
-                      className="w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed"
+                      onChange={(e) => handleFieldChange('العنوان', e.target.value)}
+                      className={isBaselineLocked
+                        ? 'w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-700 cursor-not-allowed'
+                        : 'w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-400'}
+                    />
+                  </div>
+
+                  {/* الإحداثيات (خط العرض / خط الطول) والتاريخ المتوقع */}
+                  <div>
+                    <label className="text-slate-700 font-bold block mb-1">خط العرض (Latitude)</label>
+                    <input
+                      type="text"
+                      readOnly={isBaselineLocked}
+                      disabled={isBaselineLocked}
+                      placeholder="مثال: 31.2001"
+                      value={formData['احدثيات خط العرض'] || ''}
+                      onChange={(e) => handleFieldChange('احدثيات خط العرض', e.target.value)}
+                      className={isBaselineLocked
+                        ? 'w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-mono font-bold text-slate-700 cursor-not-allowed'
+                        : 'w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-400'}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-slate-700 font-bold block mb-1">خط الطول (Longitude)</label>
+                    <input
+                      type="text"
+                      readOnly={isBaselineLocked}
+                      disabled={isBaselineLocked}
+                      placeholder="مثال: 29.9187"
+                      value={formData['احدثيات خط الطول'] || ''}
+                      onChange={(e) => handleFieldChange('احدثيات خط الطول', e.target.value)}
+                      className={isBaselineLocked
+                        ? 'w-full bg-slate-200/70 border border-slate-300 rounded-lg px-3 py-1.5 font-mono font-bold text-slate-700 cursor-not-allowed'
+                        : 'w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-400'}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-slate-700 font-bold block mb-1">التاريخ المتوقع للانتهاء</label>
+                    <input
+                      type="date"
+                      value={String(formData['التاريخ المتوقع للانتهاء'] || '').slice(0, 10)}
+                      onChange={(e) => handleFieldChange('التاريخ المتوقع للانتهاء', e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-400"
                     />
                   </div>
 
                   {/* Special Target Checkbox */}
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-2 md:col-span-3">
                     <label className="flex items-center gap-2.5 p-3 bg-amber-50/80 hover:bg-amber-100/70 border-2 border-amber-300/80 rounded-xl cursor-pointer transition select-none">
                       <input
                         type="checkbox"
                         checked={Boolean(formData.specialTarget || formData.special_target || formData['سبيشال تارجت'])}
                         onChange={(e) => {
-                          handleInputChange('specialTarget', e.target.checked);
-                          handleInputChange('special_target', e.target.checked);
-                          handleInputChange('سبيشال تارجت', e.target.checked);
+                          const checked = e.target.checked;
+                          setFormData((prev) => ({
+                            ...prev,
+                            specialTarget: checked,
+                            special_target: checked,
+                            'سبيشال تارجت': checked,
+                          }));
                         }}
                         className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
                       />
