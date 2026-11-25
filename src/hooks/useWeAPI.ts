@@ -6,6 +6,7 @@ import type { WeRecord } from '../config/fieldConfig';
 import { isClassificationValue } from '../config/fieldConfig';
 import { supabase, supabaseFallback, supabaseClients } from '../lib/supabase';
 import { normalizeSectorName } from '../utils/sectorPermissions';
+import { isWeSpecialTarget } from '../utils/specialTarget';
 import { WE_EXCEL_SITES } from '../data/preloadedProjects';
 import { WE_MASTER_RECORDS } from '../data/weSites';
 import {
@@ -40,15 +41,7 @@ export function normalizeRecord(row: Record<string, any>): WeRecord {
   const siteCode = base['site code'] || row['site code'] || row.site_code || row['Site code'] || '';
   const docUrl = base.documentUrl || row.documentUrl || base.attachmentUrl || row.attachmentUrl || '';
   const docName = base['المستند'] || row['المستند'] || (docUrl ? `Doc-${siteCode}.pdf` : '');
-  const isSpecial = Boolean(
-    base.specialTarget ??
-    base.special_target ??
-    base['سبيشال تارجت'] ??
-    row.specialTarget ??
-    row.special_target ??
-    row['سبيشال تارجت'] ??
-    false
-  );
+  const isSpecial = isWeSpecialTarget(row);
 
   const normExcSector = normalizeSectorName(base['Exc sector'] || row['Exc sector'] || base['قطاع التنفيذ'] || row['قطاع التنفيذ'] || '');
   const normSectores = normalizeSectorName(base['Sectores'] || row['Sectores'] || normExcSector);
@@ -108,7 +101,11 @@ async function fetchAllRowsFromCandidateTables(): Promise<{ rows: any[]; tableNa
           const validRows = allRows.filter((r) => {
             const sc = String(r.site_code || r['site code'] || '').trim().toUpperCase();
             const id = String(r.id || '').trim().toUpperCase();
-            return sc !== SYNC_DELETED_CODES_SITE_CODE && id !== SYNC_DELETED_CODES_ID;
+            if (sc === SYNC_DELETED_CODES_SITE_CODE || id === SYNC_DELETED_CODES_ID) return false;
+            // Exclude Orange / Vodafone records stored in shared fallback table
+            const rowCompany = String(r.data?.company || r.company || '').trim().toLowerCase();
+            if (rowCompany === 'orange' || rowCompany === 'vodafone') return false;
+            return true;
           });
           return { rows: validRows, tableName: table };
         }
@@ -308,6 +305,8 @@ export function useWeRecords() {
           // 3. Row INSERT or UPDATE event
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             if (!newRow) return;
+            const rowCompany = String(newRow.data?.company || newRow.company || '').trim().toLowerCase();
+            if (rowCompany === 'orange' || rowCompany === 'vodafone') return;
             const code = normalizeSiteCode(newRow.site_code || newRow['site code']);
             const currentDeleted = getLocalDeletedCodes();
             if (currentDeleted.has(code)) return; // Never show deleted site
@@ -573,15 +572,7 @@ export async function saveRecord(
     const targetId = record._id || (record as any).id;
     const now = new Date().toISOString();
 
-    const isSpecial = Boolean(
-      (record as any).specialTarget ??
-      (record as any).special_target ??
-      (record as any)['specialTarget'] ??
-      (record as any)['special_target'] ??
-      record['سبيشال تارجت'] ??
-      (record as any)['سبيشال_تارجت'] ??
-      false
-    );
+    const isSpecial = isWeSpecialTarget(record);
 
     const docUrl = String(record.documentUrl || (record as any).attachmentUrl || '').trim();
     const isInlineDataUrl = docUrl.startsWith('data:');

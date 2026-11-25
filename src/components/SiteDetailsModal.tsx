@@ -23,6 +23,7 @@ import {
 import * as XLSX from 'xlsx';
 import { useAuth } from '../context/AuthContext';
 import { isRecordInSector } from '../utils/sectorPermissions';
+import { isWeSpecialTarget } from '../utils/specialTarget';
 import { BulkDeleteModal } from './BulkDeleteModal';
 import { parseToDateInputValue } from '../utils/filterUtils';
 
@@ -425,7 +426,7 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                         <td className="py-2.5 px-3 font-mono font-bold text-sky-800">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span>{site.siteCode}</span>
-                            {(site.specialTarget || site.rawRecord?.specialTarget || site.rawRecord?.['سبيشال تارجت'] || site.rawRecord?.['سبيشال_تارجت']) && (
+                            {isWeSpecialTarget(site) && (
                               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs" title="Special Target Project">
                                 ⭐ Special Target
                               </span>
@@ -712,7 +713,7 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                                     <div><strong className="text-slate-600">تاريخ التسليم:</strong> {raw['تاريخ التسليم '] || raw['تاريخ التسليم'] || 'لم يتم'}</div>
                                     <div>
                                       <strong className="text-slate-600">Special Target:</strong>{' '}
-                                      {(site.specialTarget || raw.specialTarget || raw['سبيشال تارجت']) ? (
+                                      {isWeSpecialTarget(site) ? (
                                         <span className="font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-300">⭐ Special Target</span>
                                       ) : (
                                         <span className="text-slate-500">لا</span>

@@ -20,6 +20,7 @@ import { LoginModal } from '../components/LoginModal';
 import { useAuth } from '../context/AuthContext';
 import { ShieldCheck, Building2, Eye, LogIn, Lock, LogOut, Globe, Trash2, PlusCircle, Edit3, X, Search, AlertTriangle, Landmark, Mail, PieChart, ChevronRight, Download, Loader2, Database } from 'lucide-react';
 import { isRecordInSector, toCanonicalSector, normalizeSectorName } from '../utils/sectorPermissions';
+import { isWeSpecialTarget } from '../utils/specialTarget';
 import { toFilterArray } from '../utils/filterUtils';
 import { getSiteCompetentAdmin } from '../data/siteAdminMapping';
 import { useWeRecords, useWeSiteCodes, exportToCSV, deleteRecord, deleteRecordsBulk } from '../hooks/useWeAPI';
@@ -187,24 +188,8 @@ function mapWeRecordToSiteRecord(r: WeRecord, index = 0): SiteRecord {
     documentUrl: r.documentUrl || (r as any).attachmentUrl || '',
     attachmentUrl: (r as any).attachmentUrl || r.documentUrl || '',
     documentName: r['المستند'] || '',
-    specialTarget: Boolean(
-      (r as any).specialTarget ??
-      (r as any).special_target ??
-      (r as any)['specialTarget'] ??
-      (r as any)['special_target'] ??
-      r['سبيشال تارجت'] ??
-      (r as any)['سبيشال_تارجت'] ??
-      false
-    ),
-    special_target: Boolean(
-      (r as any).specialTarget ??
-      (r as any).special_target ??
-      (r as any)['specialTarget'] ??
-      (r as any)['special_target'] ??
-      r['سبيشال تارجت'] ??
-      (r as any)['سبيشال_تارجت'] ??
-      false
-    ),
+    specialTarget: isWeSpecialTarget(r),
+    special_target: isWeSpecialTarget(r),
     rawRecord: r,
   };
 }
@@ -948,8 +933,7 @@ export const Dashboard: React.FC = () => {
 
       // Universal: Special Target Filter (Works across FTTS WE, Vodafone, Orange, All and Availability)
       if (filters.specialTarget === true || filters.specialTarget === 'true' || filters.specialTarget === 'special') {
-        const isSpecial = Boolean(site.specialTarget || site.special_target || site.rawRecord?.specialTarget || site.rawRecord?.special_target || site.rawRecord?.['سبيشال تارجت'] || site.rawRecord?.['سبيشال_تارجت']);
-        if (!isSpecial) return false;
+        if (!isWeSpecialTarget(site)) return false;
       }
 
       return true;
@@ -1089,13 +1073,18 @@ export const Dashboard: React.FC = () => {
 
       // Universal: Special Target Filter (Works across FTTS WE, Vodafone, Orange, All and Availability)
       if (filters.specialTarget === true || filters.specialTarget === 'true' || filters.specialTarget === 'special') {
-        const isSpecial = Boolean(site.specialTarget || site.special_target || site.rawRecord?.specialTarget || site.rawRecord?.special_target || site.rawRecord?.['سبيشال تارجت'] || site.rawRecord?.['سبيشال_تارجت']);
-        if (!isSpecial) return false;
+        if (!isWeSpecialTarget(site)) return false;
       }
 
       return true;
     });
   }, [authorizedScopeData, filters.company, filters.expectedDate, filters.sector, filters.generalAdmin, filters.subSector, filters.competentAdmin, filters.central, filters.obstacleReason, filters.searchQuery, filters.externalPath, filters.internalPath, filters.excelStatus, filters.deliveryStatus, filters.executionResponsibility, filters.specialTarget, activeScope]);
+
+  // Unified Special Target count matching the EXACT active operator & filter scope
+  // Guarantees the Special Target badge count ALWAYS equals the exact row count when opened/filtered
+  const specialTargetBadgeCount = useMemo(() => {
+    return kpiScopeSites.filter((s) => isWeSpecialTarget(s)).length;
+  }, [kpiScopeSites]);
 
   // Compute live KPIs reflecting the exact 8 Excel classifications dynamically
   const kpis: KpiData = useMemo(() => {
@@ -1742,7 +1731,7 @@ export const Dashboard: React.FC = () => {
                     <span>Special Target {filters.specialTarget ? '(مفعل)' : ''}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${filters.specialTarget ? 'bg-white/30 text-white' : 'bg-amber-200/80 text-amber-900 font-bold'
                       }`}>
-                      {authorizedScopeData.filter((s) => Boolean(s.specialTarget || s.special_target || s.rawRecord?.specialTarget || s.rawRecord?.special_target || s.rawRecord?.['سبيشال تارجت'] || s.rawRecord?.['سبيشال_تارجت'])).length}
+                      {specialTargetBadgeCount}
                     </span>
                   </button>
                 </div>
@@ -1792,7 +1781,7 @@ export const Dashboard: React.FC = () => {
                     <span>Special Target {filters.specialTarget ? '(مفعل)' : ''}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${filters.specialTarget ? 'bg-white/30 text-white' : 'bg-amber-200/80 text-amber-900 font-bold'
                       }`}>
-                      {authorizedScopeData.filter((s) => Boolean(s.specialTarget || s.rawRecord?.specialTarget || s.rawRecord?.['سبيشال تارجت'] || s.rawRecord?.['سبيشال_تارجت'])).length}
+                      {specialTargetBadgeCount}
                     </span>
                   </button>
                 </div>
