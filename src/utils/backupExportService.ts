@@ -5,16 +5,19 @@ import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { supabase, supabaseFallback, supabaseClients } from '../lib/supabase';
 import type { SiteRecord } from '../types/dashboard';
-import { WE_EXCEL_SITES, TAHAWOL_EXCEL_SITES } from '../data/preloadedProjects';
+import { WE_EXCEL_SITES } from '../data/preloadedProjects';
 import { VODAFONE_RAW_RECORDS } from '../data/vodafoneSites';
 import { ORANGE_RAW_RECORDS } from '../data/orangeSites';
 import { ETAHA_RAW_RECORDS } from '../data/etahaSites';
+import { TAHAWOL_RAW_RECORDS } from '../data/tahawolSites';
+import { loadStoredTahawolRecords } from '../hooks/useTahawolAPI';
 
 export interface ExportBackupOptions {
   liveWeSites?: SiteRecord[];
   vodafoneSites?: SiteRecord[];
   orangeSites?: SiteRecord[];
   etahaSites?: SiteRecord[];
+  tahawolSites?: SiteRecord[];
   deletedSiteCodes?: Set<string>;
   userName?: string;
   userSector?: string;
@@ -202,17 +205,19 @@ export async function exportFullDatabaseBackup(options: ExportBackupOptions = {}
     vodafoneSites = [],
     orangeSites = [],
     etahaSites = [],
+    tahawolSites = [],
     deletedSiteCodes = new Set(),
     userName = 'مدير النظام',
     userSector = 'كافة القطاعات',
   } = options;
 
   // 1. Fetch live tables from Supabase in parallel
-  const [supabaseWe, supabaseVodafone, supabaseOrange, supabaseEtaha] = await Promise.all([
+  const [supabaseWe, supabaseVodafone, supabaseOrange, supabaseEtaha, supabaseTahawol] = await Promise.all([
     fetchSupabaseTableData('we_records').catch(() => null),
     fetchSupabaseTableData('vodafone_records').catch(() => null),
     fetchSupabaseTableData('orange_records').catch(() => null),
     fetchSupabaseTableData('etaha_records').catch(() => null),
+    fetchSupabaseTableData('tahawol_records').catch(() => null),
   ]);
 
   const isDeleted = (code?: string, id?: string) => {
@@ -270,8 +275,19 @@ export async function exportFullDatabaseBackup(options: ExportBackupOptions = {}
     etahaList = ETAHA_RAW_RECORDS.filter((r) => !isDeleted(r.Code));
   }
 
-  // 6. Digital Transformation Data
-  const tahawolList = TAHAWOL_EXCEL_SITES.filter((s) => !isDeleted(s.siteCode, s.id));
+  // 6. Digital Transformation Data (Authoritative Excel / Live Supabase / Local Storage — zero legacy records)
+  let tahawolList: any[] = [];
+  if (supabaseTahawol && supabaseTahawol.length > 0) {
+    tahawolList = supabaseTahawol
+      .map((r) => (r && r.data ? { ...r, ...r.data } : r))
+      .filter((r) => !isDeleted(r['الكود'] || r.site_code || r.code, r.id));
+  } else if (tahawolSites && tahawolSites.length > 0) {
+    tahawolList = tahawolSites.filter((s) => !isDeleted(s.siteCode, s.id));
+  } else {
+    const storedTahawol = loadStoredTahawolRecords();
+    const baseTahawol = storedTahawol.length > 0 ? storedTahawol : TAHAWOL_RAW_RECORDS;
+    tahawolList = baseTahawol.filter((r) => !isDeleted(r['الكود']));
+  }
 
   // 7. Master Consolidated FTTS Dataset (WE + Vodafone + Orange)
   const masterFttsRows: any[] = [];
@@ -398,17 +414,31 @@ export async function exportFullDatabaseBackup(options: ExportBackupOptions = {}
     };
   });
 
-  // Format Tahawol Sheet
-  const tahawolSheetRows = tahawolList.map((item, idx) => ({
-    'مسلسل': idx + 1,
-    'كود الموقع': item.siteCode,
-    'اسم الموقع': item.siteName,
-    'المشروع': 'التحول الرقمي (Digital Transformation)',
-    'القطاع': item.sector,
-    'السنترال': item.central,
-    'الحالة': item.status,
-    'تاريخ الانتهاء المتوقع': item.expectedDate || '',
-  }));
+  // Format Tahawol (Digital Transformation) Sheet
+  const tahawolSheetRows = tahawolList.map((item, idx) => {
+    const raw = item.rawRecord || item;
+    return {
+      'مسلسل': idx + 1,
+      'الكود': item.siteCode || raw['الكود'] || raw.site_code || '',
+      'Target': raw['Target'] || '',
+      'المرحلة النهائية': raw['المرحلة النهائية'] || '',
+      'قطاع التنفيذ': item.sector || raw['قطاع التنفيذ'] || '',
+      'مسئولية المسار الداخلي': raw['مسئولية المسار الداخلي'] || '',
+      'اسم الوزارة': raw['اسم الوزارة'] || '',
+      'الجهة': raw['الجهة'] || raw['الجهات'] || '',
+      'المبنى': raw['المبنى'] || item.siteName || '',
+      'المحافظة': raw['المحافظة'] || '',
+      'الادارة العامة للتنفيذ': item.generalAdmin || raw['الادارة العامة للتنفيذ'] || '',
+      'اداره التنفيذ المختصة': item.competentAdmin || raw['اداره التنفيذ المختصة'] || '',
+      'سنترال الربط': item.central || raw['سنترال الربط'] || '',
+      'المسار الخارجي': item.externalPath || raw['المسار الخارجي'] || '',
+      'المسار الداخلى': item.internalPath || raw['المسار الداخلى'] || raw['المسار الداخلي'] || '',
+      'موقف التسليم': item.deliveryStatus || raw['موقف التسليم'] || '',
+      'التصنيف النهائي': item.classification || raw['التصنيف النهائي'] || item.status || '',
+      'ملاحظات المسار الخارجي': raw['ملاحظات المسار الخارجي'] || '',
+      'ملاحظات المسار الداخلي': raw['ملاحظات المسار الداخلي'] || '',
+    };
+  });
 
   // Format Metadata / Summary Sheet
   const now = new Date();

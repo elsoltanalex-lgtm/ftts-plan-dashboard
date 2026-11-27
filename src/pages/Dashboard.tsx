@@ -53,6 +53,16 @@ import type { EtahaRecord } from '../data/etahaSites';
 import { EtahaBulkImportModal } from '../components/EtahaBulkImportModal';
 import { EtahaAddDataModal } from '../components/EtahaAddDataModal';
 import {
+  useTahawolAPI,
+  computeTahawolKpis,
+  isTahawolExternalDone,
+  isTahawolInternalDone,
+  isTahawolDelivered,
+} from '../hooks/useTahawolAPI';
+import type { TahawolRecord } from '../data/tahawolSites';
+import { TahawolKpiCards } from '../components/TahawolKpiCards';
+import { TahawolAddDataModal } from '../components/TahawolAddDataModal';
+import {
   isEtahaInternalDone,
   isEtahaExternalDone,
   isEtahaDelivered,
@@ -83,7 +93,6 @@ import {
   FTTS_EXCEL_SITES,
   WE_EXCEL_SITES,
   ETAHA_EXCEL_SITES,
-  TAHAWOL_EXCEL_SITES,
 } from '../data/preloadedProjects';
 import type {
   FilterState,
@@ -288,6 +297,19 @@ export const Dashboard: React.FC = () => {
   const [etahaEditingRecord, setEtahaEditingRecord] = useState<EtahaRecord | null>(null);
   const [etahaModalMode, setEtahaModalMode] = useState<'add' | 'edit'>('edit');
 
+  // Digital Transformation (التحول الرقمي) specific UI states & live dataset
+  const {
+    tahawolRecords,
+    tahawolSites,
+    saveTahawolRecord,
+    deleteTahawolRecordsBulk,
+    refetchTahawolRecords,
+  } = useTahawolAPI();
+  const [isTahawolAddDataOpen, setIsTahawolAddDataOpen] = useState(false);
+  const [tahawolEditingSiteCode, setTahawolEditingSiteCode] = useState<string | undefined>(undefined);
+  const [tahawolEditingRecord, setTahawolEditingRecord] = useState<TahawolRecord | null>(null);
+  const [tahawolModalMode, setTahawolModalMode] = useState<'add' | 'edit'>('edit');
+
   // Quick delete site states from control panel
   const [isQuickDeleteModalOpen, setIsQuickDeleteModalOpen] = useState(false);
   const [quickDeleteSearch, setQuickDeleteSearch] = useState('');
@@ -461,12 +483,14 @@ export const Dashboard: React.FC = () => {
 
     try {
       const isAvailability = activeScope === 'ETAHA' || activeScope === 'AVAILABILITY';
+      const isTahawol = activeScope === 'TAHAWOL';
       const targetCompany = forcedCompany || quickDeleteTargetCompany || (filters.company !== 'All' ? filters.company : undefined);
 
       const weCodes: string[] = [];
       const vdfCodes: string[] = [];
       const orgCodes: string[] = [];
       const etahaCodes: string[] = [];
+      const tahawolCodes: string[] = [];
 
       // Build quick lookup maps
       const vdfLookup = new Set<string>();
@@ -487,11 +511,19 @@ export const Dashboard: React.FC = () => {
         if (s.id) etahaLookup.add(String(s.id).trim().toUpperCase());
       });
 
+      const tahawolLookup = new Set<string>();
+      tahawolSites.forEach((s) => {
+        if (s.siteCode) tahawolLookup.add(String(s.siteCode).trim().toUpperCase());
+        if (s.id) tahawolLookup.add(String(s.id).trim().toUpperCase());
+      });
+
       siteCodes.forEach((code) => {
         const upper = code.toUpperCase();
-        const bare = code.replace(/^(VDF-|ORG-|ORANGE-|ETAH-)/i, '').trim().toUpperCase();
+        const bare = code.replace(/^(VDF-|ORG-|ORANGE-|ETAH-|DT-)/i, '').trim().toUpperCase();
 
-        if (isAvailability || targetCompany === 'Availability' || targetCompany === 'الإتاحة' || upper.startsWith('ETAH-') || etahaLookup.has(upper) || etahaLookup.has(bare)) {
+        if (isTahawol || upper.startsWith('DT-') || tahawolLookup.has(upper) || tahawolLookup.has(bare)) {
+          tahawolCodes.push(code);
+        } else if (isAvailability || targetCompany === 'Availability' || targetCompany === 'الإتاحة' || upper.startsWith('ETAH-') || etahaLookup.has(upper) || etahaLookup.has(bare)) {
           etahaCodes.push(code);
         } else if (targetCompany === 'Vodafone' || upper.startsWith('VDF-') || vdfLookup.has(upper) || vdfLookup.has(bare)) {
           vdfCodes.push(code);
@@ -505,6 +537,13 @@ export const Dashboard: React.FC = () => {
       // Execute in parallel across respective operators
       const tasks: Promise<any>[] = [];
 
+      if (tahawolCodes.length > 0) {
+        tasks.push(
+          deleteTahawolRecordsBulk(tahawolCodes)
+            .then(() => refetchTahawolRecords())
+            .catch((e) => console.error('Tahawol bulk delete error:', e))
+        );
+      }
       if (etahaCodes.length > 0) {
         tasks.push(
           deleteEtahaRecordsBulk(etahaCodes)
@@ -548,6 +587,9 @@ export const Dashboard: React.FC = () => {
     vodafoneSites,
     orangeSites,
     etahaSites,
+    tahawolSites,
+    deleteTahawolRecordsBulk,
+    refetchTahawolRecords,
     deleteEtahaRecordsBulk,
     refetchEtahaRecords,
     deleteVodafoneRecordsBulk,
@@ -665,6 +707,14 @@ export const Dashboard: React.FC = () => {
         return !deletedSiteCodes.has(c) && !deletedSiteCodes.has(id);
       });
 
+    const liveTahawol = deletedSiteCodes.size === 0
+      ? tahawolSites
+      : tahawolSites.filter((s) => {
+        const c = String(s?.siteCode || '').trim().toUpperCase();
+        const id = String(s?.id || '').trim().toUpperCase();
+        return !deletedSiteCodes.has(c) && !deletedSiteCodes.has(id);
+      });
+
     switch (activeScope) {
       case 'FTTS':
         return combinedFttsSites;
@@ -672,13 +722,13 @@ export const Dashboard: React.FC = () => {
       case 'ETAHA':
         return liveEtaha;
       case 'TAHAWOL':
-        return TAHAWOL_EXCEL_SITES;
+        return liveTahawol;
       case 'UPLOADED':
         return uploadedSites.length > 0 ? uploadedSites : combinedFttsSites;
       default:
         return combinedFttsSites;
     }
-  }, [activeScope, uploadedSites, combinedFttsSites, etahaSites, deletedSiteCodes]);
+  }, [activeScope, uploadedSites, combinedFttsSites, etahaSites, tahawolSites, deletedSiteCodes]);
 
   // Apply Strict Role-Based Access Control (RBAC):
   // - Admin: All sectors appear in the dashboard
@@ -802,6 +852,17 @@ export const Dashboard: React.FC = () => {
               return isEtahaDelivered(site);
             }
           }
+          if (activeScope === 'TAHAWOL') {
+            if (fs === 'تم التنفيذ خارجي') {
+              return isTahawolExternalDone(site);
+            }
+            if (fs === 'تم التنفيذ داخلي') {
+              return isTahawolInternalDone(site);
+            }
+            if (fs === 'تم التسليم تحول' || fs === 'تم التسليم') {
+              return isTahawolDelivered(site);
+            }
+          }
           if (siteCat === fs || siteStatus === fs || siteCls === fs) return true;
           if (fs === 'المكتمل' || fs === 'Completed') return isClassificationCompleted(siteCat);
           if (fs === 'متعذر / معوقات' || fs === 'Blocked / On Hold') return isClassificationBlocked(siteCat);
@@ -818,7 +879,7 @@ export const Dashboard: React.FC = () => {
       // 4. Sector Multi-Select Filter
       if (activeSectors.length > 0) {
         const matchSector = activeSectors.some((sec) => {
-          if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+          if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY' || activeScope === 'TAHAWOL') {
             const siteSec = String(site.executionSector || site.rawRecord?.['قطاع التنفيذ'] || site.sector || '').replace(/\s+/g, ' ').trim();
             return normalizeArabicText(siteSec) === normalizeArabicText(sec) || siteSec === sec;
           }
@@ -887,8 +948,8 @@ export const Dashboard: React.FC = () => {
         if (!matchSearch) return false;
       }
 
-      // 11. Etaha-Specific: 3 Classification Axes & Execution Responsibility
-      if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+      // 11. Etaha & Tahawol: 3 Classification Axes & Execution Responsibility
+      if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY' || activeScope === 'TAHAWOL') {
         const activeResponsibilities = toFilterArray(filters.executionResponsibility);
         if (activeResponsibilities.length > 0) {
           const resp = String(site.executionResponsibility || site.responsibility || site.rawRecord?.['مسئوليه التنفيذ'] || site.rawRecord?.['مسؤولية التنفيذ'] || '').replace(/\s+/g, ' ').trim();
@@ -981,7 +1042,7 @@ export const Dashboard: React.FC = () => {
       // 3. Sector Multi-Select Filter
       if (activeSectors.length > 0) {
         const matchSector = activeSectors.some((sec) => {
-          if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+          if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY' || activeScope === 'TAHAWOL') {
             const siteSec = String(site.executionSector || site.rawRecord?.['قطاع التنفيذ'] || site.sector || '').replace(/\s+/g, ' ').trim();
             return normalizeArabicText(siteSec) === normalizeArabicText(sec) || siteSec === sec;
           }
@@ -1027,8 +1088,8 @@ export const Dashboard: React.FC = () => {
         }
       }
 
-      // 10. Etaha-Specific: 3 Classification Axes & Execution Responsibility
-      if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
+      // 10. Etaha & Tahawol: 3 Classification Axes & Execution Responsibility
+      if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY' || activeScope === 'TAHAWOL') {
         const activeResponsibilities = toFilterArray(filters.executionResponsibility);
         if (activeResponsibilities.length > 0) {
           const resp = String(site.executionResponsibility || site.responsibility || site.rawRecord?.['مسئوليه التنفيذ'] || site.rawRecord?.['مسؤولية التنفيذ'] || '').replace(/\s+/g, ' ').trim();
@@ -1130,6 +1191,11 @@ export const Dashboard: React.FC = () => {
     return computeEtahaKpis(kpiScopeSites);
   }, [kpiScopeSites]);
 
+  // Compute Digital Transformation (التحول الرقمي) KPI statistics
+  const tahawolKpis = useMemo(() => {
+    return computeTahawolKpis(kpiScopeSites);
+  }, [kpiScopeSites]);
+
   // FTTS Operator cards stats scoped to user's authorized dataset
   const companyStats = useMemo(() => {
     const fttsScoped = user && user.role !== 'admin' && user.sector !== 'ALL'
@@ -1153,8 +1219,12 @@ export const Dashboard: React.FC = () => {
         ? etahaSites
         : etahaSites.filter((s) => !deletedSiteCodes.has(String(s?.siteCode || '').trim().toUpperCase()) && !deletedSiteCodes.has(String(s?.id || '').trim().toUpperCase()))
       ).length,
+      tahawolCount: (deletedSiteCodes.size === 0
+        ? tahawolSites
+        : tahawolSites.filter((s) => !deletedSiteCodes.has(String(s?.siteCode || '').trim().toUpperCase()) && !deletedSiteCodes.has(String(s?.id || '').trim().toUpperCase()))
+      ).length,
     };
-  }, [combinedFttsSites, etahaSites, user, deletedSiteCodes]);
+  }, [combinedFttsSites, etahaSites, tahawolSites, user, deletedSiteCodes]);
 
   // Active filters count
   const activeFiltersCount = useMemo(() => {
@@ -1311,6 +1381,7 @@ export const Dashboard: React.FC = () => {
         vodafoneSites,
         orangeSites,
         etahaSites,
+        tahawolSites,
         deletedSiteCodes,
         userName: user?.displayName || 'مدير النظام',
         userSector: user?.sector || (user?.role === 'admin' ? 'كافة القطاعات' : 'قطاع عام'),
@@ -1323,7 +1394,7 @@ export const Dashboard: React.FC = () => {
     } finally {
       setIsExportingBackup(false);
     }
-  }, [liveWeSites, vodafoneSites, orangeSites, etahaSites, deletedSiteCodes, user]);
+  }, [liveWeSites, vodafoneSites, orangeSites, etahaSites, tahawolSites, deletedSiteCodes, user]);
 
   // Handler to trigger the on-demand email backup to Elsoltanalex@gmail.com
   const handleEmailBackup = useCallback(async (customCreds?: { gmailAppPassword?: string; resendApiKey?: string }) => {
@@ -1424,32 +1495,7 @@ export const Dashboard: React.FC = () => {
           onSelectUploaded={() => handleScopeChange('UPLOADED')}
         />
 
-        {activeScope === 'TAHAWOL' ? (
-          <div className="pbi-card p-8 my-6 text-center bg-white/95 border border-dashed border-amber-300 rounded-2xl shadow-xs">
-            <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200 shadow-sm">
-              <Landmark className="w-8 h-8" />
-            </div>
-            <h3 className="text-lg font-black text-slate-800 tracking-tight">
-              مشروعات التحول الرقمي (Digital Transformation)
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-lg mx-auto">
-              هذا التبويب الفرعي مخصص لمشروعات التحول الرقمي والوزارات والهيئات الحكومية. النظام مهيأ بالكامل لاستقبال وربط شيت الإكسيل الخاص به ليعمل بكامل وظائفه الميدانية.
-            </p>
-            <div className="flex items-center justify-center gap-2 mt-4">
-              <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full">
-                ⏳ مهيأ للربط واستقبال البيانات
-              </span>
-            </div>
-            <div className="mt-5 flex items-center justify-center gap-3">
-              <button
-                onClick={() => handleScopeChange('ETAHA')}
-                className="px-5 py-2.5 bg-gradient-to-r from-teal-700 to-emerald-800 hover:from-teal-800 hover:to-emerald-900 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
-              >
-                الانتقال إلى تبويب Availability المعتمد
-              </button>
-            </div>
-          </div>
-        ) : activeScope === 'POST' ? (
+        {activeScope === 'POST' ? (
           <div className="pbi-card p-8 my-6 text-center bg-white/95 border border-dashed border-indigo-300 rounded-2xl shadow-xs">
             <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-200 shadow-sm">
               <Mail className="w-8 h-8" />
@@ -1498,6 +1544,18 @@ export const Dashboard: React.FC = () => {
                   delivered={etahaKpis.delivered}
                   bothPathsDone={etahaKpis.bothPathsDone}
                   pausedOnClient={etahaKpis.pausedOnClient}
+                  activeStatusFilter={filters.status}
+                  onSelectStatusFilter={handleStatusSelect}
+                  onClearStatusFilters={() => handleFilterChange('status', 'All')}
+                />
+              ) : activeScope === 'TAHAWOL' ? (
+                <TahawolKpiCards
+                  totalSites={tahawolKpis.totalSites}
+                  externalDone={tahawolKpis.externalDone}
+                  internalDone={tahawolKpis.internalDone}
+                  delivered={tahawolKpis.delivered}
+                  pausedOnClient={tahawolKpis.pausedOnClient}
+                  blocked={tahawolKpis.blocked}
                   activeStatusFilter={filters.status}
                   onSelectStatusFilter={handleStatusSelect}
                   onClearStatusFilters={() => handleFilterChange('status', 'All')}
@@ -1788,6 +1846,54 @@ export const Dashboard: React.FC = () => {
               </div>
             )}
 
+            {/* Action Buttons for Digital Transformation (التحول الرقمي) */}
+            {activeScope === 'TAHAWOL' && (
+              <div className="mb-6 p-3.5 bg-white border border-amber-200/90 rounded-2xl shadow-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <SiteActionDropdown
+                    variant="orange"
+                    label="إدارة وعمليات التحول الرقمي"
+                    itemTypeLabel="مشروع"
+                    onAdd={() => {
+                      setTahawolEditingSiteCode(undefined);
+                      setTahawolEditingRecord(null);
+                      setTahawolModalMode('add');
+                      setIsTahawolAddDataOpen(true);
+                    }}
+                    onEdit={() => {
+                      setTahawolEditingSiteCode(undefined);
+                      setTahawolEditingRecord(null);
+                      setTahawolModalMode('edit');
+                      setIsTahawolAddDataOpen(true);
+                    }}
+                    onDelete={() => setIsQuickDeleteModalOpen(true)}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilters((prev) => ({
+                        ...prev,
+                        specialTarget: prev.specialTarget ? undefined : true,
+                      }));
+                    }}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border shadow-2xs ${filters.specialTarget
+                      ? 'bg-amber-500 text-white border-amber-600 shadow-sm ring-2 ring-amber-300'
+                      : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                      }`}
+                    title="تصفية وعرض مشروعات التحول الرقمي المصنفة كـ Special Target فقط"
+                  >
+                    <span>⭐</span>
+                    <span>Special Target {filters.specialTarget ? '(مفعل)' : ''}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${filters.specialTarget ? 'bg-white/30 text-white' : 'bg-amber-200/80 text-amber-900 font-bold'
+                      }`}>
+                      {specialTargetBadgeCount}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* 7. Overall Sites Execution Status - with View Mode Toggle */}
             <div ref={executionSectionRef} className="mb-6 space-y-3">
               {/* Section Header with View Mode Toggle & Export Image Button */}
@@ -1988,7 +2094,7 @@ export const Dashboard: React.FC = () => {
               : activeScope === 'ETAHA'
                 ? 'مصدر البيانات: الاتاحه .xlsx (1,374 موقع)'
                 : activeScope === 'TAHAWOL'
-                  ? 'مصدر البيانات: بيان التحول الرقمى.xlsx (380 موقع)'
+                  ? `مصدر البيانات: بيان التحول الرقمى.xlsx (${tahawolSites.length.toLocaleString()} موقع)`
                   : `ملف مخصص: ${uploadedMetadata?.fileName}`}
           </span>
         </footer>
@@ -2005,6 +2111,21 @@ export const Dashboard: React.FC = () => {
             try {
               const targetCode = String(siteCode || '').trim().toUpperCase();
               if (!targetCode) return;
+
+              if (activeScope === 'TAHAWOL') {
+                const matchedTahawol = tahawolSites.find(
+                  (s) => String(s?.siteCode || '').trim().toUpperCase() === targetCode
+                );
+                const thRec = tahawolRecords.find(
+                  (r) => String(r?.['الكود'] || '').trim().toUpperCase() === targetCode
+                ) || (matchedTahawol?.rawRecord as TahawolRecord) || null;
+
+                setTahawolEditingSiteCode(targetCode);
+                setTahawolEditingRecord(thRec);
+                setTahawolModalMode('edit');
+                setIsTahawolAddDataOpen(true);
+                return;
+              }
 
               if (activeScope === 'ETAHA' || activeScope === 'AVAILABILITY') {
                 const matchedEtaha = etahaSites.find(
@@ -2498,6 +2619,50 @@ export const Dashboard: React.FC = () => {
         />
       </ModalErrorBoundary>
 
+      {/* Digital Transformation (التحول الرقمي) Add / Edit Modal with Error Boundary */}
+      <ModalErrorBoundary
+        isOpen={isTahawolAddDataOpen}
+        onClose={() => {
+          setIsTahawolAddDataOpen(false);
+          setTahawolEditingSiteCode(undefined);
+          setTahawolEditingRecord(null);
+        }}
+        title="نافذة إدارة مشروعات التحول الرقمي"
+      >
+        <TahawolAddDataModal
+          isOpen={isTahawolAddDataOpen}
+          onClose={() => {
+            setIsTahawolAddDataOpen(false);
+            setTahawolEditingSiteCode(undefined);
+            setTahawolEditingRecord(null);
+          }}
+          allSiteCodes={tahawolSites.map((s) => s.siteCode)}
+          initialSiteCode={tahawolEditingSiteCode}
+          initialRecord={tahawolEditingRecord}
+          mode={tahawolModalMode}
+          sitesData={tahawolSites}
+          onSave={async (record) => {
+            const res = await saveTahawolRecord(record);
+            if (res.success) {
+              await refetchTahawolRecords();
+              const code = String(record['الكود'] || '').trim();
+              if (code) {
+                setDeletedSiteCodes((prev) => {
+                  const next = new Set(prev);
+                  next.delete(code.toUpperCase());
+                  persistDeletedSiteCodes(next);
+                  return next;
+                });
+              }
+              setToastMessage(`تم حفظ وتحديث بيانات مشروع التحول الرقمي (${code}) بنجاح ✅`);
+            } else {
+              setToastMessage(`حدث خطأ أثناء حفظ بيانات التحول الرقمي: ${res.error || ''}`);
+            }
+            return res;
+          }}
+        />
+      </ModalErrorBoundary>
+
       {/* Excel Uploader Modal */}
       <ExcelUploaderModal
         isOpen={isUploadModalOpen}
@@ -2524,11 +2689,13 @@ export const Dashboard: React.FC = () => {
         }
         initialSelectedCodes={quickDeleteSelectedCode ? [quickDeleteSelectedCode] : []}
         activeScopeLabel={
-          activeScope === 'ETAHA'
-            ? 'مشروعات الإتاحة'
-            : quickDeleteTargetCompany
-              ? `مواقع ${quickDeleteTargetCompany}`
-              : 'مواقع FTTS'
+          activeScope === 'TAHAWOL'
+            ? 'مشروعات التحول الرقمي'
+            : activeScope === 'ETAHA'
+              ? 'مشروعات الإتاحة'
+              : quickDeleteTargetCompany
+                ? `مواقع ${quickDeleteTargetCompany}`
+                : 'مواقع FTTS'
         }
         onDeleteBulk={async (siteCodes) => {
           await handleBulkDeleteSites(siteCodes, quickDeleteTargetCompany || filters.company);

@@ -28,6 +28,7 @@ export interface TopNavBarStats {
   orangeCount: number;
   orangeLinks: number;
   etahaCount?: number;
+  tahawolCount?: number;
 }
 
 interface TopNavBarProps {
@@ -194,9 +195,9 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
       nameEn: 'التحول الرقمي',
       arSubtitle: 'مشروعات الوزارات والهيئات الحكومية',
       icon: Landmark,
-      count: 0,
-      countLabel: 'مهيأ لاستقبال البيانات',
-      badge: 'مهيأ للربط ⏳',
+      count: stats.tahawolCount || 0,
+      countLabel: 'مشروع معتمد',
+      badge: 'بيان التحول الرقمي ✅',
       activeGradient:
         'bg-gradient-to-r from-amber-700 via-orange-700 to-amber-800 text-white shadow-md ring-2 ring-amber-500/30 border-amber-600',
       brandDot: 'bg-amber-400',
