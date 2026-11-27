@@ -17,6 +17,9 @@ import {
   normalizeSiteCode,
   SYNC_DELETED_CODES_ID,
   SYNC_DELETED_CODES_SITE_CODE,
+  SYNC_APP_USERS_ID,
+  SYNC_APP_USERS_SITE_CODE,
+  isSystemSyncRecord,
 } from '../utils/deletedSitesSync';
 import { logActivity, buildRecordDiffSummary, getActiveActor } from '../utils/auditService';
 
@@ -102,7 +105,7 @@ async function fetchAllRowsFromCandidateTables(): Promise<{ rows: any[]; tableNa
           const validRows = allRows.filter((r) => {
             const sc = String(r.site_code || r['site code'] || '').trim().toUpperCase();
             const id = String(r.id || '').trim().toUpperCase();
-            if (sc === SYNC_DELETED_CODES_SITE_CODE || id === SYNC_DELETED_CODES_ID) return false;
+            if (isSystemSyncRecord(sc, id)) return false;
             // Exclude Orange / Vodafone records stored in shared fallback table
             const rowCompany = String(r.data?.company || r.company || '').trim().toLowerCase();
             if (rowCompany === 'orange' || rowCompany === 'vodafone') return false;
@@ -389,7 +392,7 @@ export function useWeSiteCodes() {
                   .map((r: any) => r.site_code || r['site code'] || r.data?.['site code'])
                   .filter((c: any) => {
                     const norm = normalizeSiteCode(c);
-                    return norm && norm !== SYNC_DELETED_CODES_SITE_CODE && !deletedCodes.has(norm);
+                    return norm && norm !== SYNC_DELETED_CODES_SITE_CODE && norm !== SYNC_APP_USERS_SITE_CODE && !deletedCodes.has(norm);
                   })
               ),
             ].sort();

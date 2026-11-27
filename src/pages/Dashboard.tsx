@@ -37,6 +37,7 @@ import {
   subscribeToDeletedCodes,
   SYNC_DELETED_CODES_ID,
   SYNC_DELETED_CODES_SITE_CODE,
+  isSystemSyncRecord,
 } from '../utils/deletedSitesSync';
 import type { WeRecord } from '../config/fieldConfig';
 import { normalizeClassification, isClassificationValue } from '../config/fieldConfig';
@@ -613,7 +614,7 @@ export const Dashboard: React.FC = () => {
         .filter((r) => {
           const sc = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
           const id = String(r._id || (r as any).id || '').trim().toUpperCase();
-          return sc !== SYNC_DELETED_CODES_SITE_CODE && id !== SYNC_DELETED_CODES_ID;
+          return !isSystemSyncRecord(sc, id);
         })
         .map((r, i) => mapWeRecordToSiteRecord(r, i));
     } else {

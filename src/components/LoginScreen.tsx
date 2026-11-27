@@ -29,7 +29,7 @@ export const LoginScreen: React.FC = () => {
     setErrorMessage('');
     setIsSubmitting(true);
     try {
-      const res = await login(username, password);
+      const res = await login(username.trim(), password);
       if (!res.success) {
         setErrorMessage(res.error || 'اسم المستخدم أو كلمة المرور غير صحيحة');
       }
@@ -93,6 +93,9 @@ export const LoginScreen: React.FC = () => {
                   required
                   autoFocus
                   autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="admin أو admin@ftts.local"

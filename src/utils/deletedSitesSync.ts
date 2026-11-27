@@ -5,6 +5,19 @@ import { supabaseClients } from '../lib/supabase';
 
 export const SYNC_DELETED_CODES_ID = '00000000-0000-0000-0000-000000000001';
 export const SYNC_DELETED_CODES_SITE_CODE = '__FTTS_DELETED_CODES__';
+export const SYNC_APP_USERS_ID = '00000000-0000-0000-0000-000000000002';
+export const SYNC_APP_USERS_SITE_CODE = '__FTTS_APP_USERS__';
+
+export function isSystemSyncRecord(siteCode?: string | null, id?: string | null): boolean {
+  const sc = String(siteCode || '').trim().toUpperCase();
+  const normId = String(id || '').trim().toUpperCase();
+  return (
+    sc === SYNC_DELETED_CODES_SITE_CODE ||
+    sc === SYNC_APP_USERS_SITE_CODE ||
+    normId === SYNC_DELETED_CODES_ID.toUpperCase() ||
+    normId === SYNC_APP_USERS_ID.toUpperCase()
+  );
+}
 
 export const FTTS_DELETED_CODES_KEY = 'ftts_deleted_site_codes_v3';
 export const WE_DELETED_CODES_KEY = 'we_deleted_codes_cache';

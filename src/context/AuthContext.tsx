@@ -4,8 +4,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { AuthUser, DemoAccount, ManagedUser, UserRole } from '../types/auth';
 import { isSectorMatch, extractRecordSector, isRecordInSector } from '../utils/sectorPermissions';
-import { supabaseClients } from '../lib/supabase';
+import { supabaseClients, supabaseFallback } from '../lib/supabase';
 import { startUserSession, heartbeatUserSession, endUserSession } from '../utils/auditService';
+import { SYNC_APP_USERS_ID, SYNC_APP_USERS_SITE_CODE } from '../utils/deletedSitesSync';
 
 export const INITIAL_ADMIN_CREDENTIALS = {
   username: 'admin',
@@ -185,6 +186,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 async function fetchUsersFromSupabase(): Promise<ManagedUser[] | null> {
+  // 1. Try dedicated `app_users` table first (prioritizing live fallback DB fzdmdvgmorzifysygkhp.supabase.co)
   for (const client of supabaseClients) {
     try {
       const { data, error } = await client.from(USERS_TABLE_NAME).select('*').limit(500);
@@ -216,10 +218,48 @@ async function fetchUsersFromSupabase(): Promise<ManagedUser[] | null> {
       // try next client
     }
   }
+
+  // 2. Live cloud fallback via reserved sentinel record in `we_records` so cross-device sync works immediately even before SQL migration
+  for (const client of [supabaseFallback, ...supabaseClients]) {
+    try {
+      const { data, error } = await client
+        .from('we_records')
+        .select('id, data')
+        .eq('id', SYNC_APP_USERS_ID)
+        .maybeSingle();
+      if (!error && data && data.data && Array.isArray(data.data.users)) {
+        return data.data.users as ManagedUser[];
+      }
+    } catch {
+      // continue
+    }
+  }
+
   return null;
 }
 
-async function upsertUserToSupabase(u: ManagedUser): Promise<boolean> {
+async function mirrorUsersToCloudSentinel(users: ManagedUser[]): Promise<boolean> {
+  const payload = {
+    id: SYNC_APP_USERS_ID,
+    site_code: SYNC_APP_USERS_SITE_CODE,
+    'site code': SYNC_APP_USERS_SITE_CODE,
+    data: {
+      __system: true,
+      users: ensureAdminPresent(users),
+      updatedAt: new Date().toISOString(),
+    },
+    updated_at: new Date().toISOString(),
+  };
+  try {
+    const { error } = await supabaseFallback.from('we_records').upsert(payload, { onConflict: 'id' });
+    if (!error) return true;
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
+async function upsertUserToSupabase(u: ManagedUser, allUsers: ManagedUser[]): Promise<boolean> {
   const row = {
     id: u.id,
     username: u.username,
@@ -232,27 +272,37 @@ async function upsertUserToSupabase(u: ManagedUser): Promise<boolean> {
     updated_at: u.updatedAt,
     created_at: u.createdAt,
   };
+  let tableSynced = false;
   for (const client of supabaseClients) {
     try {
       const { error } = await client.from(USERS_TABLE_NAME).upsert(row, { onConflict: 'id' });
-      if (!error) return true;
+      if (!error) {
+        tableSynced = true;
+        break;
+      }
     } catch {
       // continue
     }
   }
-  return false;
+  const sentinelSynced = await mirrorUsersToCloudSentinel(allUsers);
+  return tableSynced || sentinelSynced;
 }
 
-async function deleteUserFromSupabase(userId: string): Promise<boolean> {
+async function deleteUserFromSupabase(userId: string, remainingUsers: ManagedUser[]): Promise<boolean> {
+  let tableSynced = false;
   for (const client of supabaseClients) {
     try {
       const { error } = await client.from(USERS_TABLE_NAME).delete().eq('id', userId);
-      if (!error) return true;
+      if (!error) {
+        tableSynced = true;
+        break;
+      }
     } catch {
       // continue
     }
   }
-  return false;
+  const sentinelSynced = await mirrorUsersToCloudSentinel(remainingUsers);
+  return tableSynced || sentinelSynced;
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -279,7 +329,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           saveLocalUsers(seeded);
           setManagedUsers(seeded);
           for (const u of seeded) {
-            await upsertUserToSupabase(u);
+            await upsertUserToSupabase(u, seeded);
           }
         } else {
           // Merge cloud (authoritative) with ensureAdminPresent
@@ -391,14 +441,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = useCallback(
     async (usernameOrEmail: string, password: string, selectedSector?: string): Promise<{ success: boolean; error?: string }> => {
-      const cleanId = normalizeIdentifier(usernameOrEmail);
-      const cleanPass = String(password || '').trim();
+      // Automatically trim leading/trailing whitespace on username/email (mobile keyboard auto-space)
+      // while keeping password exact
+      const cleanId = normalizeIdentifier(String(usernameOrEmail || '').trim());
+      const exactPass = String(password ?? '');
 
-      if (!cleanId || !cleanPass) {
+      if (!cleanId || !exactPass) {
         return { success: false, error: 'يرجى إدخال اسم المستخدم أو البريد الإلكتروني وكلمة المرور' };
       }
 
-      // Refresh from Supabase first if reachable so password changes on another device take effect immediately
+      // Always fetch latest user credentials from live Supabase first (fallback to local only if offline)
       let currentUsers = loadLocalUsers();
       const cloud = await fetchUsersFromSupabase();
       if (cloud && cloud.length > 0) {
@@ -414,7 +466,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return uName === cleanId || (uMail && uMail === cleanId);
       });
 
-      if (!found || found.password !== cleanPass) {
+      if (!found || found.password !== exactPass) {
         return {
           success: false,
           error: 'اسم المستخدم أو كلمة المرور غير صحيحة. يرجى التحقق وإعادة المحاولة.',
@@ -494,7 +546,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     saveLocalUsers(next);
     setManagedUsers(next);
 
-    const synced = await upsertUserToSupabase(newUser);
+    const synced = await upsertUserToSupabase(newUser, next);
     if (synced) setCloudUsersSynced(true);
 
     return { success: true };
@@ -522,7 +574,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     saveLocalUsers(next);
     setManagedUsers(next);
 
-    const synced = await upsertUserToSupabase(updatedUser);
+    const synced = await upsertUserToSupabase(updatedUser, next);
     if (synced) setCloudUsersSynced(true);
 
     return { success: true };
@@ -548,7 +600,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     saveLocalUsers(next);
     setManagedUsers(next);
 
-    const synced = await upsertUserToSupabase(updatedUser);
+    const synced = await upsertUserToSupabase(updatedUser, next);
     if (synced) setCloudUsersSynced(true);
 
     return { success: true };
@@ -572,7 +624,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     saveLocalUsers(next);
     setManagedUsers(next);
 
-    const synced = await deleteUserFromSupabase(userId);
+    const synced = await deleteUserFromSupabase(userId, next);
     if (synced) setCloudUsersSynced(true);
 
     return { success: true };
