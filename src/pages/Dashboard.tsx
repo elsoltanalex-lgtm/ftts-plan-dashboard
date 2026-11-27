@@ -1553,6 +1553,8 @@ export const Dashboard: React.FC = () => {
                   totalSites={tahawolKpis.totalSites}
                   externalDone={tahawolKpis.externalDone}
                   internalDone={tahawolKpis.internalDone}
+                  internalExecuted={tahawolKpis.internalExecuted}
+                  internalNotRequired={tahawolKpis.internalNotRequired}
                   delivered={tahawolKpis.delivered}
                   pausedOnClient={tahawolKpis.pausedOnClient}
                   blockedCount={tahawolKpis.blockedCount}

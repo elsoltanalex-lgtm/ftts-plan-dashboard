@@ -44,6 +44,17 @@ function purgeLegacyTahawolCaches(): void {
   }
 }
 
+function deduplicateTahawolRecords(records: TahawolRecord[]): TahawolRecord[] {
+  const seen = new Map<string, TahawolRecord>();
+  for (const r of records) {
+    if (!r) continue;
+    const code = String(r['الكود'] || r.code || r.Code || '').trim().toUpperCase();
+    if (!code) continue;
+    seen.set(code, r);
+  }
+  return Array.from(seen.values());
+}
+
 export function loadStoredTahawolRecords(): TahawolRecord[] {
   purgeLegacyTahawolCaches();
   if (inMemoryTahawolRecords.length > 0) return inMemoryTahawolRecords;
@@ -52,22 +63,23 @@ export function loadStoredTahawolRecords(): TahawolRecord[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        inMemoryTahawolRecords = parsed;
+        inMemoryTahawolRecords = deduplicateTahawolRecords(parsed);
         return inMemoryTahawolRecords;
       }
     }
   } catch {
     // fallback to authoritative Excel seed
   }
-  inMemoryTahawolRecords = [...TAHAWOL_RAW_RECORDS];
+  inMemoryTahawolRecords = deduplicateTahawolRecords([...TAHAWOL_RAW_RECORDS]);
   saveStoredTahawolRecords(inMemoryTahawolRecords);
   return inMemoryTahawolRecords;
 }
 
 export function saveStoredTahawolRecords(records: TahawolRecord[]): void {
-  inMemoryTahawolRecords = records;
+  const deduped = deduplicateTahawolRecords(records);
+  inMemoryTahawolRecords = deduped;
   try {
-    localStorage.setItem(TAHAWOL_STORAGE_KEY, JSON.stringify(records));
+    localStorage.setItem(TAHAWOL_STORAGE_KEY, JSON.stringify(deduped));
   } catch {
     // storage quota fallback
   }
@@ -76,17 +88,46 @@ export function saveStoredTahawolRecords(records: TahawolRecord[]): void {
 export function isTahawolExternalDone(site: any): boolean {
   if (!site) return false;
   const raw = site.rawRecord || site;
-  const val = String(site.externalPath || raw['المسار الخارجي'] || '').trim();
+  const val = String(site.externalPath || raw['المسار الخارجي'] || '').replace(/\s+/g, ' ').trim();
+  if (!val) return false;
   const norm = normalizeArabicText(val);
-  return norm.includes('تم التنفيذ') || norm.includes('تم الانتهاء') || norm.includes('غير مطلوب اعمال');
+  if (norm.includes('لم يتم') || norm.includes('غير مطلوب')) return false;
+  return (
+    norm === normalizeArabicText('تم التنفيذ') ||
+    norm === normalizeArabicText('تمت تنفيذ') ||
+    norm === normalizeArabicText('تم الانتهاء') ||
+    norm.startsWith(normalizeArabicText('تم التنفيذ')) ||
+    norm.startsWith(normalizeArabicText('تمت تنفيذ'))
+  );
+}
+
+export function isTahawolInternalExecuted(site: any): boolean {
+  if (!site) return false;
+  const raw = site.rawRecord || site;
+  const val = String(site.internalPath || raw['المسار الداخلى'] || raw['المسار الداخلي'] || '').replace(/\s+/g, ' ').trim();
+  if (!val) return false;
+  const norm = normalizeArabicText(val);
+  if (norm.includes('لم يتم') || norm.includes('غير مطلوب')) return false;
+  return (
+    norm === normalizeArabicText('تم التنفيذ') ||
+    norm === normalizeArabicText('تمت تنفيذ') ||
+    norm === normalizeArabicText('تم الانتهاء') ||
+    norm.startsWith(normalizeArabicText('تم التنفيذ')) ||
+    norm.startsWith(normalizeArabicText('تمت تنفيذ'))
+  );
+}
+
+export function isTahawolInternalNotRequired(site: any): boolean {
+  if (!site) return false;
+  const raw = site.rawRecord || site;
+  const val = String(site.internalPath || raw['المسار الداخلى'] || raw['المسار الداخلي'] || '').replace(/\s+/g, ' ').trim();
+  if (!val) return false;
+  const norm = normalizeArabicText(val);
+  return norm.includes(normalizeArabicText('غير مطلوب اعمال'));
 }
 
 export function isTahawolInternalDone(site: any): boolean {
-  if (!site) return false;
-  const raw = site.rawRecord || site;
-  const val = String(site.internalPath || raw['المسار الداخلى'] || raw['المسار الداخلي'] || '').trim();
-  const norm = normalizeArabicText(val);
-  return norm.includes('تم التنفيذ') || norm.includes('تم الانتهاء');
+  return isTahawolInternalExecuted(site) || isTahawolInternalNotRequired(site);
 }
 
 export function isTahawolDelivered(site: any): boolean {
@@ -114,25 +155,48 @@ export function isTahawolBlocked(site: any): boolean {
 }
 
 export function computeTahawolKpis(sites: any[]) {
-  const totalSites = sites.length;
+  // Deduplicate by siteCode / الكود to guarantee zero duplicate counting
+  const uniqueSites: any[] = [];
+  const seenCodes = new Set<string>();
+  for (const s of sites || []) {
+    if (!s) continue;
+    const raw = s.rawRecord || s;
+    const code = String(s.siteCode || raw['الكود'] || s.id || '').trim().toUpperCase();
+    if (code) {
+      if (seenCodes.has(code)) continue;
+      seenCodes.add(code);
+    }
+    uniqueSites.push(s);
+  }
+
+  const totalSites = uniqueSites.length;
   let externalDone = 0;
-  let internalDone = 0;
+  let internalExecuted = 0;
+  let internalNotRequired = 0;
   let delivered = 0;
   let pausedOnClient = 0;
   let blockedCount = 0;
 
-  for (const s of sites) {
+  for (const s of uniqueSites) {
     if (isTahawolExternalDone(s)) externalDone++;
-    if (isTahawolInternalDone(s)) internalDone++;
+    if (isTahawolInternalExecuted(s)) {
+      internalExecuted++;
+    } else if (isTahawolInternalNotRequired(s)) {
+      internalNotRequired++;
+    }
     if (isTahawolDelivered(s)) delivered++;
     if (isTahawolPausedOnClient(s)) pausedOnClient++;
     if (isTahawolBlocked(s)) blockedCount++;
   }
 
+  const internalDone = internalExecuted + internalNotRequired;
+
   return {
     totalSites,
     externalDone,
     internalDone,
+    internalExecuted,
+    internalNotRequired,
     delivered,
     pausedOnClient,
     blockedCount,

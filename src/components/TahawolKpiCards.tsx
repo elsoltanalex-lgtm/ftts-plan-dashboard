@@ -13,6 +13,8 @@ export interface TahawolKpiCardsProps {
   totalSites?: number;
   externalDone?: number;
   internalDone?: number;
+  internalExecuted?: number;
+  internalNotRequired?: number;
   delivered?: number;
   pausedOnClient?: number;
   blockedCount?: number;
@@ -26,6 +28,8 @@ export const TahawolKpiCards: React.FC<TahawolKpiCardsProps> = ({
   totalSites = 0,
   externalDone = 0,
   internalDone = 0,
+  internalExecuted = 0,
+  internalNotRequired = 0,
   delivered = 0,
   pausedOnClient = 0,
   blockedCount,
@@ -36,7 +40,9 @@ export const TahawolKpiCards: React.FC<TahawolKpiCardsProps> = ({
 }) => {
   const safeTotalSites = Number(totalSites) || 0;
   const safeExternalDone = Number(externalDone) || 0;
-  const safeInternalDone = Number(internalDone) || 0;
+  const safeInternalExecuted = Number(internalExecuted) || 0;
+  const safeInternalNotRequired = Number(internalNotRequired) || 0;
+  const safeInternalDone = Number(internalDone) || (safeInternalExecuted + safeInternalNotRequired);
   const safeDelivered = Number(delivered) || 0;
   const safePausedOnClient = Number(pausedOnClient) || 0;
   const safeBlockedCount = Number(blockedCount ?? blocked) || 0;
@@ -82,6 +88,10 @@ export const TahawolKpiCards: React.FC<TahawolKpiCardsProps> = ({
       titleEn: 'Internal Path Completed',
       value: safeInternalDone,
       subValue: `${((safeInternalDone / total) * 100).toFixed(1)}% من الإجمالي`,
+      breakdown: [
+        { label: 'تم التنفيذ', count: safeInternalExecuted },
+        { label: 'غير مطلوب أعمال', count: safeInternalNotRequired },
+      ],
       icon: CheckCircle2,
       color: 'from-emerald-500 to-green-600',
       textColor: 'text-emerald-700',
@@ -198,6 +208,21 @@ export const TahawolKpiCards: React.FC<TahawolKpiCardsProps> = ({
                 <p className="text-xs text-slate-500 mt-1 font-semibold truncate" title={card.subValue}>
                   {card.subValue}
                 </p>
+                {'breakdown' in card && Array.isArray(card.breakdown) && card.breakdown.length > 0 && (
+                  <div className="mt-2 pt-1.5 border-t border-emerald-200/80 grid grid-cols-2 gap-1.5 text-[11px] font-bold">
+                    {card.breakdown.map((item) => (
+                      <div
+                        key={item.label}
+                        className="flex items-center justify-between gap-1 bg-white/85 px-2 py-1 rounded-lg border border-emerald-200/70 text-emerald-900"
+                      >
+                        <span className="truncate">{item.label}</span>
+                        <span className="font-mono font-black text-emerald-700 shrink-0">
+                          {(Number(item.count) || 0).toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {'extraFooter' in card && card.extraFooter && (
                   <div className="mt-2 pt-1.5 border-t border-slate-200/80 flex items-center justify-between gap-1.5 text-[11px] font-bold text-amber-900 bg-white/80 px-2 py-1 rounded-lg border border-amber-200/70">
                     <span className="truncate">{card.extraFooter}</span>
