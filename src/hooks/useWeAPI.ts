@@ -392,7 +392,7 @@ export function useWeSiteCodes() {
                   .map((r: any) => r.site_code || r['site code'] || r.data?.['site code'])
                   .filter((c: any) => {
                     const norm = normalizeSiteCode(c);
-                    return norm && norm !== SYNC_DELETED_CODES_SITE_CODE && norm !== SYNC_APP_USERS_SITE_CODE && !deletedCodes.has(norm);
+                    return norm && !isSystemSyncRecord(norm, null) && !deletedCodes.has(norm);
                   })
               ),
             ].sort();

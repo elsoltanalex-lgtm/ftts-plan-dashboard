@@ -7,6 +7,10 @@ export const SYNC_DELETED_CODES_ID = '00000000-0000-0000-0000-000000000001';
 export const SYNC_DELETED_CODES_SITE_CODE = '__FTTS_DELETED_CODES__';
 export const SYNC_APP_USERS_ID = '00000000-0000-0000-0000-000000000002';
 export const SYNC_APP_USERS_SITE_CODE = '__FTTS_APP_USERS__';
+export const SYNC_SESSIONS_ID = '00000000-0000-0000-0000-000000000003';
+export const SYNC_SESSIONS_SITE_CODE = '__FTTS_USER_SESSIONS__';
+export const SYNC_ACTIVITY_LOGS_ID = '00000000-0000-0000-0000-000000000004';
+export const SYNC_ACTIVITY_LOGS_SITE_CODE = '__FTTS_ACTIVITY_LOGS__';
 
 export function isSystemSyncRecord(siteCode?: string | null, id?: string | null): boolean {
   const sc = String(siteCode || '').trim().toUpperCase();
@@ -14,8 +18,12 @@ export function isSystemSyncRecord(siteCode?: string | null, id?: string | null)
   return (
     sc === SYNC_DELETED_CODES_SITE_CODE ||
     sc === SYNC_APP_USERS_SITE_CODE ||
+    sc === SYNC_SESSIONS_SITE_CODE ||
+    sc === SYNC_ACTIVITY_LOGS_SITE_CODE ||
     normId === SYNC_DELETED_CODES_ID.toUpperCase() ||
-    normId === SYNC_APP_USERS_ID.toUpperCase()
+    normId === SYNC_APP_USERS_ID.toUpperCase() ||
+    normId === SYNC_SESSIONS_ID.toUpperCase() ||
+    normId === SYNC_ACTIVITY_LOGS_ID.toUpperCase()
   );
 }
 

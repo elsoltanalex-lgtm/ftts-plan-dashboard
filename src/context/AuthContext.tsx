@@ -411,30 +411,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [managedUsers, user]);
 
-  // Periodic 60-second session heartbeat + beforeunload / visibilitychange tracking
+  // Periodic 15-second session heartbeat + resilient keepalive flush on pagehide / beforeunload / visibilitychange
   useEffect(() => {
     if (!user) return;
     heartbeatUserSession();
     const interval = window.setInterval(() => {
-      heartbeatUserSession();
-    }, 60_000);
+      if (document.visibilityState === 'visible') {
+        heartbeatUserSession();
+      }
+    }, 15_000);
 
-    const handleBeforeUnload = () => {
+    let hiddenSince = 0;
+
+    const handleCloseFlush = () => {
       endUserSession(true);
     };
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        heartbeatUserSession();
+        hiddenSince = Date.now();
+        // Flush exit time immediately for mobile browsers that suspend/kill background tabs without beforeunload
+        endUserSession(true);
       } else if (document.visibilityState === 'visible') {
-        heartbeatUserSession();
+        const awayMs = hiddenSince ? Date.now() - hiddenSince : 0;
+        hiddenSince = 0;
+        if (awayMs > 60_000) {
+          // Returning after > 60s away counts as a new visit
+          startUserSession(user, { forceNew: true });
+        } else {
+          heartbeatUserSession();
+        }
       }
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handleCloseFlush);
+    window.addEventListener('beforeunload', handleCloseFlush);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       window.clearInterval(interval);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handleCloseFlush);
+      window.removeEventListener('beforeunload', handleCloseFlush);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [user]);
@@ -492,7 +507,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const authUser = toAuthUser(found);
       setUser(authUser);
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(authUser));
-      startUserSession(authUser);
+      startUserSession(authUser, { forceNew: true });
       setIsLoginModalOpen(false);
       return { success: true };
     },

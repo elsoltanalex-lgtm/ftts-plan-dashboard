@@ -1,16 +1,22 @@
 // src/components/ActivitySessionsModal.tsx
-// Admin-only "سجل النشاط والجلسات" (Activity & Sessions Log) view with 2 tabs, filters, and Excel export
+// Admin-only Real-Time "سجل النشاط والجلسات" (Activity & Sessions Log)
+// Features Supabase Realtime + 10s auto-refresh, Per-User Multi-Visit Summary cards,
+// Per-Visit expandable edits breakdown, filters, and Excel export
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../context/AuthContext';
+import { supabaseFallback } from '../lib/supabase';
 import {
   fetchUserSessions,
   fetchActivityLogs,
   formatSessionDuration,
+  formatDurationSeconds,
+  computeDurationSeconds,
   type UserSessionRecord,
   type ActivityLogRecord,
 } from '../utils/auditService';
+import { SYNC_SESSIONS_ID, SYNC_ACTIVITY_LOGS_ID } from '../utils/deletedSitesSync';
 import {
   X,
   Activity,
@@ -23,6 +29,10 @@ import {
   Filter,
   UserCheck,
   History,
+  ChevronDown,
+  ChevronUp,
+  LogIn,
+  Edit3,
 } from 'lucide-react';
 
 type DatePreset = 'all' | 'today' | 'yesterday' | 'custom';
@@ -46,6 +56,7 @@ function formatDateTimeAr(iso?: string | null): string {
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
+    second: '2-digit',
   });
 }
 
@@ -65,30 +76,58 @@ export const ActivitySessionsModal: React.FC = () => {
   const [logs, setLogs] = useState<ActivityLogRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [cloudSynced, setCloudSynced] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string>('');
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
 
   // Filters
-  const [datePreset, setDatePreset] = useState<DatePreset>('all');
+  const [datePreset, setDatePreset] = useState<DatePreset>('today');
   const [customDate, setCustomDate] = useState(() => toLocalYMD(new Date()));
   const [selectedUser, setSelectedUser] = useState('ALL');
   const [selectedModule, setSelectedModule] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [sessRes, logsRes] = await Promise.all([fetchUserSessions(), fetchActivityLogs()]);
       setSessions(sessRes.records);
       setLogs(logsRes.records);
       setCloudSynced(sessRes.cloudSynced || logsRes.cloudSynced);
+      setLastRefreshedAt(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
+  // Real-time Supabase subscriptions + 10-second live auto-refresh while Admin is viewing
   useEffect(() => {
-    if (isAuditLogOpen && isAdmin) {
-      loadData();
-    }
+    if (!isAuditLogOpen || !isAdmin) return;
+    loadData(false);
+
+    const interval = window.setInterval(() => {
+      loadData(true);
+    }, 10_000);
+
+    const channel = supabaseFallback
+      .channel('audit_sessions_live_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_sessions' }, () => {
+        loadData(true);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, () => {
+        loadData(true);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'we_records' }, (payload) => {
+        const row = (payload.new || payload.old) as any;
+        if (row && (row.id === SYNC_SESSIONS_ID || row.id === SYNC_ACTIVITY_LOGS_ID)) {
+          loadData(true);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      window.clearInterval(interval);
+      supabaseFallback.removeChannel(channel);
+    };
   }, [isAuditLogOpen, isAdmin, loadData]);
 
   const todayYmd = useMemo(() => toLocalYMD(new Date()), []);
@@ -149,6 +188,66 @@ export const ActivitySessionsModal: React.FC = () => {
     });
   }, [logs, matchesDateFilter, selectedUser, selectedModule, searchQuery]);
 
+  // Match activity logs belonging to a specific visit/session
+  const getLogsForSession = useCallback(
+    (s: UserSessionRecord): ActivityLogRecord[] => {
+      const startMs = new Date(s.login_at).getTime();
+      const endMs = s.is_active ? Date.now() : new Date(s.logout_at || s.last_active_at).getTime() + 5000;
+      return logs.filter((l) => {
+        if (l.session_id && l.session_id === s.id) return true;
+        if (!l.session_id && l.username === s.username) {
+          const t = new Date(l.created_at).getTime();
+          return t >= startMs - 2000 && t <= endMs;
+        }
+        return false;
+      });
+    },
+    [logs]
+  );
+
+  // Per-User Multi-Visit Summary for the currently selected date filter
+  const perUserSummary = useMemo(() => {
+    const map = new Map<
+      string,
+      { username: string; userName: string; visits: number; totalSeconds: number; edits: number; online: boolean }
+    >();
+
+    for (const s of filteredSessions) {
+      const key = s.username;
+      const cur = map.get(key) || {
+        username: s.username,
+        userName: s.user_name,
+        visits: 0,
+        totalSeconds: 0,
+        edits: 0,
+        online: false,
+      };
+      cur.visits += 1;
+      cur.totalSeconds +=
+        typeof s.duration_seconds === 'number' && s.duration_seconds > 0
+          ? s.duration_seconds
+          : computeDurationSeconds(s.login_at, s.is_active ? null : s.logout_at || s.last_active_at);
+      if (s.is_active) cur.online = true;
+      map.set(key, cur);
+    }
+
+    for (const l of filteredLogs) {
+      const key = l.username;
+      const cur = map.get(key) || {
+        username: l.username,
+        userName: l.user_name,
+        visits: 0,
+        totalSeconds: 0,
+        edits: 0,
+        online: false,
+      };
+      cur.edits += 1;
+      map.set(key, cur);
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.visits - a.visits || b.edits - a.edits);
+  }, [filteredSessions, filteredLogs]);
+
   const handleExportActivityExcel = () => {
     const rows = filteredLogs.map((l, idx) => ({
       'مسلسل': idx + 1,
@@ -196,19 +295,25 @@ export const ActivitySessionsModal: React.FC = () => {
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-black tracking-tight flex items-center gap-2 flex-wrap">
-                <span>سجل النشاط والجلسات (Activity & Sessions Log)</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/25 border border-emerald-400/40 text-emerald-200">
+                <span>سجل النشاط والجلسات المباشر</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/25 border border-emerald-400/40 text-emerald-200 inline-flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   متصل الآن: {onlineCount}
                 </span>
               </h2>
-              <p className="text-[11px] text-slate-300 mt-0.5 flex items-center gap-2">
+              <p className="text-[11px] text-slate-300 mt-0.5 flex items-center gap-2 flex-wrap">
                 {cloudSynced ? (
                   <span className="inline-flex items-center gap-1 text-emerald-300">
-                    <Cloud className="w-3.5 h-3.5" /> متزامن مع Supabase (`user_sessions` & `activity_logs`)
+                    <Cloud className="w-3.5 h-3.5" /> بث مباشر مع Supabase (تحديث تلقائي كل 10 ثوانٍ)
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 text-amber-300">
-                    <HardDrive className="w-3.5 h-3.5" /> تسجيل محلي فوري نشط (مهيأ للمزامنة السحابية مع Supabase)
+                    <HardDrive className="w-3.5 h-3.5" /> تسجيل محلي فوري نشط
+                  </span>
+                )}
+                {lastRefreshedAt && (
+                  <span className="text-slate-400 font-mono text-[10px]">
+                    • آخر تحديث: {lastRefreshedAt}
                   </span>
                 )}
               </p>
@@ -218,12 +323,13 @@ export const ActivitySessionsModal: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={loadData}
+              onClick={() => loadData(false)}
               disabled={loading}
-              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 cursor-pointer transition"
-              title="تحديث السجلات"
+              className="px-3 py-1.5 rounded-lg bg-sky-600/80 hover:bg-sky-500 text-white text-xs font-bold cursor-pointer transition flex items-center gap-1.5"
+              title="تحديث فوري الآن"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <span>تحديث فوري</span>
             </button>
             <button
               type="button"
@@ -291,7 +397,7 @@ export const ActivitySessionsModal: React.FC = () => {
             <Filter className="w-3.5 h-3.5 text-blue-600" />
             <span>الفترة:</span>
           </div>
-          {(['all', 'today', 'yesterday', 'custom'] as DatePreset[]).map((preset) => (
+          {(['today', 'yesterday', 'all', 'custom'] as DatePreset[]).map((preset) => (
             <button
               key={preset}
               type="button"
@@ -356,8 +462,62 @@ export const ActivitySessionsModal: React.FC = () => {
           </div>
         </div>
 
-        {/* Table Content */}
-        <div className="p-5 overflow-y-auto flex-1">
+        {/* Scrollable Content */}
+        <div className="p-5 overflow-y-auto flex-1 space-y-4">
+          {/* Per-User Multi-Visit Summary Cards */}
+          {perUserSummary.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {perUserSummary.map((u) => (
+                <div
+                  key={u.username}
+                  onClick={() => setSelectedUser(selectedUser === u.username ? 'ALL' : u.username)}
+                  className={`p-3.5 rounded-2xl border transition cursor-pointer ${
+                    selectedUser === u.username
+                      ? 'bg-blue-50/90 border-blue-400 ring-2 ring-blue-500/20'
+                      : 'bg-slate-50/80 border-slate-200 hover:border-blue-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="min-w-0">
+                      <div className="text-xs font-extrabold text-slate-800 truncate">{u.userName}</div>
+                      <div className="text-[10px] font-mono text-slate-400">{u.username}</div>
+                    </div>
+                    {u.online ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        متصل الآن
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200/80 text-slate-600 shrink-0">
+                        غير متصل
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5 text-center text-[11px]">
+                    <div className="bg-white rounded-xl p-1.5 border border-slate-200/80">
+                      <div className="text-[10px] text-slate-400 font-semibold flex items-center justify-center gap-0.5">
+                        <LogIn className="w-3 h-3 text-blue-500" /> الدخول
+                      </div>
+                      <div className="font-mono font-black text-slate-800">{u.visits} مرة</div>
+                    </div>
+                    <div className="bg-white rounded-xl p-1.5 border border-slate-200/80">
+                      <div className="text-[10px] text-slate-400 font-semibold flex items-center justify-center gap-0.5">
+                        <Clock className="w-3 h-3 text-indigo-500" /> التواجد
+                      </div>
+                      <div className="font-bold text-indigo-700 truncate">{formatDurationSeconds(u.totalSeconds)}</div>
+                    </div>
+                    <div className="bg-white rounded-xl p-1.5 border border-slate-200/80">
+                      <div className="text-[10px] text-slate-400 font-semibold flex items-center justify-center gap-0.5">
+                        <Edit3 className="w-3 h-3 text-emerald-500" /> التعديلات
+                      </div>
+                      <div className="font-mono font-black text-emerald-700">{u.edits}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {activeTab === 'sessions' ? (
             <div className="border border-slate-200 rounded-2xl overflow-hidden">
               <div className="overflow-x-auto">
@@ -367,50 +527,104 @@ export const ActivitySessionsModal: React.FC = () => {
                       <th className="px-3.5 py-2.5">المستخدم</th>
                       <th className="px-3.5 py-2.5">وقت الدخول</th>
                       <th className="px-3.5 py-2.5">وقت الخروج / آخر نشاط</th>
-                      <th className="px-3.5 py-2.5">مدة الجلسة</th>
+                      <th className="px-3.5 py-2.5">مدة الزيارة</th>
                       <th className="px-3.5 py-2.5 text-center">الحالة</th>
+                      <th className="px-3.5 py-2.5 text-center">تعديلات الزيارة</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredSessions.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-10 text-center text-slate-400 font-bold">
-                          لا توجد جلسات مسجلة في النطاق المحدد
+                        <td colSpan={6} className="py-10 text-center text-slate-400 font-bold">
+                          لا توجد زيارات أو جلسات مسجلة في النطاق المحدد
                         </td>
                       </tr>
                     ) : (
-                      filteredSessions.map((s) => (
-                        <tr key={s.id} className="bg-white hover:bg-slate-50/80">
-                          <td className="px-3.5 py-2.5">
-                            <div className="font-bold text-slate-800">{s.user_name}</div>
-                            <div className="text-[10px] font-mono text-slate-400">{s.username}</div>
-                          </td>
-                          <td className="px-3.5 py-2.5 font-mono text-slate-700">
-                            {formatDateTimeAr(s.login_at)}
-                          </td>
-                          <td className="px-3.5 py-2.5 font-mono text-slate-700">
-                            {formatDateTimeAr(s.logout_at || s.last_active_at)}
-                          </td>
-                          <td className="px-3.5 py-2.5 font-bold text-slate-800">
-                            <span className="inline-flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5 text-blue-500" />
-                              {formatSessionDuration(s.login_at, s.logout_at || s.last_active_at)}
-                            </span>
-                          </td>
-                          <td className="px-3.5 py-2.5 text-center">
-                            {s.is_active ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                متصل الآن
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                                منتهية
-                              </span>
+                      filteredSessions.map((s) => {
+                        const visitLogs = getLogsForSession(s);
+                        const isExpanded = expandedSessionId === s.id;
+                        return (
+                          <React.Fragment key={s.id}>
+                            <tr className="bg-white hover:bg-slate-50/80">
+                              <td className="px-3.5 py-2.5">
+                                <div className="font-bold text-slate-800">{s.user_name}</div>
+                                <div className="text-[10px] font-mono text-slate-400">{s.username}</div>
+                              </td>
+                              <td className="px-3.5 py-2.5 font-mono text-slate-700 whitespace-nowrap">
+                                {formatDateTimeAr(s.login_at)}
+                              </td>
+                              <td className="px-3.5 py-2.5 font-mono text-slate-700 whitespace-nowrap">
+                                {formatDateTimeAr(s.logout_at || s.last_active_at)}
+                              </td>
+                              <td className="px-3.5 py-2.5 font-bold text-slate-800 whitespace-nowrap">
+                                <span className="inline-flex items-center gap-1">
+                                  <Clock className="w-3.5 h-3.5 text-blue-500" />
+                                  {formatSessionDuration(s.login_at, s.logout_at || s.last_active_at, s.duration_seconds)}
+                                </span>
+                              </td>
+                              <td className="px-3.5 py-2.5 text-center whitespace-nowrap">
+                                {s.is_active ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                    متصل الآن
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                    منتهية
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3.5 py-2.5 text-center whitespace-nowrap">
+                                {visitLogs.length > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedSessionId(isExpanded ? null : s.id)}
+                                    className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer transition"
+                                  >
+                                    <span>{visitLogs.length} تعديل</span>
+                                    {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                  </button>
+                                ) : (
+                                  <span className="text-[11px] text-slate-400">تصفح فقط</span>
+                                )}
+                              </td>
+                            </tr>
+
+                            {isExpanded && visitLogs.length > 0 && (
+                              <tr className="bg-indigo-50/40">
+                                <td colSpan={6} className="px-4 py-3">
+                                  <div className="bg-white rounded-xl border border-indigo-200 p-3 space-y-2">
+                                    <div className="text-[11px] font-extrabold text-indigo-900">
+                                      التعديلات والحركات المسجلة خلال هذه الزيارة ({visitLogs.length}):
+                                    </div>
+                                    <div className="divide-y divide-slate-100">
+                                      {visitLogs.map((vl) => (
+                                        <div key={vl.id} className="py-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <span
+                                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                                ACTION_BADGE[vl.action_type] || 'bg-slate-100 text-slate-700 border-slate-200'
+                                              }`}
+                                            >
+                                              {vl.action_type}
+                                            </span>
+                                            <span className="font-bold text-slate-700">{vl.module}</span>
+                                            <span className="font-mono font-bold text-indigo-700">{vl.site_code}</span>
+                                            <span className="text-slate-600">{vl.details}</span>
+                                          </div>
+                                          <span className="font-mono text-[10px] text-slate-400">
+                                            {formatDateTimeAr(vl.created_at)}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
                             )}
-                          </td>
-                        </tr>
-                      ))
+                          </React.Fragment>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
