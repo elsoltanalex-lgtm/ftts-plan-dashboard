@@ -172,7 +172,7 @@ export const ProjectTabs: React.FC<ProjectTabsProps> = ({
                       className={`inline-block font-mono text-xs sm:text-sm font-extrabold px-2 py-0.5 rounded-full ${isActive ? tab.countColor : 'bg-slate-200/80 text-slate-700'
                         }`}
                     >
-                      {tab.count.toLocaleString()}
+                      {(Number(tab.count) || 0).toLocaleString()}
                     </span>
                     <span
                       className={`text-[9px] block text-center mt-0.5 leading-none font-medium ${isActive ? 'text-white/70' : 'text-slate-400'

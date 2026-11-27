@@ -280,7 +280,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isFttsActive ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700'
                         }`}
                     >
-                      {stats.allCount.toLocaleString()} Sites
+                      {(Number(stats.allCount) || 0).toLocaleString()} Sites
                     </span>
                   </div>
                   <span
@@ -346,7 +346,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
-                            {op.sites.toLocaleString()} Sites
+                            {(Number(op.sites) || 0).toLocaleString()} Sites
                           </span>
                           {isSelected && <Check className="w-4 h-4 text-blue-600" />}
                         </div>
@@ -555,7 +555,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                           Total Sites
                         </span>
                         <span className="font-mono text-base sm:text-lg font-black tracking-tight leading-none">
-                          {op.sites.toLocaleString()}
+                          {(Number(op.sites) || 0).toLocaleString()}
                         </span>
                       </div>
 
@@ -572,7 +572,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                             : 'bg-slate-100 text-slate-700'
                             }`}
                         >
-                          {op.links.toLocaleString()}
+                          {(Number(op.links) || 0).toLocaleString()}
                         </span>
                       </div>
                     </div>

@@ -927,7 +927,7 @@ export const WeExecutiveReportView: React.FC<WeExecutiveReportViewProps> = ({
         <div className="bg-white rounded-xl shadow-xs border border-slate-200 border-t-4 border-t-slate-800 p-3 sm:p-3.5 flex flex-col justify-between text-right">
           <span className="text-xs font-bold text-slate-800">إجمالي التارجت</span>
           <span className="font-mono text-2xl sm:text-3xl font-black text-slate-900 my-1 block">
-            {totals.target.toLocaleString()}
+            {(Number(totals?.target) || 0).toLocaleString()}
           </span>
           <span className="text-[10px] text-slate-400">إجمالي المواقع المستهدفة</span>
         </div>
@@ -936,16 +936,16 @@ export const WeExecutiveReportView: React.FC<WeExecutiveReportViewProps> = ({
         <div className="bg-[#f0fdfa] rounded-xl shadow-xs border border-teal-200 border-t-4 border-t-teal-600 p-3 sm:p-3.5 flex flex-col justify-between text-right">
           <span className="text-xs font-bold text-teal-800">إجمالي المحقق (المنفذ)</span>
           <span className="font-mono text-2xl sm:text-3xl font-black text-teal-700 my-1 block">
-            {totals.executed.toLocaleString()}
+            {(Number(totals?.executed) || 0).toLocaleString()}
           </span>
-          <span className="text-[10px] font-bold text-teal-700">بنسبة إنجاز {totals.achievementRate}% من التارجت</span>
+          <span className="text-[10px] font-bold text-teal-700">بنسبة إنجاز {totals?.achievementRate ?? 0}% من التارجت</span>
         </div>
 
         {/* Card 3: مسلّم بشهادة معتمدة */}
         <div className="bg-[#f0fdf4] rounded-xl shadow-xs border border-green-200 border-t-4 border-t-green-600 p-3 sm:p-3.5 flex flex-col justify-between text-right">
           <span className="text-xs font-bold text-green-800">مسلّم بشهادة معتمدة</span>
           <span className="font-mono text-2xl sm:text-3xl font-black text-green-700 my-1 block">
-            {totals.withCert.toLocaleString()}
+            {(Number(totals?.withCert) || 0).toLocaleString()}
           </span>
           <span className="text-[10px] text-green-700">
             {totals.executed > 0 ? ((totals.withCert / totals.executed) * 100).toFixed(1) : 0}% من إجمالي المنفذ
@@ -956,7 +956,7 @@ export const WeExecutiveReportView: React.FC<WeExecutiveReportViewProps> = ({
         <div className="bg-[#ecfdf5] rounded-xl shadow-xs border border-emerald-200 border-t-4 border-t-emerald-500 p-3 sm:p-3.5 flex flex-col justify-between text-right">
           <span className="text-xs font-bold text-emerald-800">منفذ طرف المنطقة</span>
           <span className="font-mono text-2xl sm:text-3xl font-black text-emerald-700 my-1 block">
-            {totals.byRegion.toLocaleString()}
+            {(Number(totals?.byRegion) || 0).toLocaleString()}
           </span>
           <span className="text-[10px] text-emerald-700">
             {totals.executed > 0 ? ((totals.byRegion / totals.executed) * 100).toFixed(1) : 0}% من إجمالي المنفذ
@@ -967,7 +967,7 @@ export const WeExecutiveReportView: React.FC<WeExecutiveReportViewProps> = ({
         <div className="bg-[#f0fdf4] rounded-xl shadow-xs border border-emerald-200 border-t-4 border-t-emerald-400 p-3 sm:p-3.5 flex flex-col justify-between text-right">
           <span className="text-xs font-bold text-emerald-800">منفذ بدون شهادة</span>
           <span className="font-mono text-2xl sm:text-3xl font-black text-emerald-700 my-1 block">
-            {totals.noCert.toLocaleString()}
+            {(Number(totals?.noCert) || 0).toLocaleString()}
           </span>
           <span className="text-[10px] text-emerald-700">
             {totals.executed > 0 ? ((totals.noCert / totals.executed) * 100).toFixed(1) : 0}% من إجمالي المنفذ
@@ -978,16 +978,16 @@ export const WeExecutiveReportView: React.FC<WeExecutiveReportViewProps> = ({
         <div className="bg-[#fff1f2] rounded-xl shadow-xs border border-rose-200 border-t-4 border-t-rose-700 p-3 sm:p-3.5 flex flex-col justify-between text-right">
           <span className="text-xs font-bold text-rose-800">متبقي: جاري العمل</span>
           <span className="font-mono text-2xl sm:text-3xl font-black text-rose-700 my-1 block">
-            {totals.inProgress.toLocaleString()}
+            {(Number(totals?.inProgress) || 0).toLocaleString()}
           </span>
-          <span className="text-[10px] text-rose-700">من إجمالي المتبقي ({totals.remaining})</span>
+          <span className="text-[10px] text-rose-700">من إجمالي المتبقي ({totals?.remaining ?? 0})</span>
         </div>
 
         {/* Card 7: متبقي: جاري التصاريح */}
         <div className="bg-[#fff1f2] rounded-xl shadow-xs border border-rose-200 border-t-4 border-t-rose-500 p-3 sm:p-3.5 flex flex-col justify-between text-right">
           <span className="text-xs font-bold text-rose-800">متبقي: جاري التصاريح</span>
           <span className="font-mono text-2xl sm:text-3xl font-black text-rose-600 my-1 block">
-            {(totals.permits + totals.blocked).toLocaleString()}
+            {((Number(totals?.permits) || 0) + (Number(totals?.blocked) || 0)).toLocaleString()}
           </span>
           <span className="text-[10px] text-rose-600">
             المطلوب يومياً: {Math.max(1, Math.round((totals.permits + totals.blocked) / 14))} موقع

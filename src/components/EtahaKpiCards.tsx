@@ -89,7 +89,7 @@ export const EtahaKpiCards: React.FC<EtahaKpiCardsProps> = ({
       titleEn: 'General Status (Internal & External Done)',
       value: generalStatusCount,
       subValue: `${((generalStatusCount / total) * 100).toFixed(1)}% من الإجمالي (تم داخلي + خارجي)`,
-      extraFooter: `متوقف على العميل: ${pausedOnClient.toLocaleString()} موقع`,
+      extraFooter: `متوقف على العميل: ${(Number(pausedOnClient) || 0).toLocaleString()} موقع`,
       icon: Award,
       color: 'from-purple-500 to-indigo-600',
       textColor: 'text-purple-700',
@@ -177,7 +177,7 @@ export const EtahaKpiCards: React.FC<EtahaKpiCardsProps> = ({
               <div className="mt-2">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className={`text-2xl sm:text-3xl font-black font-sans tracking-tight ${card.textColor}`}>
-                    {card.value.toLocaleString()}
+                    {(Number(card.value) || 0).toLocaleString()}
                   </span>
                   <span
                     className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors ${

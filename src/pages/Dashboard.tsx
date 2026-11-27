@@ -1387,7 +1387,7 @@ export const Dashboard: React.FC = () => {
         userSector: user?.sector || (user?.role === 'admin' ? 'كافة القطاعات' : 'قطاع عام'),
       });
       const docNote = res.documentsCount > 0 ? ` + ${res.documentsCount} مستند ومرفق PDF` : '';
-      setToastMessage(`✅ تم تحميل حزمة النسخة الاحتياطية بنجاح (${res.totalSites.toLocaleString()} موقعاً${docNote}) 📦`);
+      setToastMessage(`✅ تم تحميل حزمة النسخة الاحتياطية بنجاح (${(Number(res.totalSites) || 0).toLocaleString()} موقعاً${docNote}) 📦`);
     } catch (err: any) {
       console.error('Failed to export backup:', err);
       setToastMessage(`❌ حدث خطأ أثناء تصدير النسخة الاحتياطية: ${err?.message || 'فشل التصدير'}`);
@@ -1555,7 +1555,7 @@ export const Dashboard: React.FC = () => {
                   internalDone={tahawolKpis.internalDone}
                   delivered={tahawolKpis.delivered}
                   pausedOnClient={tahawolKpis.pausedOnClient}
-                  blocked={tahawolKpis.blocked}
+                  blockedCount={tahawolKpis.blockedCount}
                   activeStatusFilter={filters.status}
                   onSelectStatusFilter={handleStatusSelect}
                   onClearStatusFilters={() => handleFilterChange('status', 'All')}
@@ -1906,7 +1906,7 @@ export const Dashboard: React.FC = () => {
                     <h3 className="text-sm font-black text-slate-800 tracking-tight flex items-center gap-2">
                       <span>الموقف العام لتنفيذ المواقع (Overall Sites Execution Status)</span>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-mono">
-                        {filteredSites.length.toLocaleString()} موقع معروض
+                        {(filteredSites?.length || 0).toLocaleString()} موقع معروض
                       </span>
                     </h3>
                     <p className="text-[11px] text-slate-400">
@@ -2094,7 +2094,7 @@ export const Dashboard: React.FC = () => {
               : activeScope === 'ETAHA'
                 ? 'مصدر البيانات: الاتاحه .xlsx (1,374 موقع)'
                 : activeScope === 'TAHAWOL'
-                  ? `مصدر البيانات: بيان التحول الرقمى.xlsx (${tahawolSites.length.toLocaleString()} موقع)`
+                  ? `مصدر البيانات: بيان التحول الرقمى.xlsx (${(tahawolSites?.length || 0).toLocaleString()} موقع)`
                   : `ملف مخصص: ${uploadedMetadata?.fileName}`}
           </span>
         </footer>

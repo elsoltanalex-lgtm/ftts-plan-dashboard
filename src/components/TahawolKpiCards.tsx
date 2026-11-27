@@ -10,29 +10,37 @@ import {
 import { toFilterArray } from '../utils/filterUtils';
 
 export interface TahawolKpiCardsProps {
-  totalSites: number;
-  externalDone: number;
-  internalDone: number;
-  delivered: number;
-  pausedOnClient: number;
-  blockedCount: number;
+  totalSites?: number;
+  externalDone?: number;
+  internalDone?: number;
+  delivered?: number;
+  pausedOnClient?: number;
+  blockedCount?: number;
+  blocked?: number;
   activeStatusFilter: string | string[];
   onSelectStatusFilter: (status: string) => void;
   onClearStatusFilters?: () => void;
 }
 
 export const TahawolKpiCards: React.FC<TahawolKpiCardsProps> = ({
-  totalSites,
-  externalDone,
-  internalDone,
-  delivered,
-  pausedOnClient,
+  totalSites = 0,
+  externalDone = 0,
+  internalDone = 0,
+  delivered = 0,
+  pausedOnClient = 0,
   blockedCount,
+  blocked,
   activeStatusFilter,
   onSelectStatusFilter,
   onClearStatusFilters,
 }) => {
-  const total = totalSites || 1;
+  const safeTotalSites = Number(totalSites) || 0;
+  const safeExternalDone = Number(externalDone) || 0;
+  const safeInternalDone = Number(internalDone) || 0;
+  const safeDelivered = Number(delivered) || 0;
+  const safePausedOnClient = Number(pausedOnClient) || 0;
+  const safeBlockedCount = Number(blockedCount ?? blocked) || 0;
+  const total = safeTotalSites || 1;
   const activeList = useMemo(() => toFilterArray(activeStatusFilter), [activeStatusFilter]);
   const isAllActive = activeList.length === 0 || activeList.includes('All');
 
@@ -41,9 +49,9 @@ export const TahawolKpiCards: React.FC<TahawolKpiCardsProps> = ({
       id: 'tahawol-kpi-total',
       title: 'إجمالي مواقع التحول الرقمي',
       titleEn: 'Total Digital Transformation Sites',
-      value: totalSites,
-      subValue: `${totalSites.toLocaleString()} موقع حكومي معتمد`,
-      extraFooter: `معوقات / متعذرات: ${blockedCount.toLocaleString()} موقع`,
+      value: safeTotalSites,
+      subValue: `${safeTotalSites.toLocaleString()} موقع حكومي معتمد`,
+      extraFooter: `معوقات / متعذرات: ${safeBlockedCount.toLocaleString()} موقع`,
       icon: Landmark,
       color: 'from-amber-600 via-orange-600 to-amber-700',
       textColor: 'text-amber-800',
@@ -57,8 +65,8 @@ export const TahawolKpiCards: React.FC<TahawolKpiCardsProps> = ({
       id: 'tahawol-kpi-external-done',
       title: 'تم التنفيذ خارجي',
       titleEn: 'External Path Completed',
-      value: externalDone,
-      subValue: `${((externalDone / total) * 100).toFixed(1)}% من الإجمالي`,
+      value: safeExternalDone,
+      subValue: `${((safeExternalDone / total) * 100).toFixed(1)}% من الإجمالي`,
       icon: Zap,
       color: 'from-cyan-500 to-teal-600',
       textColor: 'text-cyan-700',
@@ -72,8 +80,8 @@ export const TahawolKpiCards: React.FC<TahawolKpiCardsProps> = ({
       id: 'tahawol-kpi-internal-done',
       title: 'تم التنفيذ داخلي',
       titleEn: 'Internal Path Completed',
-      value: internalDone,
-      subValue: `${((internalDone / total) * 100).toFixed(1)}% من الإجمالي`,
+      value: safeInternalDone,
+      subValue: `${((safeInternalDone / total) * 100).toFixed(1)}% من الإجمالي`,
       icon: CheckCircle2,
       color: 'from-emerald-500 to-green-600',
       textColor: 'text-emerald-700',
@@ -87,9 +95,9 @@ export const TahawolKpiCards: React.FC<TahawolKpiCardsProps> = ({
       id: 'tahawol-kpi-delivered',
       title: 'تم التسليم / الموقف العام',
       titleEn: 'Delivered & General Status',
-      value: delivered,
-      subValue: `${((delivered / total) * 100).toFixed(1)}% من الإجمالي`,
-      extraFooter: `متوقف على العميل: ${pausedOnClient.toLocaleString()} موقع`,
+      value: safeDelivered,
+      subValue: `${((safeDelivered / total) * 100).toFixed(1)}% من الإجمالي`,
+      extraFooter: `متوقف على العميل: ${safePausedOnClient.toLocaleString()} موقع`,
       icon: Award,
       color: 'from-purple-500 to-indigo-600',
       textColor: 'text-purple-700',
@@ -173,7 +181,7 @@ export const TahawolKpiCards: React.FC<TahawolKpiCardsProps> = ({
               <div className="mt-2">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className={`text-2xl sm:text-3xl font-black font-sans tracking-tight ${card.textColor}`}>
-                    {card.value.toLocaleString()}
+                    {(Number(card.value) || 0).toLocaleString()}
                   </span>
                   <span
                     className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors ${

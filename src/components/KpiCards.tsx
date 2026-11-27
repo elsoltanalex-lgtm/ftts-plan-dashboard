@@ -250,15 +250,15 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
               <div className="mt-1">
                 <div className="flex items-baseline justify-between gap-1">
                   <span className={`text-xl sm:text-2xl font-black font-sans tracking-tight ${card.textColor}`}>
-                    {card.value.toLocaleString()}
+                    {(Number(card.value) || 0).toLocaleString()}
                   </span>
                   {card.filterTarget && (
                     <span
                       className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full transition-colors ${card.isActive && card.filterTarget !== 'All'
-                          ? 'bg-slate-900 text-white'
-                          : card.isActive && card.filterTarget === 'All'
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-white/80 text-slate-500'
+                        ? 'bg-slate-900 text-white'
+                        : card.isActive && card.filterTarget === 'All'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white/80 text-slate-500'
                         }`}
                     >
                       {card.isActive && card.filterTarget !== 'All' ? '✓ محدد' : card.filterTarget === 'All' ? 'الكل' : 'اختيار'}
