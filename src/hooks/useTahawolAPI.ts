@@ -130,13 +130,37 @@ export function isTahawolInternalDone(site: any): boolean {
   return isTahawolInternalExecuted(site) || isTahawolInternalNotRequired(site);
 }
 
-export function isTahawolDelivered(site: any): boolean {
+export function isCompletedOrNotRequired(val: unknown): boolean {
+  const cleaned = String(val ?? '').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return false;
+  const norm = normalizeArabicText(cleaned);
+  if (norm.includes('لم يتم')) return false;
+  return (
+    norm === normalizeArabicText('تم التنفيذ') ||
+    norm === normalizeArabicText('تمت تنفيذ') ||
+    norm === normalizeArabicText('تم الانتهاء') ||
+    norm.startsWith(normalizeArabicText('تم التنفيذ')) ||
+    norm.startsWith(normalizeArabicText('تمت تنفيذ')) ||
+    norm.includes(normalizeArabicText('غير مطلوب اعمال'))
+  );
+}
+
+export function isDigitalTransformationOverallDone(site: any): boolean {
   if (!site) return false;
   const raw = site.rawRecord || site;
-  const del = normalizeArabicText(String(site.deliveryStatus || raw['موقف التسليم'] || '').trim());
-  const cls = normalizeArabicText(String(site.classification || site.excelStatus || raw['التصنيف النهائي'] || '').trim());
-  if (del.includes('لم يتم')) return false;
-  return del.includes('تم التسليم') || cls === normalizeArabicText('تم الانتهاء خارجي و داخلي');
+  const extVal = site.externalPath || raw['المسار الخارجي'] || '';
+  const intVal = site.internalPath || raw['المسار الداخلى'] || raw['المسار الداخلي'] || '';
+  return isCompletedOrNotRequired(extVal) && isCompletedOrNotRequired(intVal);
+}
+
+export function computeTahawolOverallStatus(extVal: unknown, intVal: unknown): string {
+  return isCompletedOrNotRequired(extVal) && isCompletedOrNotRequired(intVal)
+    ? 'تم التنفيذ'
+    : 'جاري الاستكمال';
+}
+
+export function isTahawolDelivered(site: any): boolean {
+  return isDigitalTransformationOverallDone(site);
 }
 
 export function isTahawolPausedOnClient(site: any): boolean {
@@ -173,7 +197,7 @@ export function computeTahawolKpis(sites: any[]) {
   let externalDone = 0;
   let internalExecuted = 0;
   let internalNotRequired = 0;
-  let delivered = 0;
+  let overallDone = 0;
   let pausedOnClient = 0;
   let blockedCount = 0;
 
@@ -184,7 +208,7 @@ export function computeTahawolKpis(sites: any[]) {
     } else if (isTahawolInternalNotRequired(s)) {
       internalNotRequired++;
     }
-    if (isTahawolDelivered(s)) delivered++;
+    if (isDigitalTransformationOverallDone(s)) overallDone++;
     if (isTahawolPausedOnClient(s)) pausedOnClient++;
     if (isTahawolBlocked(s)) blockedCount++;
   }
@@ -197,7 +221,8 @@ export function computeTahawolKpis(sites: any[]) {
     internalDone,
     internalExecuted,
     internalNotRequired,
-    delivered,
+    overallDone,
+    delivered: overallDone,
     pausedOnClient,
     blockedCount,
   };
@@ -389,9 +414,13 @@ export function useTahawolAPI() {
 
       const codeUpper = code.toUpperCase();
       const now = new Date().toISOString();
+      const extVal = record['المسار الخارجي'] || '';
+      const intVal = record['المسار الداخلى'] || record['المسار الداخلي'] || '';
+      const overallStatus = computeTahawolOverallStatus(extVal, intVal);
       const enriched: TahawolRecord = {
         ...record,
         'الكود': code,
+        'الموقف العام': overallStatus,
         _updatedAt: now,
       };
 

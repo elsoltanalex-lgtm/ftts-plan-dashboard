@@ -57,7 +57,7 @@ import {
   computeTahawolKpis,
   isTahawolExternalDone,
   isTahawolInternalDone,
-  isTahawolDelivered,
+  isDigitalTransformationOverallDone,
 } from '../hooks/useTahawolAPI';
 import type { TahawolRecord } from '../data/tahawolSites';
 import { TahawolKpiCards } from '../components/TahawolKpiCards';
@@ -859,8 +859,8 @@ export const Dashboard: React.FC = () => {
             if (fs === 'تم التنفيذ داخلي') {
               return isTahawolInternalDone(site);
             }
-            if (fs === 'تم التسليم تحول' || fs === 'تم التسليم') {
-              return isTahawolDelivered(site);
+            if (fs === 'الموقف العام' || fs === 'تم التسليم تحول' || fs === 'تم التسليم') {
+              return isDigitalTransformationOverallDone(site);
             }
           }
           if (siteCat === fs || siteStatus === fs || siteCls === fs) return true;
@@ -1555,7 +1555,8 @@ export const Dashboard: React.FC = () => {
                   internalDone={tahawolKpis.internalDone}
                   internalExecuted={tahawolKpis.internalExecuted}
                   internalNotRequired={tahawolKpis.internalNotRequired}
-                  delivered={tahawolKpis.delivered}
+                  overallDone={tahawolKpis.overallDone}
+                  delivered={tahawolKpis.overallDone}
                   pausedOnClient={tahawolKpis.pausedOnClient}
                   blockedCount={tahawolKpis.blockedCount}
                   activeStatusFilter={filters.status}

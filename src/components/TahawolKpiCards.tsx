@@ -15,6 +15,7 @@ export interface TahawolKpiCardsProps {
   internalDone?: number;
   internalExecuted?: number;
   internalNotRequired?: number;
+  overallDone?: number;
   delivered?: number;
   pausedOnClient?: number;
   blockedCount?: number;
@@ -30,6 +31,7 @@ export const TahawolKpiCards: React.FC<TahawolKpiCardsProps> = ({
   internalDone = 0,
   internalExecuted = 0,
   internalNotRequired = 0,
+  overallDone,
   delivered = 0,
   pausedOnClient = 0,
   blockedCount,
@@ -43,7 +45,7 @@ export const TahawolKpiCards: React.FC<TahawolKpiCardsProps> = ({
   const safeInternalExecuted = Number(internalExecuted) || 0;
   const safeInternalNotRequired = Number(internalNotRequired) || 0;
   const safeInternalDone = Number(internalDone) || (safeInternalExecuted + safeInternalNotRequired);
-  const safeDelivered = Number(delivered) || 0;
+  const safeOverallDone = Number(overallDone ?? delivered) || 0;
   const safePausedOnClient = Number(pausedOnClient) || 0;
   const safeBlockedCount = Number(blockedCount ?? blocked) || 0;
   const total = safeTotalSites || 1;
@@ -102,11 +104,11 @@ export const TahawolKpiCards: React.FC<TahawolKpiCardsProps> = ({
       isActive: activeList.includes('تم التنفيذ داخلي'),
     },
     {
-      id: 'tahawol-kpi-delivered',
-      title: 'تم التسليم / الموقف العام',
-      titleEn: 'Delivered & General Status',
-      value: safeDelivered,
-      subValue: `${((safeDelivered / total) * 100).toFixed(1)}% من الإجمالي`,
+      id: 'tahawol-kpi-overall-status',
+      title: 'الموقف العام',
+      titleEn: 'Overall Status (Internal & External Done)',
+      value: safeOverallDone,
+      subValue: `${((safeOverallDone / total) * 100).toFixed(1)}% من الإجمالي (تم داخلي + خارجي)`,
       extraFooter: `متوقف على العميل: ${safePausedOnClient.toLocaleString()} موقع`,
       icon: Award,
       color: 'from-purple-500 to-indigo-600',
@@ -114,8 +116,8 @@ export const TahawolKpiCards: React.FC<TahawolKpiCardsProps> = ({
       bgColor: 'bg-purple-50/80',
       borderColor: 'border-purple-200',
       ringColor: 'ring-purple-500',
-      filterTarget: 'تم التسليم تحول',
-      isActive: activeList.includes('تم التسليم تحول'),
+      filterTarget: 'الموقف العام',
+      isActive: activeList.includes('الموقف العام') || activeList.includes('تم التسليم تحول'),
     },
   ];
 

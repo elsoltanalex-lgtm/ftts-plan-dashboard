@@ -5,6 +5,10 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { TahawolRecord } from '../data/tahawolSites';
 import type { SiteRecord } from '../types/dashboard';
 import {
+  isCompletedOrNotRequired,
+  computeTahawolOverallStatus,
+} from '../hooks/useTahawolAPI';
+import {
   X,
   PlusCircle,
   Edit3,
@@ -198,17 +202,24 @@ export const TahawolAddDataModal: React.FC<TahawolAddDataModalProps> = ({
   const handleChange = (field: keyof TahawolRecord, value: string) => {
     setFormData((prev) => {
       const next = { ...prev, [field]: value };
-      // Auto-sync Final Classification when both External & Internal paths are completed
+      // Auto-sync Overall Status ("الموقف العام") & Final Classification when External or Internal path changes
       if (field === 'المسار الخارجي' || field === 'المسار الداخلى') {
         const ext = String(next['المسار الخارجي'] || '').trim();
         const intP = String(next['المسار الداخلى'] || '').trim();
-        if (ext === 'تم التنفيذ' && intP === 'تم التنفيذ') {
-          next['التصنيف النهائي'] = 'تم الانتهاء خارجي و داخلي';
+        const extDone = isCompletedOrNotRequired(ext);
+        const intDone = isCompletedOrNotRequired(intP);
+
+        next['الموقف العام'] = computeTahawolOverallStatus(ext, intP);
+
+        if (extDone && intDone) {
+          if (intP.includes('غير مطلوب')) {
+            next['التصنيف النهائي'] = 'تم الانتهاء خارجي وغير مطلوب اعمال داخلي';
+          } else {
+            next['التصنيف النهائي'] = 'تم الانتهاء خارجي و داخلي';
+          }
           next['موقف التسليم'] = 'تم التسليم';
-        } else if (ext === 'تم التنفيذ' && intP === 'مسئولية العميل') {
+        } else if (extDone && intP === 'مسئولية العميل') {
           next['التصنيف النهائي'] = 'تم الانتهاء خارجي ومتوقف عميل';
-        } else if (ext === 'تم التنفيذ' && intP === 'غير مطلوب اعمال') {
-          next['التصنيف النهائي'] = 'تم الانتهاء خارجي وغير مطلوب اعمال داخلي';
         }
       }
       return next;
@@ -239,10 +250,15 @@ export const TahawolAddDataModal: React.FC<TahawolAddDataModalProps> = ({
     setSaving(true);
     setErrors({});
     try {
+      const computedOverall = computeTahawolOverallStatus(
+        formData['المسار الخارجي'],
+        formData['المسار الداخلى']
+      );
       const res = await onSave({
         ...formData,
         'الكود': String(formData['الكود']).trim(),
         'الجهات': formData['الجهات'] || formData['الجهة'] || '',
+        'الموقف العام': computedOverall,
       });
       if (res.success) {
         setSuccessMessage(`تم حفظ بيانات موقع التحول الرقمي (${formData['الكود']}) بنجاح ✅`);
@@ -535,6 +551,41 @@ export const TahawolAddDataModal: React.FC<TahawolAddDataModalProps> = ({
                     >
                       {FINAL_CLASSIFICATION_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
+                  </div>
+
+                  {/* Auto-computed Overall Status ("الموقف العام") indicator */}
+                  <div className="sm:col-span-2 md:col-span-4">
+                    {(() => {
+                      const overallDone =
+                        isCompletedOrNotRequired(formData['المسار الخارجي']) &&
+                        isCompletedOrNotRequired(formData['المسار الداخلى']);
+                      const statusLabel = overallDone ? 'تم التنفيذ' : 'جاري الاستكمال';
+                      return (
+                        <div
+                          className={`flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold ${
+                            overallDone
+                              ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                              : 'bg-slate-100 border-slate-300 text-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2
+                              className={`w-4 h-4 ${overallDone ? 'text-emerald-600' : 'text-slate-400'}`}
+                            />
+                            <span>الموقف العام (محسوب تلقائياً من المسار الخارجي + الداخلي):</span>
+                          </div>
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-black ${
+                              overallDone
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            {statusLabel} {overallDone ? '✅' : ''}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="sm:col-span-2">
