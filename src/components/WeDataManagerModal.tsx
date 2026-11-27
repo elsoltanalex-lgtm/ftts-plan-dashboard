@@ -22,8 +22,11 @@ import {
   RefreshCw,
   Lock,
   Eye,
-  ShieldCheck
+  ShieldCheck,
+  FileCheck2
 } from 'lucide-react';
+import { getSiteProofDocument, type ProofDocumentInfo } from '../utils/proofDocument';
+import { ProofDocumentModal } from './ProofDocumentModal';
 
 interface WeDataManagerModalProps {
   isOpen: boolean;
@@ -52,6 +55,7 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; ids: string[]; message: string } | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<{ doc: ProofDocumentInfo; siteCode: string } | null>(null);
 
   // Toast Notification
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -613,6 +617,27 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
                             </button>
                           )}
 
+                          {/* View Proof Document (when attached) */}
+                          {(() => {
+                            const proofDoc = getSiteProofDocument(r);
+                            if (!proofDoc) return null;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPreviewDoc({
+                                    doc: proofDoc,
+                                    siteCode: String(r['site code'] || (r as any).site_code || ''),
+                                  })
+                                }
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-800 rounded transition cursor-pointer"
+                                title={`مستند إثبات الموقف: ${proofDoc.name}`}
+                              >
+                                <FileCheck2 className="w-4 h-4" />
+                              </button>
+                            );
+                          })()}
+
                           {/* Delete Row */}
                           {canModify ? (
                             <button
@@ -762,6 +787,14 @@ export const WeDataManagerModal: React.FC<WeDataManagerModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Built-in Proof Document Preview Modal */}
+      <ProofDocumentModal
+        isOpen={Boolean(previewDoc)}
+        onClose={() => setPreviewDoc(null)}
+        document={previewDoc?.doc || null}
+        siteCode={previewDoc?.siteCode}
+      />
 
     </div>
   );

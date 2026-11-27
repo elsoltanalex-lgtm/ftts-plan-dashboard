@@ -19,10 +19,13 @@ import {
   Square,
   FileSpreadsheet,
   Calendar,
+  FileCheck2,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../context/AuthContext';
 import { getLastModifiedInfoForSite } from '../utils/auditService';
+import { getSiteProofDocument, type ProofDocumentInfo } from '../utils/proofDocument';
+import { ProofDocumentModal } from './ProofDocumentModal';
 import { isRecordInSector } from '../utils/sectorPermissions';
 import { isWeSpecialTarget } from '../utils/specialTarget';
 import { BulkDeleteModal } from './BulkDeleteModal';
@@ -62,6 +65,11 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
   const [expandedEtahaCode, setExpandedEtahaCode] = useState<string | null>(null);
   const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<{
+    doc: ProofDocumentInfo;
+    siteCode: string;
+    siteName?: string;
+  } | null>(null);
   const pageSize = 8;
 
   // Quick lookup map for Orange raw Excel records
@@ -589,42 +597,75 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                         </td>
                         {/* إجراءات التحكم بجانب كل موقع */}
                         <td className="py-2.5 px-3 text-center bg-slate-50/70 border-l border-r border-slate-200">
-                          {user?.role === 'viewer' ? (
-                            <span className="text-[11px] font-bold text-slate-400">مشاهدة فقط</span>
-                          ) : (
-                            <div className="flex items-center justify-center gap-2">
-                              {/* 1. زر تعديل البيانات */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (onEditSite) {
-                                    const code = site?.siteCode ? String(site.siteCode).trim() : '';
-                                    if (!code) return;
-                                    onClose();
-                                    onEditSite(code);
-                                  }
-                                }}
-                                className="px-3 py-1.5 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-xs hover:shadow-amber-500/25 active:scale-95"
-                                title={`تعديل بيانات (${site.siteCode})`}
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                                <span>تعديل</span>
-                              </button>
+                          {(() => {
+                            const proofDoc = getSiteProofDocument(site);
+                            return (
+                              <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                {/* 0. زر عرض مستند إثبات الموقف (متاح لجميع المستخدمين عند وجود مرفق) */}
+                                {proofDoc ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setPreviewDoc({
+                                        doc: proofDoc,
+                                        siteCode: String(site.siteCode || ''),
+                                        siteName: String(site.siteName || ''),
+                                      })
+                                    }
+                                    className="px-2.5 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all cursor-pointer flex items-center gap-1 shadow-xs hover:shadow-emerald-600/25 active:scale-95 whitespace-nowrap"
+                                    title={`مستند إثبات الموقف: ${proofDoc.name}`}
+                                  >
+                                    <FileCheck2 className="w-3.5 h-3.5 shrink-0" />
+                                    <span>مستند إثبات الموقف</span>
+                                  </button>
+                                ) : (
+                                  <span
+                                    className="px-2 py-1 text-[10px] font-semibold text-slate-300 bg-slate-100/70 border border-slate-200/70 rounded-lg select-none whitespace-nowrap"
+                                    title="لا يوجد مستند مرفق لهذا الموقع"
+                                  >
+                                    بدون مستند
+                                  </span>
+                                )}
 
-                              {/* 2. زر إلغاء أو حذف موقع */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSiteToDelete(site);
-                                }}
-                                className="px-3 py-1.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-xs hover:shadow-rose-600/25 active:scale-95"
-                                title={`حذف وإلغاء (${site.siteCode})`}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>حذف</span>
-                              </button>
-                            </div>
-                          )}
+                                {user?.role === 'viewer' ? (
+                                  <span className="text-[11px] font-bold text-slate-400 px-1">مشاهدة فقط</span>
+                                ) : (
+                                  <>
+                                    {/* 1. زر تعديل البيانات */}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (onEditSite) {
+                                          const code = site?.siteCode ? String(site.siteCode).trim() : '';
+                                          if (!code) return;
+                                          onClose();
+                                          onEditSite(code);
+                                        }
+                                      }}
+                                      className="px-3 py-1.5 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-xs hover:shadow-amber-500/25 active:scale-95"
+                                      title={`تعديل بيانات (${site.siteCode})`}
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                      <span>تعديل</span>
+                                    </button>
+
+                                    {/* 2. زر إلغاء أو حذف موقع */}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSiteToDelete(site);
+                                      }}
+                                      className="px-3 py-1.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-xs hover:shadow-rose-600/25 active:scale-95"
+                                      title={`حذف وإلغاء (${site.siteCode})`}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      <span>حذف</span>
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
                       </tr>
 
@@ -919,6 +960,15 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
             setIsBulkDeleteModalOpen(false);
           }
         }}
+      />
+
+      {/* Built-in Proof Document Preview Modal */}
+      <ProofDocumentModal
+        isOpen={Boolean(previewDoc)}
+        onClose={() => setPreviewDoc(null)}
+        document={previewDoc?.doc || null}
+        siteCode={previewDoc?.siteCode}
+        siteName={previewDoc?.siteName}
       />
     </div>
   );
