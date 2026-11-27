@@ -1,106 +1,125 @@
 // src/context/AuthContext.tsx
-// Strict Role-Based Access Control (RBAC) & Sector Permissions Context
-// Provides session management, sector permissions, and role validation
+// Phase 1 Authentication, Session Persistence, RBAC (Admin / Editor / Viewer), & User Management Context
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import type { AuthUser, DemoAccount, UserRole } from '../types/auth';
+import type { AuthUser, DemoAccount, ManagedUser, UserRole } from '../types/auth';
 import { isSectorMatch, extractRecordSector, isRecordInSector } from '../utils/sectorPermissions';
+import { supabaseClients } from '../lib/supabase';
 
-// Built-in sector accounts with credentials
-// Built-in sector accounts with credentials (Admin + 6 Geographic Sectors)
-// Built-in sector accounts with credentials (Admin + Unified Canonical Sectors)
+export const INITIAL_ADMIN_CREDENTIALS = {
+  username: 'admin',
+  email: 'admin@ftts.local',
+  password: 'Admin@2026',
+  displayName: 'د. شريف — الإدارة العامة المركزية (Admin)',
+};
+
 export const PRESET_ACCOUNTS: DemoAccount[] = [
   {
-    username: 'admin',
-    displayName: 'الإدارة العامة المركزية (Admin)',
-    plainPassword: 'Admin@2026',
+    username: INITIAL_ADMIN_CREDENTIALS.username,
+    displayName: INITIAL_ADMIN_CREDENTIALS.displayName,
+    plainPassword: INITIAL_ADMIN_CREDENTIALS.password,
     sector: 'ALL',
     role: 'admin',
-    description: 'صلاحية كاملة لرؤية وإدارة كافة القطاعات والمشروعات (إضافة وتعديل وحذف وتحكم شامل بدون قيود)',
+    description: 'صلاحية كاملة لإدارة جميع الوحدات والمستخدمين وكلمات المرور (Admin)',
     tagColor: 'bg-purple-500/10 text-purple-700 border-purple-300',
   },
-  {
-    username: 'alex_coast',
-    displayName: 'قطاع إسكندرية والساحل',
-    plainPassword: 'AlexCoast@2026',
-    sector: 'قطاع إسكندرية والساحل',
-    role: 'editor',
-    description: 'صلاحية موحدة لمناطق الإسكندرية والساحل الشمالي ومطروح • إدارة وتعديل المواقع',
-    tagColor: 'bg-cyan-500/10 text-cyan-700 border-cyan-300',
-  },
-  {
-    username: 'east_delta',
-    displayName: 'قطاع شرق الدلتا',
-    plainPassword: 'EastDelta@2026',
-    sector: 'قطاع شرق الدلتا',
-    role: 'editor',
-    description: 'صلاحية موحدة لمناطق شرق الدلتا 1 وشرق الدلتا 2 • إدارة وتعديل المواقع',
-    tagColor: 'bg-indigo-500/10 text-indigo-700 border-indigo-300',
-  },
-  {
-    username: 'west_delta',
-    displayName: 'قطاع مناطق غرب الدلتا',
-    plainPassword: 'West@2026',
-    sector: 'قطاع مناطق غرب الدلتا',
-    role: 'editor',
-    description: 'صلاحية كاملة لقطاع مناطق غرب الدلتا • إدارة وتعديل المواقع',
-    tagColor: 'bg-blue-500/10 text-blue-700 border-blue-300',
-  },
-  {
-    username: 'central_delta',
-    displayName: 'قطاع مناطق وسط الدلتا',
-    plainPassword: 'Delta@2026',
-    sector: 'قطاع مناطق وسط الدلتا',
-    role: 'editor',
-    description: 'صلاحية كاملة لقطاع مناطق وسط الدلتا • إدارة وتعديل المواقع',
-    tagColor: 'bg-amber-500/10 text-amber-700 border-amber-300',
-  },
-  {
-    username: 'suez',
-    displayName: 'قطاع مناطق السويس',
-    plainPassword: 'Suez@2026',
-    sector: 'قطاع مناطق السويس',
-    role: 'editor',
-    description: 'صلاحية كاملة لقطاع مناطق السويس وسيناء • إدارة وتعديل المواقع',
-    tagColor: 'bg-rose-500/10 text-rose-700 border-rose-300',
-  },
-  {
-    username: 'ismailia',
-    displayName: 'قطاع مناطق الإسماعيلية',
-    plainPassword: 'Ismailia@2026',
-    sector: 'قطاع مناطق الإسماعيلية',
-    role: 'editor',
-    description: 'صلاحية كاملة لقطاع مناطق الإسماعيلية • إدارة وتعديل المواقع',
-    tagColor: 'bg-teal-500/10 text-teal-700 border-teal-300',
-  },
-  {
-    username: 'cairo',
-    displayName: 'قطاع مناطق القاهرة الكبرى',
-    plainPassword: 'Cairo@2026',
-    sector: 'قطاع مناطق القاهرة الكبرى',
-    role: 'editor',
-    description: 'صلاحية كاملة لقطاع مناطق القاهرة الكبرى • إدارة وتعديل المواقع',
-    tagColor: 'bg-emerald-500/10 text-emerald-700 border-emerald-300',
-  },
-  {
-    username: 'giza_october',
-    displayName: 'قطاع مناطق الجيزة وأكتوبر',
-    plainPassword: 'Giza@2026',
-    sector: 'قطاع مناطق الجيزة وأكتوبر',
-    role: 'editor',
-    description: 'صلاحية كاملة لقطاع مناطق الجيزة وأكتوبر • إدارة وتعديل المواقع',
-    tagColor: 'bg-orange-500/10 text-orange-700 border-orange-300',
-  },
-  {
-    username: 'upper_egypt',
-    displayName: 'قطاع مناطق الصعيد',
-    plainPassword: 'Upper@2026',
-    sector: 'قطاع مناطق الصعيد',
-    role: 'editor',
-    description: 'صلاحية كاملة لقطاع مناطق الصعيد • إدارة وتعديل المواقع',
-    tagColor: 'bg-violet-500/10 text-violet-700 border-violet-300',
-  },
 ];
+
+const SESSION_STORAGE_KEY = 'ftts_auth_user_session_v2';
+const USERS_STORAGE_KEY = 'ftts_managed_users_v1';
+const USERS_TABLE_NAME = 'app_users';
+
+function buildInitialAdminUser(): ManagedUser {
+  const now = new Date().toISOString();
+  return {
+    id: 'usr-admin-root',
+    username: INITIAL_ADMIN_CREDENTIALS.username,
+    email: INITIAL_ADMIN_CREDENTIALS.email,
+    displayName: INITIAL_ADMIN_CREDENTIALS.displayName,
+    password: INITIAL_ADMIN_CREDENTIALS.password,
+    role: 'admin',
+    sector: 'ALL',
+    isActive: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function normalizeIdentifier(val: string): string {
+  return String(val || '').trim().toLowerCase();
+}
+
+function ensureAdminPresent(users: ManagedUser[]): ManagedUser[] {
+  const map = new Map<string, ManagedUser>();
+  for (const u of users) {
+    if (!u || !u.username) continue;
+    const key = normalizeIdentifier(u.username);
+    map.set(key, {
+      ...u,
+      username: u.username.trim(),
+      email: u.email ? u.email.trim() : undefined,
+      displayName: u.displayName?.trim() || u.username.trim(),
+      role: (['admin', 'editor', 'viewer'].includes(u.role) ? u.role : 'viewer') as UserRole,
+      sector: u.sector || 'ALL',
+      isActive: u.isActive !== false,
+    });
+  }
+
+  const hasActiveAdmin = Array.from(map.values()).some((u) => u.role === 'admin' && u.isActive);
+  if (!hasActiveAdmin) {
+    const existingAdmin = map.get('admin');
+    if (existingAdmin) {
+      map.set('admin', { ...existingAdmin, role: 'admin', isActive: true, sector: 'ALL' });
+    } else {
+      map.set('admin', buildInitialAdminUser());
+    }
+  }
+  return Array.from(map.values());
+}
+
+function loadLocalUsers(): ManagedUser[] {
+  try {
+    const raw = localStorage.getItem(USERS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return ensureAdminPresent(parsed);
+      }
+    }
+  } catch {
+    // ignore storage errors
+  }
+  const seeded = [buildInitialAdminUser()];
+  saveLocalUsers(seeded);
+  return seeded;
+}
+
+function saveLocalUsers(users: ManagedUser[]): void {
+  try {
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(ensureAdminPresent(users)));
+  } catch {
+    // ignore quota errors
+  }
+}
+
+function buildPermissionsForRole(role: UserRole): string[] {
+  if (role === 'admin') return ['view_all', 'edit_all', 'delete_all', 'manage_users'];
+  if (role === 'editor') return ['view_all', 'edit_records'];
+  return ['view_all'];
+}
+
+function toAuthUser(u: ManagedUser): AuthUser {
+  return {
+    id: u.id,
+    username: u.username,
+    email: u.email,
+    displayName: u.displayName,
+    sector: u.sector || 'ALL',
+    role: u.role,
+    permissions: buildPermissionsForRole(u.role),
+    loginTime: new Date().toISOString(),
+  };
+}
 
 interface SectorPermissionInfo {
   canEdit: boolean;
@@ -110,171 +129,283 @@ interface SectorPermissionInfo {
   reason: string;
 }
 
+export interface CreateUserInput {
+  displayName: string;
+  username: string;
+  email?: string;
+  password: string;
+  role: UserRole;
+  sector?: string;
+}
+
+export interface UpdateUserInput {
+  displayName?: string;
+  role?: UserRole;
+  sector?: string;
+  isActive?: boolean;
+}
+
 interface AuthContextType {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isViewer: boolean;
+  canManageUsers: boolean;
   isLoading: boolean;
-  login: (username: string, password: string, selectedSector?: string) => Promise<{ success: boolean; error?: string }>;
+  login: (usernameOrEmail: string, password: string, selectedSector?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   canEditRecord: (record: any) => boolean;
-  canDeleteRecord: (record: any) => boolean;
-  canCreateForSector: (targetSector: string) => boolean;
+  canDeleteRecord: (record?: any) => boolean;
+  canCreateForSector: (targetSector?: string) => boolean;
   canAddSite: boolean;
   getSectorPermission: (record: any) => SectorPermissionInfo;
   demoAccounts: DemoAccount[];
   isLoginModalOpen: boolean;
   openLoginModal: () => void;
   closeLoginModal: () => void;
+  // Phase 1 User Management
+  managedUsers: ManagedUser[];
+  usersLoading: boolean;
+  cloudUsersSynced: boolean;
+  refreshUsers: () => Promise<void>;
+  createUser: (input: CreateUserInput) => Promise<{ success: boolean; error?: string }>;
+  updateUser: (userId: string, updates: UpdateUserInput) => Promise<{ success: boolean; error?: string }>;
+  changeUserPassword: (userId: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  deleteUser: (userId: string) => Promise<{ success: boolean; error?: string }>;
+  isUserManagementOpen: boolean;
+  openUserManagement: () => void;
+  closeUserManagement: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'ftts_auth_user_session';
-const API_BASE = 'http://localhost:3001/api';
+async function fetchUsersFromSupabase(): Promise<ManagedUser[] | null> {
+  for (const client of supabaseClients) {
+    try {
+      const { data, error } = await client.from(USERS_TABLE_NAME).select('*').limit(500);
+      if (!error && Array.isArray(data)) {
+        const mapped: ManagedUser[] = data
+          .map((row: any) => {
+            const payload = row.data && typeof row.data === 'object' ? row.data : row;
+            const username = String(row.username || payload.username || '').trim();
+            if (!username) return null;
+            return {
+              id: String(row.id || payload.id || `usr-${username}`),
+              username,
+              email: row.email || payload.email || undefined,
+              displayName: String(row.display_name || payload.displayName || username),
+              password: String(row.password || payload.password || ''),
+              role: (['admin', 'editor', 'viewer'].includes(row.role || payload.role)
+                ? (row.role || payload.role)
+                : 'viewer') as UserRole,
+              sector: String(row.sector || payload.sector || 'ALL'),
+              isActive: row.is_active !== undefined ? Boolean(row.is_active) : payload.isActive !== false,
+              createdAt: String(row.created_at || payload.createdAt || new Date().toISOString()),
+              updatedAt: String(row.updated_at || payload.updatedAt || new Date().toISOString()),
+            } as ManagedUser;
+          })
+          .filter(Boolean) as ManagedUser[];
+        return mapped;
+      }
+    } catch {
+      // try next client
+    }
+  }
+  return null;
+}
 
-function isUsernameMatch(accUser: string, input?: string | null): boolean {
-  if (!input) return false;
-  const a = accUser.toLowerCase();
-  const i = input.toLowerCase().trim();
-  if (a === i) return true;
-  if (a === 'alex_coast' && ['alexandria', 'alex', 'north_coast_matrouh', 'north_coast', 'coast', 'matrouh', 'alexcoast'].includes(i)) return true;
-  if (a === 'east_delta' && ['east_delta1', 'east_delta2', 'east', 'delta1', 'delta2', 'eastdelta'].includes(i)) return true;
-  if (a === 'west_delta' && ['west', 'westdelta'].includes(i)) return true;
-  if (a === 'central_delta' && ['mid_delta', 'delta', 'central_delta', 'centraldelta'].includes(i)) return true;
+async function upsertUserToSupabase(u: ManagedUser): Promise<boolean> {
+  const row = {
+    id: u.id,
+    username: u.username,
+    email: u.email || null,
+    display_name: u.displayName,
+    password: u.password,
+    role: u.role,
+    sector: u.sector || 'ALL',
+    is_active: u.isActive,
+    updated_at: u.updatedAt,
+    created_at: u.createdAt,
+  };
+  for (const client of supabaseClients) {
+    try {
+      const { error } = await client.from(USERS_TABLE_NAME).upsert(row, { onConflict: 'id' });
+      if (!error) return true;
+    } catch {
+      // continue
+    }
+  }
   return false;
 }
 
-export const DEFAULT_ADMIN_USER: AuthUser = {
-  id: 'admin',
-  username: 'admin',
-  displayName: 'الإدارة العامة المركزية (Admin)',
-  sector: 'ALL',
-  role: 'admin',
-  permissions: ['view_all', 'edit_all', 'delete_all'],
-  loginTime: new Date().toISOString(),
-};
+async function deleteUserFromSupabase(userId: string): Promise<boolean> {
+  for (const client of supabaseClients) {
+    try {
+      const { error } = await client.from(USERS_TABLE_NAME).delete().eq('id', userId);
+      if (!error) return true;
+    } catch {
+      // continue
+    }
+  }
+  return false;
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AuthUser | null>(DEFAULT_ADMIN_USER);
+  const [managedUsers, setManagedUsers] = useState<ManagedUser[]>(() => loadLocalUsers());
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [cloudUsersSynced, setCloudUsersSynced] = useState(false);
+
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
 
-  // Restore saved session on load or default to Full Admin Access
-  useEffect(() => {
+  const refreshUsers = useCallback(async () => {
+    setUsersLoading(true);
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const validAccount = PRESET_ACCOUNTS.find((a) => isUsernameMatch(a.username, parsed.username));
-        if (validAccount) {
-          setUser(parsed);
+      const local = loadLocalUsers();
+      const cloud = await fetchUsersFromSupabase();
+      if (cloud !== null) {
+        setCloudUsersSynced(true);
+        if (cloud.length === 0) {
+          // Table exists but empty — seed initial admin to cloud
+          const seeded = ensureAdminPresent(local);
+          saveLocalUsers(seeded);
+          setManagedUsers(seeded);
+          for (const u of seeded) {
+            await upsertUserToSupabase(u);
+          }
         } else {
-          setUser(DEFAULT_ADMIN_USER);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_ADMIN_USER));
+          // Merge cloud (authoritative) with ensureAdminPresent
+          const merged = ensureAdminPresent(cloud);
+          saveLocalUsers(merged);
+          setManagedUsers(merged);
         }
       } else {
-        // Default to Full Admin Access so user is never locked out
-        setUser(DEFAULT_ADMIN_USER);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_ADMIN_USER));
+        setCloudUsersSynced(false);
+        const ensured = ensureAdminPresent(local);
+        saveLocalUsers(ensured);
+        setManagedUsers(ensured);
       }
-    } catch {
-      setUser(DEFAULT_ADMIN_USER);
     } finally {
-      setIsLoading(false);
+      setUsersLoading(false);
     }
   }, []);
 
-  // Login handler with backend fallback and sector validation
-  const login = useCallback(
-    async (username: string, password: string, selectedSector?: string): Promise<{ success: boolean; error?: string }> => {
-      const cleanUser = username.trim().toLowerCase();
-      const cleanPass = password.trim();
-
-      if (!cleanUser || !cleanPass) {
-        return { success: false, error: 'يرجى إدخال اسم المستخدم وكلمة المرور' };
-      }
-
-      // 1. Try local server login first
+  // Restore saved session on mount & sync user directory
+  useEffect(() => {
+    let active = true;
+    (async () => {
       try {
-        const res = await fetch(`${API_BASE}/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: cleanUser, password: cleanPass, sector: selectedSector }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.user) {
-            // Validate selected sector
-            if (selectedSector && selectedSector !== 'ALL' && data.user.role !== 'admin') {
-              if (!isSectorMatch(data.user.sector, selectedSector)) {
-                return {
-                  success: false,
-                  error: `حسابك (${data.user.displayName}) يتبع (${data.user.sector}) ولا يتطابق مع القطاع المختار (${selectedSector}). يرجى اختيار القطاع الصحيح.`,
-                };
-              }
-            }
+        const localUsers = loadLocalUsers();
+        setManagedUsers(localUsers);
 
-            const authUser: AuthUser = {
-              id: data.user.id || cleanUser,
-              username: data.user.username,
-              displayName: data.user.displayName || cleanUser,
-              sector: data.user.sector,
-              role: data.user.role as UserRole,
-              permissions: data.user.permissions || ['view_all'],
-              token: data.token,
-              loginTime: new Date().toISOString(),
-            };
-            setUser(authUser);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
-            return { success: true };
+        const saved = localStorage.getItem(SESSION_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved) as AuthUser;
+          const match = localUsers.find(
+            (u) =>
+              u.isActive &&
+              (u.id === parsed.id || normalizeIdentifier(u.username) === normalizeIdentifier(parsed.username))
+          );
+          if (match && active) {
+            const refreshedSession = toAuthUser(match);
+            setUser(refreshedSession);
+            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(refreshedSession));
+          } else {
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+            if (active) setUser(null);
           }
         }
       } catch {
-        // Local server is not reachable, fallback to credentials check
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        if (active) setUser(null);
+      } finally {
+        if (active) setIsLoading(false);
       }
 
-      // 2. Client-side authentication fallback using PRESET_ACCOUNTS
-      const found = PRESET_ACCOUNTS.find((a) => {
-        const matchUser = isUsernameMatch(a.username, cleanUser);
-        const matchPass =
-          a.plainPassword === cleanPass ||
-          (a.username === 'alex_coast' && ['Alex@2026', 'CoastMatrouh@2026', 'Coast@2026'].includes(cleanPass)) ||
-          (a.username === 'east_delta' && ['Delta1@2026', 'Delta2@2026'].includes(cleanPass));
-        return matchUser && matchPass;
+      // Sync cloud users in background
+      await refreshUsers();
+    })();
+    return () => {
+      active = false;
+    };
+  }, [refreshUsers]);
+
+  // Keep active user session in sync if admin updates own role/name or disables account
+  useEffect(() => {
+    if (!user) return;
+    const match = managedUsers.find(
+      (u) => u.id === user.id || normalizeIdentifier(u.username) === normalizeIdentifier(user.username)
+    );
+    if (!match || !match.isActive) {
+      setUser(null);
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      return;
+    }
+    if (
+      match.role !== user.role ||
+      match.displayName !== user.displayName ||
+      match.sector !== user.sector
+    ) {
+      const updatedSession = toAuthUser(match);
+      setUser(updatedSession);
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(updatedSession));
+    }
+  }, [managedUsers, user]);
+
+  const login = useCallback(
+    async (usernameOrEmail: string, password: string, selectedSector?: string): Promise<{ success: boolean; error?: string }> => {
+      const cleanId = normalizeIdentifier(usernameOrEmail);
+      const cleanPass = String(password || '').trim();
+
+      if (!cleanId || !cleanPass) {
+        return { success: false, error: 'يرجى إدخال اسم المستخدم أو البريد الإلكتروني وكلمة المرور' };
+      }
+
+      // Refresh from Supabase first if reachable so password changes on another device take effect immediately
+      let currentUsers = loadLocalUsers();
+      const cloud = await fetchUsersFromSupabase();
+      if (cloud && cloud.length > 0) {
+        currentUsers = ensureAdminPresent(cloud);
+        saveLocalUsers(currentUsers);
+        setManagedUsers(currentUsers);
+        setCloudUsersSynced(true);
+      }
+
+      const found = currentUsers.find((u) => {
+        const uName = normalizeIdentifier(u.username);
+        const uMail = normalizeIdentifier(u.email || '');
+        return uName === cleanId || (uMail && uMail === cleanId);
       });
 
-      if (!found) {
+      if (!found || found.password !== cleanPass) {
         return {
           success: false,
           error: 'اسم المستخدم أو كلمة المرور غير صحيحة. يرجى التحقق وإعادة المحاولة.',
         };
       }
 
-      // Verify chosen sector matches the account
-      if (selectedSector && selectedSector !== 'ALL' && found.role !== 'admin') {
+      if (!found.isActive) {
+        return {
+          success: false,
+          error: 'هذا الحساب معطّل حالياً. يرجى التواصل مع مدير النظام (Admin) لتفعيله.',
+        };
+      }
+
+      if (selectedSector && selectedSector !== 'ALL' && found.role !== 'admin' && found.sector !== 'ALL') {
         if (!isSectorMatch(found.sector, selectedSector)) {
           return {
             success: false,
-            error: `حساب (${found.displayName}) غير مصرح له بالدخول على (${selectedSector}). يرجى اختيار قطاعك التابع له حسابك.`,
+            error: `حساب (${found.displayName}) غير مصرح له بالدخول على (${selectedSector}).`,
           };
         }
       }
 
-      const authUser: AuthUser = {
-        id: found.username,
-        username: found.username,
-        displayName: found.displayName,
-        sector: found.sector,
-        role: found.role,
-        permissions:
-          found.role === 'admin'
-            ? ['view_all', 'edit_all', 'delete_all']
-            : ['view_own_sector', 'edit_own_sector'],
-        loginTime: new Date().toISOString(),
-      };
+      const authUser = toAuthUser(found);
       setUser(authUser);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(authUser));
+      setIsLoginModalOpen(false);
       return { success: true };
     },
     []
@@ -282,62 +413,189 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = useCallback(() => {
     setUser(null);
-    localStorage.removeItem(STORAGE_KEY);
-    setIsLoginModalOpen(true);
+    setIsUserManagementOpen(false);
+    setIsLoginModalOpen(false);
+    localStorage.removeItem(SESSION_STORAGE_KEY);
   }, []);
 
-  // Check if current user has permission to edit this record
+  const createUser = useCallback(async (input: CreateUserInput): Promise<{ success: boolean; error?: string }> => {
+    const username = String(input.username || '').trim();
+    const displayName = String(input.displayName || '').trim();
+    const password = String(input.password || '').trim();
+    const email = input.email ? String(input.email).trim() : (username.includes('@') ? username : undefined);
+
+    if (!displayName) return { success: false, error: 'الاسم الكامل مطلوب' };
+    if (!username) return { success: false, error: 'اسم المستخدم أو البريد الإلكتروني مطلوب' };
+    if (password.length < 4) return { success: false, error: 'كلمة المرور يجب ألا تقل عن 4 أحرف' };
+
+    const current = loadLocalUsers();
+    const exists = current.some(
+      (u) =>
+        normalizeIdentifier(u.username) === normalizeIdentifier(username) ||
+        (email && u.email && normalizeIdentifier(u.email) === normalizeIdentifier(email))
+    );
+    if (exists) {
+      return { success: false, error: 'اسم المستخدم أو البريد الإلكتروني مستخدم بالفعل' };
+    }
+
+    const now = new Date().toISOString();
+    const newUser: ManagedUser = {
+      id: `usr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      username,
+      email,
+      displayName,
+      password,
+      role: input.role,
+      sector: input.sector || 'ALL',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const next = ensureAdminPresent([...current, newUser]);
+    saveLocalUsers(next);
+    setManagedUsers(next);
+
+    const synced = await upsertUserToSupabase(newUser);
+    if (synced) setCloudUsersSynced(true);
+
+    return { success: true };
+  }, []);
+
+  const updateUser = useCallback(async (userId: string, updates: UpdateUserInput): Promise<{ success: boolean; error?: string }> => {
+    const current = loadLocalUsers();
+    const target = current.find((u) => u.id === userId);
+    if (!target) return { success: false, error: 'المستخدم غير موجود' };
+
+    const activeAdmins = current.filter((u) => u.role === 'admin' && u.isActive);
+    const isLastActiveAdmin = activeAdmins.length === 1 && activeAdmins[0].id === userId;
+
+    if (isLastActiveAdmin && (updates.isActive === false || (updates.role && updates.role !== 'admin'))) {
+      return { success: false, error: 'لا يمكن تعطيل أو تغيير صلاحية آخر حساب مدير نظام (Admin) نشط.' };
+    }
+
+    const updatedUser: ManagedUser = {
+      ...target,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const next = ensureAdminPresent(current.map((u) => (u.id === userId ? updatedUser : u)));
+    saveLocalUsers(next);
+    setManagedUsers(next);
+
+    const synced = await upsertUserToSupabase(updatedUser);
+    if (synced) setCloudUsersSynced(true);
+
+    return { success: true };
+  }, []);
+
+  const changeUserPassword = useCallback(async (userId: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    const cleanPass = String(newPassword || '').trim();
+    if (cleanPass.length < 4) {
+      return { success: false, error: 'كلمة المرور الجديدة يجب ألا تقل عن 4 أحرف' };
+    }
+
+    const current = loadLocalUsers();
+    const target = current.find((u) => u.id === userId);
+    if (!target) return { success: false, error: 'المستخدم غير موجود' };
+
+    const updatedUser: ManagedUser = {
+      ...target,
+      password: cleanPass,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const next = ensureAdminPresent(current.map((u) => (u.id === userId ? updatedUser : u)));
+    saveLocalUsers(next);
+    setManagedUsers(next);
+
+    const synced = await upsertUserToSupabase(updatedUser);
+    if (synced) setCloudUsersSynced(true);
+
+    return { success: true };
+  }, []);
+
+  const deleteUser = useCallback(async (userId: string): Promise<{ success: boolean; error?: string }> => {
+    if (user && user.id === userId) {
+      return { success: false, error: 'لا يمكنك حذف حسابك الحالي أثناء تسجيل الدخول.' };
+    }
+
+    const current = loadLocalUsers();
+    const target = current.find((u) => u.id === userId);
+    if (!target) return { success: false, error: 'المستخدم غير موجود' };
+
+    const activeAdmins = current.filter((u) => u.role === 'admin' && u.isActive);
+    if (activeAdmins.length === 1 && activeAdmins[0].id === userId) {
+      return { success: false, error: 'لا يمكن حذف آخر حساب مدير نظام (Admin) نشط.' };
+    }
+
+    const next = ensureAdminPresent(current.filter((u) => u.id !== userId));
+    saveLocalUsers(next);
+    setManagedUsers(next);
+
+    const synced = await deleteUserFromSupabase(userId);
+    if (synced) setCloudUsersSynced(true);
+
+    return { success: true };
+  }, [user]);
+
+  const isAdmin = useMemo(() => Boolean(user && user.role === 'admin'), [user]);
+  const isViewer = useMemo(() => Boolean(user && user.role === 'viewer'), [user]);
+  const canManageUsers = isAdmin;
+
   const canEditRecord = useCallback(
     (record: any): boolean => {
-      if (!user) return true; // Full admin access fallback
-      if (user.role === 'admin' || user.sector === 'ALL') return true;
+      if (!user) return false;
       if (user.role === 'viewer') return false;
-
+      if (user.role === 'admin' || user.sector === 'ALL') return true;
       return isRecordInSector(user.sector, record);
     },
     [user]
   );
 
-  // Check if current user has permission to delete this record (Admin only)
   const canDeleteRecord = useCallback(
     (_record?: any): boolean => {
-      if (!user) return true; // Full admin access fallback
-      return user.role === 'admin' || user.sector === 'ALL';
+      if (!user) return false;
+      return user.role === 'admin';
     },
     [user]
   );
 
-  // Check if current user can create a site (Admin only)
   const canCreateForSector = useCallback(
-    (_targetSector?: string): boolean => {
-      if (!user) return true; // Full admin access fallback
-      return user.role === 'admin' || user.sector === 'ALL';
+    (targetSector?: string): boolean => {
+      if (!user) return false;
+      if (user.role === 'viewer') return false;
+      if (user.role === 'admin' || user.sector === 'ALL') return true;
+      if (!targetSector) return true;
+      return isSectorMatch(user.sector, targetSector);
     },
     [user]
   );
 
-  // Get detailed sector permission info
+  const canAddSite = useMemo(() => Boolean(user && (user.role === 'admin' || user.role === 'editor')), [user]);
+
   const getSectorPermission = useCallback(
     (record: any): SectorPermissionInfo => {
       const recordSector = extractRecordSector(record);
 
       if (!user) {
         return {
-          canEdit: true,
-          isOwnSector: true,
+          canEdit: false,
+          isOwnSector: false,
           recordSector,
-          userSector: 'الإدارة العامة (Admin)',
-          reason: 'صلاحية كاملة لجميع القطاعات والمشروعات (Full Admin Access)',
+          userSector: 'غير مسجل',
+          reason: 'يرجى تسجيل الدخول أولاً',
         };
       }
 
-      if (user.role === 'admin' || user.sector === 'ALL') {
+      if (user.role === 'admin') {
         return {
           canEdit: true,
           isOwnSector: true,
           recordSector,
           userSector: 'الإدارة العامة (كافة القطاعات)',
-          reason: 'صلاحية كاملة لجميع القطاعات والمشروعات وكافة الحقول (Full Admin Access)',
+          reason: 'صلاحية كاملة لجميع القطاعات والمشروعات وكافة الحقول (Admin)',
         };
       }
 
@@ -347,18 +605,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isOwnSector: false,
           recordSector,
           userSector: 'مشاهدة فقط',
-          reason: 'حسابك يحمل صلاحية المشاهدة فقط (Read-Only)',
+          reason: 'حسابك يحمل صلاحية المشاهدة فقط (Viewer - Read-Only)',
         };
       }
 
-      const match = isRecordInSector(user.sector, record);
-      if (match) {
+      if (user.sector === 'ALL' || isRecordInSector(user.sector, record)) {
         return {
           canEdit: true,
           isOwnSector: true,
           recordSector,
-          userSector: user.sector,
-          reason: `هذا الموقع يتبع قطاعك (${user.sector}) - لديك صلاحية التعديل الكاملة`,
+          userSector: user.sector === 'ALL' ? 'كافة القطاعات (Editor)' : user.sector,
+          reason: 'لديك صلاحية الإضافة والتعديل لهذا الموقع (Editor)',
         };
       }
 
@@ -373,40 +630,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [user]
   );
 
-  const isAdmin = useMemo(() => {
-    if (!user) return true; // Default to Full Admin Access
-    return Boolean(user.role === 'admin' || user.sector === 'ALL');
-  }, [user]);
-
-  const value = useMemo(
+  const value = useMemo<AuthContextType>(
     () => ({
       user,
       isAuthenticated: Boolean(user),
       isAdmin,
+      isViewer,
+      canManageUsers,
       isLoading,
       login,
       logout,
       canEditRecord,
       canDeleteRecord,
       canCreateForSector,
-      canAddSite: isAdmin,
+      canAddSite,
       getSectorPermission,
       demoAccounts: PRESET_ACCOUNTS,
       isLoginModalOpen,
       openLoginModal: () => setIsLoginModalOpen(true),
       closeLoginModal: () => setIsLoginModalOpen(false),
+      managedUsers,
+      usersLoading,
+      cloudUsersSynced,
+      refreshUsers,
+      createUser,
+      updateUser,
+      changeUserPassword,
+      deleteUser,
+      isUserManagementOpen,
+      openUserManagement: () => setIsUserManagementOpen(true),
+      closeUserManagement: () => setIsUserManagementOpen(false),
     }),
     [
       user,
       isAdmin,
+      isViewer,
+      canManageUsers,
       isLoading,
       login,
       logout,
       canEditRecord,
       canDeleteRecord,
       canCreateForSector,
+      canAddSite,
       getSectorPermission,
       isLoginModalOpen,
+      managedUsers,
+      usersLoading,
+      cloudUsersSynced,
+      refreshUsers,
+      createUser,
+      updateUser,
+      changeUserPassword,
+      deleteUser,
+      isUserManagementOpen,
     ]
   );
 

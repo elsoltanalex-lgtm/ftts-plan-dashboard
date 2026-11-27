@@ -1,13 +1,27 @@
 // src/types/auth.ts
-// User roles and sector permissions definitions
+// User roles, managed accounts, and sector permissions definitions
 
 export type UserRole = 'admin' | 'editor' | 'viewer';
+
+export interface ManagedUser {
+  id: string;
+  username: string;
+  email?: string;
+  displayName: string;
+  password: string;
+  role: UserRole;
+  sector: string; // 'ALL' or specific geographic sector
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface AuthUser {
   id: string;
   username: string;
+  email?: string;
   displayName: string;
-  sector: string; // e.g., 'شرق الدلتا 1', 'غرب الدلتا', 'ALL', 'None'
+  sector: string; // e.g., 'ALL' or specific sector
   role: UserRole;
   permissions: string[];
   plainPassword?: string;

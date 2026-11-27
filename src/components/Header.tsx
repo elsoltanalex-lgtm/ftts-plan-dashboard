@@ -13,7 +13,8 @@ import {
   Database,
   Loader2,
   Mail,
-  KeyRound
+  KeyRound,
+  Users
 } from 'lucide-react';
 import type { UploadedFileMetadata } from '../types/dashboard';
 import { useAuth } from '../context/AuthContext';
@@ -47,7 +48,7 @@ export const Header: React.FC<HeaderProps> = ({
   activeUploadedMetadata,
   onResetToDefault,
 }) => {
-  const { user, openLoginModal, logout } = useAuth();
+  const { user, isAdmin, openLoginModal, openUserManagement, logout } = useAuth();
 
   return (
     <header className="pbi-header-banner text-white rounded-2xl shadow-xl p-4 sm:p-5 mb-5 border border-slate-700/60 transition-all">
@@ -449,34 +450,41 @@ export const Header: React.FC<HeaderProps> = ({
                     <div className="mt-0.5">
                       {user.role === 'admin' ? (
                         <span className="text-[10px] font-semibold text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded-full border border-purple-400/30 inline-flex items-center gap-1 whitespace-nowrap shadow-xs">
-                          👑 الإدارة العامة المركزية
+                          👑 مدير نظام (Admin)
+                        </span>
+                      ) : user.role === 'viewer' ? (
+                        <span className="text-[10px] font-semibold text-slate-200 bg-slate-600/40 px-2 py-0.5 rounded-full border border-slate-400/40 inline-flex items-center gap-1 whitespace-nowrap shadow-xs">
+                          👁️ مشاهد فقط (Viewer)
                         </span>
                       ) : (
                         <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-400/30 inline-flex items-center gap-1 whitespace-nowrap shadow-xs">
-                          قطاع: {user.sector}
+                          ✏️ محرر (Editor){user.sector && user.sector !== 'ALL' ? ` • ${user.sector}` : ''}
                         </span>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* جدول الحسابات Button */}
-                <button
-                  onClick={openLoginModal}
-                  className="w-full h-[30px] px-2.5 bg-slate-800/90 hover:bg-slate-700 text-amber-300 rounded-lg text-xs font-bold border border-amber-400/40 transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
-                  title="عرض جدول حسابات وكلمات مرور القطاعات المعتمدة"
-                >
-                  <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-                  <span>جدول الحسابات</span>
-                </button>
+                {/* Admin-only User Management Button */}
+                {isAdmin && (
+                  <button
+                    onClick={openUserManagement}
+                    id="btn-header-user-management"
+                    className="w-full h-[30px] px-2.5 bg-purple-600/35 hover:bg-purple-600/55 text-purple-100 rounded-lg text-xs font-bold border border-purple-400/50 transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                    title="إدارة المستخدمين والصلاحيات وكلمات المرور (Admin Only)"
+                  >
+                    <Users className="w-3.5 h-3.5 text-purple-200" />
+                    <span>إدارة المستخدمين</span>
+                  </button>
+                )}
               </div>
 
-              {/* Column 2: تبديل الحساب on top, خروج directly underneath */}
+              {/* Column 2: تبديل الحساب on top, تسجيل الخروج directly underneath */}
               <div className="flex flex-col gap-1.5">
                 <button
                   onClick={openLoginModal}
                   className="w-28 sm:w-32 h-[30px] px-2.5 bg-blue-600/30 hover:bg-blue-600/50 text-sky-200 rounded-lg text-xs font-bold border border-blue-400/40 transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
-                  title="تبديل الحساب الحالي أو تسجيل الدخول بقطاع آخر"
+                  title="تبديل الحساب الحالي"
                 >
                   <LogIn className="w-3.5 h-3.5 text-sky-300" />
                   <span>تبديل الحساب</span>
@@ -484,11 +492,12 @@ export const Header: React.FC<HeaderProps> = ({
 
                 <button
                   onClick={logout}
+                  id="btn-header-logout"
                   className="w-28 sm:w-32 h-[30px] px-2.5 text-xs font-bold text-rose-200 bg-rose-600/30 hover:bg-rose-600/50 rounded-lg border border-rose-400/40 transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
                   title="تسجيل الخروج من الحساب"
                 >
                   <LogOut className="w-3.5 h-3.5 text-rose-300" />
-                  <span>خروج</span>
+                  <span>تسجيل الخروج</span>
                 </button>
               </div>
             </div>

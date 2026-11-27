@@ -17,6 +17,7 @@ import { WeDataManagerModal } from '../components/WeDataManagerModal';
 import { WeeklyPerformanceLineChart } from '../components/WeeklyPerformanceLineChart';
 import { WeBulkImportModal } from '../components/WeBulkImportModal';
 import { LoginModal } from '../components/LoginModal';
+import { UserManagementModal } from '../components/UserManagementModal';
 import { useAuth } from '../context/AuthContext';
 import { ShieldCheck, Building2, Eye, LogIn, Lock, LogOut, Globe, Trash2, PlusCircle, Edit3, X, Search, AlertTriangle, Landmark, Mail, PieChart, ChevronRight, Download, Loader2, Database } from 'lucide-react';
 import { isRecordInSector, toCanonicalSector, normalizeSectorName } from '../utils/sectorPermissions';
@@ -215,7 +216,7 @@ function persistDeletedSiteCodes(set: Set<string>) {
 }
 
 export const Dashboard: React.FC = () => {
-  const { user, isLoginModalOpen, closeLoginModal, openLoginModal, logout } = useAuth();
+  const { user, isViewer, isLoginModalOpen, closeLoginModal, openLoginModal, logout } = useAuth();
 
   // Current active project scope: FTTS, ETAHA, TAHAWOL, or UPLOADED
   const [activeScope, setActiveScope] = useState<ActiveProjectScope>('FTTS');
@@ -1678,27 +1679,29 @@ export const Dashboard: React.FC = () => {
                         <span>تحليل Orange (Orange Analysis)</span>
                       </button>
 
-                      <SiteActionDropdown
-                        variant="orange"
-                        label="إدارة وعمليات المواقع"
-                        hasOperatorSubmenus={false}
-                        onAdd={() => {
-                          setOrangeEditingSiteCode(undefined);
-                          setOrangeEditingRecord(null);
-                          setOrangeModalMode('add');
-                          setIsOrangeAddDataOpen(true);
-                        }}
-                        onEdit={() => {
-                          setOrangeEditingSiteCode(undefined);
-                          setOrangeEditingRecord(null);
-                          setOrangeModalMode('edit');
-                          setIsOrangeAddDataOpen(true);
-                        }}
-                        onDelete={() => {
-                          setQuickDeleteTargetCompany('Orange');
-                          setIsQuickDeleteModalOpen(true);
-                        }}
-                      />
+                      {!isViewer && (
+                        <SiteActionDropdown
+                          variant="orange"
+                          label="إدارة وعمليات المواقع"
+                          hasOperatorSubmenus={false}
+                          onAdd={() => {
+                            setOrangeEditingSiteCode(undefined);
+                            setOrangeEditingRecord(null);
+                            setOrangeModalMode('add');
+                            setIsOrangeAddDataOpen(true);
+                          }}
+                          onEdit={() => {
+                            setOrangeEditingSiteCode(undefined);
+                            setOrangeEditingRecord(null);
+                            setOrangeModalMode('edit');
+                            setIsOrangeAddDataOpen(true);
+                          }}
+                          onDelete={() => {
+                            setQuickDeleteTargetCompany('Orange');
+                            setIsQuickDeleteModalOpen(true);
+                          }}
+                        />
+                      )}
                     </>
                   ) : filters.company === 'Vodafone' ? (
                     /* Vodafone Buttons Group */
@@ -1712,27 +1715,29 @@ export const Dashboard: React.FC = () => {
                         <span>تحليل Vodafone (Vodafone Analysis)</span>
                       </button>
 
-                      <SiteActionDropdown
-                        variant="vodafone"
-                        label="إدارة وعمليات المواقع"
-                        hasOperatorSubmenus={false}
-                        onAdd={() => {
-                          setVodafoneEditingSiteCode(undefined);
-                          setVodafoneEditingRecord(null);
-                          setVodafoneModalMode('add');
-                          setIsVodafoneAddDataOpen(true);
-                        }}
-                        onEdit={() => {
-                          setVodafoneEditingSiteCode(undefined);
-                          setVodafoneEditingRecord(null);
-                          setVodafoneModalMode('edit');
-                          setIsVodafoneAddDataOpen(true);
-                        }}
-                        onDelete={() => {
-                          setQuickDeleteTargetCompany('Vodafone');
-                          setIsQuickDeleteModalOpen(true);
-                        }}
-                      />
+                      {!isViewer && (
+                        <SiteActionDropdown
+                          variant="vodafone"
+                          label="إدارة وعمليات المواقع"
+                          hasOperatorSubmenus={false}
+                          onAdd={() => {
+                            setVodafoneEditingSiteCode(undefined);
+                            setVodafoneEditingRecord(null);
+                            setVodafoneModalMode('add');
+                            setIsVodafoneAddDataOpen(true);
+                          }}
+                          onEdit={() => {
+                            setVodafoneEditingSiteCode(undefined);
+                            setVodafoneEditingRecord(null);
+                            setVodafoneModalMode('edit');
+                            setIsVodafoneAddDataOpen(true);
+                          }}
+                          onDelete={() => {
+                            setQuickDeleteTargetCompany('Vodafone');
+                            setIsQuickDeleteModalOpen(true);
+                          }}
+                        />
+                      )}
                     </>
                   ) : (
                     /* WE & Default Buttons Group: يقتصر حصرياً على تحليل WE وعمليات المواقع */
@@ -1746,30 +1751,32 @@ export const Dashboard: React.FC = () => {
                         <span>تحليل WE (WE Analysis)</span>
                       </button>
 
-                      <SiteActionDropdown
-                        variant={filters.company === 'WE' ? 'we' : 'default'}
-                        label="إدارة وعمليات المواقع"
-                        hasOperatorSubmenus={filters.company === 'All' || !filters.company}
-                        onAdd={() => {
-                          setEditingSiteCode(undefined);
-                          setEditingRecord(null);
-                          setWeModalMode('add');
-                          setIsWeAddDataOpen(true);
-                        }}
-                        onEdit={() => {
-                          setEditingSiteCode(undefined);
-                          setEditingRecord(null);
-                          setWeModalMode('edit');
-                          setIsWeAddDataOpen(true);
-                        }}
-                        onDelete={() => {
-                          setQuickDeleteTargetCompany(filters.company === 'WE' ? 'WE' : undefined);
-                          setIsQuickDeleteModalOpen(true);
-                        }}
-                        onAddByOperator={handleAddByOperator}
-                        onEditByOperator={handleEditByOperator}
-                        onDeleteByOperator={handleDeleteByOperator}
-                      />
+                      {!isViewer && (
+                        <SiteActionDropdown
+                          variant={filters.company === 'WE' ? 'we' : 'default'}
+                          label="إدارة وعمليات المواقع"
+                          hasOperatorSubmenus={filters.company === 'All' || !filters.company}
+                          onAdd={() => {
+                            setEditingSiteCode(undefined);
+                            setEditingRecord(null);
+                            setWeModalMode('add');
+                            setIsWeAddDataOpen(true);
+                          }}
+                          onEdit={() => {
+                            setEditingSiteCode(undefined);
+                            setEditingRecord(null);
+                            setWeModalMode('edit');
+                            setIsWeAddDataOpen(true);
+                          }}
+                          onDelete={() => {
+                            setQuickDeleteTargetCompany(filters.company === 'WE' ? 'WE' : undefined);
+                            setIsQuickDeleteModalOpen(true);
+                          }}
+                          onAddByOperator={handleAddByOperator}
+                          onEditByOperator={handleEditByOperator}
+                          onDeleteByOperator={handleDeleteByOperator}
+                        />
+                      )}
                     </>
                   )}
 
@@ -1804,24 +1811,26 @@ export const Dashboard: React.FC = () => {
               <div className="mb-6 p-3.5 bg-white border border-teal-200/90 rounded-2xl shadow-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   {/* زر موحد لإدارة وعمليات المشروعات (إضافة / تعديل / حذف) */}
-                  <SiteActionDropdown
-                    variant="etaha"
-                    label="إدارة وعمليات المشروعات"
-                    itemTypeLabel="مشروع"
-                    onAdd={() => {
-                      setEtahaEditingSiteCode(undefined);
-                      setEtahaEditingRecord(null);
-                      setEtahaModalMode('add');
-                      setIsEtahaAddDataOpen(true);
-                    }}
-                    onEdit={() => {
-                      setEtahaEditingSiteCode(undefined);
-                      setEtahaEditingRecord(null);
-                      setEtahaModalMode('edit');
-                      setIsEtahaAddDataOpen(true);
-                    }}
-                    onDelete={() => setIsQuickDeleteModalOpen(true)}
-                  />
+                  {!isViewer && (
+                    <SiteActionDropdown
+                      variant="etaha"
+                      label="إدارة وعمليات المشروعات"
+                      itemTypeLabel="مشروع"
+                      onAdd={() => {
+                        setEtahaEditingSiteCode(undefined);
+                        setEtahaEditingRecord(null);
+                        setEtahaModalMode('add');
+                        setIsEtahaAddDataOpen(true);
+                      }}
+                      onEdit={() => {
+                        setEtahaEditingSiteCode(undefined);
+                        setEtahaEditingRecord(null);
+                        setEtahaModalMode('edit');
+                        setIsEtahaAddDataOpen(true);
+                      }}
+                      onDelete={() => setIsQuickDeleteModalOpen(true)}
+                    />
+                  )}
 
                   {/* زر فلترة Special Target السريع */}
                   <button
@@ -1853,24 +1862,26 @@ export const Dashboard: React.FC = () => {
             {activeScope === 'TAHAWOL' && (
               <div className="mb-6 p-3.5 bg-white border border-amber-200/90 rounded-2xl shadow-sm">
                 <div className="flex flex-wrap items-center gap-2">
-                  <SiteActionDropdown
-                    variant="orange"
-                    label="إدارة وعمليات التحول الرقمي"
-                    itemTypeLabel="مشروع"
-                    onAdd={() => {
-                      setTahawolEditingSiteCode(undefined);
-                      setTahawolEditingRecord(null);
-                      setTahawolModalMode('add');
-                      setIsTahawolAddDataOpen(true);
-                    }}
-                    onEdit={() => {
-                      setTahawolEditingSiteCode(undefined);
-                      setTahawolEditingRecord(null);
-                      setTahawolModalMode('edit');
-                      setIsTahawolAddDataOpen(true);
-                    }}
-                    onDelete={() => setIsQuickDeleteModalOpen(true)}
-                  />
+                  {!isViewer && (
+                    <SiteActionDropdown
+                      variant="orange"
+                      label="إدارة وعمليات التحول الرقمي"
+                      itemTypeLabel="مشروع"
+                      onAdd={() => {
+                        setTahawolEditingSiteCode(undefined);
+                        setTahawolEditingRecord(null);
+                        setTahawolModalMode('add');
+                        setIsTahawolAddDataOpen(true);
+                      }}
+                      onEdit={() => {
+                        setTahawolEditingSiteCode(undefined);
+                        setTahawolEditingRecord(null);
+                        setTahawolModalMode('edit');
+                        setIsTahawolAddDataOpen(true);
+                      }}
+                      onDelete={() => setIsQuickDeleteModalOpen(true)}
+                    />
+                  )}
 
                   <button
                     type="button"
@@ -2110,7 +2121,7 @@ export const Dashboard: React.FC = () => {
           onClose={() => setIsDetailsModalOpen(false)}
           sites={filteredSites}
           activeStatusFilter={modalFilterStatus || filters.status || undefined}
-          onEditSite={(siteCode) => {
+          onEditSite={isViewer ? undefined : (siteCode) => {
             try {
               const targetCode = String(siteCode || '').trim().toUpperCase();
               if (!targetCode) return;
@@ -2713,6 +2724,9 @@ export const Dashboard: React.FC = () => {
         isOpen={isLoginModalOpen}
         onClose={closeLoginModal}
       />
+
+      {/* Admin-only User Management Modal */}
+      <UserManagementModal />
 
       {/* Backup Email Configuration & Sending Modal */}
       <BackupEmailConfigModal
