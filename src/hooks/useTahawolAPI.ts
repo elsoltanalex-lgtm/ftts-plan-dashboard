@@ -14,6 +14,7 @@ import {
 } from '../utils/deletedSitesSync';
 import { normalizeArabicText } from '../utils/etahaMetrics';
 import { isWeSpecialTarget } from '../utils/specialTarget';
+import { logActivity, buildRecordDiffSummary, getActiveActor } from '../utils/auditService';
 
 export const TAHAWOL_STORAGE_KEY = 'digital_transformation_records_v2_417';
 
@@ -417,15 +418,19 @@ export function useTahawolAPI() {
       const extVal = record['المسار الخارجي'] || '';
       const intVal = record['المسار الداخلى'] || record['المسار الداخلي'] || '';
       const overallStatus = computeTahawolOverallStatus(extVal, intVal);
+      const actor = getActiveActor();
       const enriched: TahawolRecord = {
         ...record,
         'الكود': code,
         'الموقف العام': overallStatus,
         _updatedAt: now,
+        _lastModifiedBy: actor.displayName,
+        _lastModifiedAt: now,
       };
 
       const current = loadStoredTahawolRecords();
       const idx = current.findIndex((r) => String(r['الكود'] || r.code || '').trim().toUpperCase() === codeUpper);
+      const oldRec = idx >= 0 ? current[idx] : null;
       let updated: TahawolRecord[];
       if (idx >= 0) {
         updated = [...current];
@@ -437,6 +442,13 @@ export function useTahawolAPI() {
 
       saveStoredTahawolRecords(updated);
       setTahawolRecords(updated);
+
+      logActivity({
+        actionType: oldRec ? 'تعديل موقع' : 'إضافة موقع',
+        module: 'التحول الرقمي',
+        siteCode: code,
+        details: buildRecordDiffSummary(oldRec, enriched),
+      });
 
       const payload = {
         id: code,
@@ -480,6 +492,13 @@ export function useTahawolAPI() {
       const targetList = Array.from(targetCodes);
       await addCloudDeletedCodes(targetList);
 
+      logActivity({
+        actionType: 'حذف موقع',
+        module: 'التحول الرقمي',
+        siteCode: norm,
+        details: `حذف مشروع تحول رقمي (${norm})`,
+      });
+
       for (const client of supabaseClients) {
         for (const table of TAHAWOL_TABLE_CANDIDATES) {
           try {
@@ -520,6 +539,13 @@ export function useTahawolAPI() {
 
       const codeArray = Array.from(codeSet);
       await addCloudDeletedCodes(codeArray);
+
+      logActivity({
+        actionType: 'حذف جماعي',
+        module: 'التحول الرقمي',
+        siteCode: `${codes.length} مشروعات`,
+        details: `حذف جماعي لمشروعات التحول الرقمي (${codes.slice(0, 10).join(', ')}${codes.length > 10 ? '...' : ''})`,
+      });
 
       for (const client of supabaseClients) {
         for (const table of TAHAWOL_TABLE_CANDIDATES) {

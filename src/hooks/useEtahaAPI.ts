@@ -19,6 +19,7 @@ import {
   SYNC_DELETED_CODES_ID,
   SYNC_DELETED_CODES_SITE_CODE,
 } from '../utils/deletedSitesSync';
+import { logActivity, buildRecordDiffSummary, getActiveActor } from '../utils/auditService';
 
 const STORAGE_KEY = 'availability_etaha_records_v7_368';
 
@@ -358,11 +359,15 @@ export function useEtahaAPI() {
       }
       const delDate = String(record['تاريخ التسليم'] || record['تاريخ التسليم '] || record.deliveryDate || record.delivery_date || '').trim();
 
+      const actor = getActiveActor();
       const enriched: EtahaRecord = {
         ...record,
         Code: code,
         _updatedAt: now,
+        _lastModifiedBy: actor.displayName,
+        _lastModifiedAt: now,
       };
+      const oldRec = idx >= 0 ? current[idx] : null;
 
       if (intVal) {
         enriched['المسار الداخلي'] = intVal;
@@ -406,6 +411,13 @@ export function useEtahaAPI() {
 
       saveStoredEtahaRecords(updated);
       setEtahaRecords(updated);
+
+      logActivity({
+        actionType: oldRec ? 'تعديل موقع' : 'إضافة موقع',
+        module: 'الإتاحة',
+        siteCode: code,
+        details: buildRecordDiffSummary(oldRec, enriched),
+      });
 
       const paymentDate = enriched['تاريخ السداد والبدء في التنفيذ'] || enriched['تاريخ السداد و البدء فى التنفيذ'] || enriched.paymentAndStartDate || enriched.payment_and_start_date || '';
       const finalDelDate = enriched['تاريخ التسليم'] || enriched.deliveryDate || '';
@@ -495,6 +507,13 @@ export function useEtahaAPI() {
       // Persist to authoritative Cloud Deleted Codes in Supabase for cross-device sync
       await addCloudDeletedCodes(targetList);
 
+      logActivity({
+        actionType: 'حذف موقع',
+        module: 'الإتاحة',
+        siteCode: norm,
+        details: `حذف مشروع إتاحة (${norm})`,
+      });
+
       // Attempt deletion in Supabase if etaha table exists across all clients
       for (const client of supabaseClients) {
         for (const table of ['etaha', 'etaha_records', 'availability']) {
@@ -538,6 +557,13 @@ export function useEtahaAPI() {
 
       // Persist to authoritative Cloud Deleted Codes in Supabase for cross-device sync
       await addCloudDeletedCodes(codeArray);
+
+      logActivity({
+        actionType: 'حذف جماعي',
+        module: 'الإتاحة',
+        siteCode: `${codes.length} مشروعات`,
+        details: `حذف جماعي لمشروعات الإتاحة (${codes.slice(0, 10).join(', ')}${codes.length > 10 ? '...' : ''})`,
+      });
 
       for (const client of supabaseClients) {
         for (const table of ['etaha', 'etaha_records', 'availability']) {

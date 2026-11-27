@@ -5,6 +5,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import type { AuthUser, DemoAccount, ManagedUser, UserRole } from '../types/auth';
 import { isSectorMatch, extractRecordSector, isRecordInSector } from '../utils/sectorPermissions';
 import { supabaseClients } from '../lib/supabase';
+import { startUserSession, heartbeatUserSession, endUserSession } from '../utils/auditService';
 
 export const INITIAL_ADMIN_CREDENTIALS = {
   username: 'admin',
@@ -175,6 +176,10 @@ interface AuthContextType {
   isUserManagementOpen: boolean;
   openUserManagement: () => void;
   closeUserManagement: () => void;
+  // Phase 2 Activity & Sessions Log
+  isAuditLogOpen: boolean;
+  openAuditLog: () => void;
+  closeAuditLog: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -259,6 +264,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
+  const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
 
   const refreshUsers = useCallback(async () => {
     setUsersLoading(true);
@@ -312,6 +318,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const refreshedSession = toAuthUser(match);
             setUser(refreshedSession);
             localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(refreshedSession));
+            startUserSession(refreshedSession);
           } else {
             localStorage.removeItem(SESSION_STORAGE_KEY);
             if (active) setUser(null);
@@ -353,6 +360,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(updatedSession));
     }
   }, [managedUsers, user]);
+
+  // Periodic 60-second session heartbeat + beforeunload / visibilitychange tracking
+  useEffect(() => {
+    if (!user) return;
+    heartbeatUserSession();
+    const interval = window.setInterval(() => {
+      heartbeatUserSession();
+    }, 60_000);
+
+    const handleBeforeUnload = () => {
+      endUserSession(true);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        heartbeatUserSession();
+      } else if (document.visibilityState === 'visible') {
+        heartbeatUserSession();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user]);
 
   const login = useCallback(
     async (usernameOrEmail: string, password: string, selectedSector?: string): Promise<{ success: boolean; error?: string }> => {
@@ -405,6 +440,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const authUser = toAuthUser(found);
       setUser(authUser);
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(authUser));
+      startUserSession(authUser);
       setIsLoginModalOpen(false);
       return { success: true };
     },
@@ -412,8 +448,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const logout = useCallback(() => {
+    endUserSession(false);
     setUser(null);
     setIsUserManagementOpen(false);
+    setIsAuditLogOpen(false);
     setIsLoginModalOpen(false);
     localStorage.removeItem(SESSION_STORAGE_KEY);
   }, []);
@@ -660,6 +698,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isUserManagementOpen,
       openUserManagement: () => setIsUserManagementOpen(true),
       closeUserManagement: () => setIsUserManagementOpen(false),
+      isAuditLogOpen,
+      openAuditLog: () => setIsAuditLogOpen(true),
+      closeAuditLog: () => setIsAuditLogOpen(false),
     }),
     [
       user,
@@ -684,6 +725,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       changeUserPassword,
       deleteUser,
       isUserManagementOpen,
+      isAuditLogOpen,
     ]
   );
 

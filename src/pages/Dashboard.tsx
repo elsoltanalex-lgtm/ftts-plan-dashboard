@@ -18,6 +18,8 @@ import { WeeklyPerformanceLineChart } from '../components/WeeklyPerformanceLineC
 import { WeBulkImportModal } from '../components/WeBulkImportModal';
 import { LoginModal } from '../components/LoginModal';
 import { UserManagementModal } from '../components/UserManagementModal';
+import { ActivitySessionsModal } from '../components/ActivitySessionsModal';
+import { logActivity } from '../utils/auditService';
 import { useAuth } from '../context/AuthContext';
 import { ShieldCheck, Building2, Eye, LogIn, Lock, LogOut, Globe, Trash2, PlusCircle, Edit3, X, Search, AlertTriangle, Landmark, Mail, PieChart, ChevronRight, Download, Loader2, Database } from 'lucide-react';
 import { isRecordInSector, toCanonicalSector, normalizeSectorName } from '../utils/sectorPermissions';
@@ -1388,6 +1390,12 @@ export const Dashboard: React.FC = () => {
         userSector: user?.sector || (user?.role === 'admin' ? 'كافة القطاعات' : 'قطاع عام'),
       });
       const docNote = res.documentsCount > 0 ? ` + ${res.documentsCount} مستند ومرفق PDF` : '';
+      logActivity({
+        actionType: 'تصدير بيانات',
+        module: 'النظام',
+        siteCode: `${res.totalSites} موقع`,
+        details: `تصدير النسخة الاحتياطية الكاملة (${res.totalSites} موقع${docNote})`,
+      });
       setToastMessage(`✅ تم تحميل حزمة النسخة الاحتياطية بنجاح (${(Number(res.totalSites) || 0).toLocaleString()} موقعاً${docNote}) 📦`);
     } catch (err: any) {
       console.error('Failed to export backup:', err);
@@ -2727,6 +2735,9 @@ export const Dashboard: React.FC = () => {
 
       {/* Admin-only User Management Modal */}
       <UserManagementModal />
+
+      {/* Admin-only Activity & Sessions Log Modal */}
+      <ActivitySessionsModal />
 
       {/* Backup Email Configuration & Sending Modal */}
       <BackupEmailConfigModal

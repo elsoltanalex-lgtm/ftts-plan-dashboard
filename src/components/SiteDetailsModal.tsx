@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../context/AuthContext';
+import { getLastModifiedInfoForSite } from '../utils/auditService';
 import { isRecordInSector } from '../utils/sectorPermissions';
 import { isWeSpecialTarget } from '../utils/specialTarget';
 import { BulkDeleteModal } from './BulkDeleteModal';
@@ -572,41 +573,58 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                           ) : (
                             <span className="text-slate-400 text-[11px] italic">لا توجد ملاحظات مسجلة</span>
                           )}
+                          {(() => {
+                            const lastMod = getLastModifiedInfoForSite(site.siteCode, site.rawRecord);
+                            if (!lastMod) return null;
+                            return (
+                              <div className="mt-1.5 text-[10px] text-slate-500 flex items-center gap-1">
+                                <span className="font-bold text-slate-600">آخر تعديل بواسطة:</span>
+                                <span>{lastMod.userName}</span>
+                                <span className="text-slate-400 font-mono">
+                                  ({new Date(lastMod.timestamp).toLocaleDateString('ar-EG')})
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </td>
                         {/* إجراءات التحكم بجانب كل موقع */}
                         <td className="py-2.5 px-3 text-center bg-slate-50/70 border-l border-r border-slate-200">
-                          <div className="flex items-center justify-center gap-2">
-                            {/* 1. زر تعديل البيانات */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (onEditSite) {
-                                  const code = site?.siteCode ? String(site.siteCode).trim() : '';
-                                  if (!code) return;
-                                  onClose();
-                                  onEditSite(code);
-                                }
-                              }}
-                              className="px-3 py-1.5 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-xs hover:shadow-amber-500/25 active:scale-95"
-                              title={`تعديل بيانات (${site.siteCode})`}
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                              <span>تعديل</span>
-                            </button>
+                          {user?.role === 'viewer' ? (
+                            <span className="text-[11px] font-bold text-slate-400">مشاهدة فقط</span>
+                          ) : (
+                            <div className="flex items-center justify-center gap-2">
+                              {/* 1. زر تعديل البيانات */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (onEditSite) {
+                                    const code = site?.siteCode ? String(site.siteCode).trim() : '';
+                                    if (!code) return;
+                                    onClose();
+                                    onEditSite(code);
+                                  }
+                                }}
+                                className="px-3 py-1.5 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-xs hover:shadow-amber-500/25 active:scale-95"
+                                title={`تعديل بيانات (${site.siteCode})`}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>تعديل</span>
+                              </button>
 
-                            {/* 2. زر إلغاء أو حذف موقع */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSiteToDelete(site);
-                              }}
-                              className="px-3 py-1.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-xs hover:shadow-rose-600/25 active:scale-95"
-                              title={`حذف وإلغاء (${site.siteCode})`}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>حذف</span>
-                            </button>
-                          </div>
+                              {/* 2. زر إلغاء أو حذف موقع */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSiteToDelete(site);
+                                }}
+                                className="px-3 py-1.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-xs hover:shadow-rose-600/25 active:scale-95"
+                                title={`حذف وإلغاء (${site.siteCode})`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>حذف</span>
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
 

@@ -14,7 +14,8 @@ import {
   Loader2,
   Mail,
   KeyRound,
-  Users
+  Users,
+  Activity
 } from 'lucide-react';
 import type { UploadedFileMetadata } from '../types/dashboard';
 import { useAuth } from '../context/AuthContext';
@@ -48,7 +49,7 @@ export const Header: React.FC<HeaderProps> = ({
   activeUploadedMetadata,
   onResetToDefault,
 }) => {
-  const { user, isAdmin, openLoginModal, openUserManagement, logout } = useAuth();
+  const { user, isAdmin, openLoginModal, openUserManagement, openAuditLog, logout } = useAuth();
 
   return (
     <header className="pbi-header-banner text-white rounded-2xl shadow-xl p-4 sm:p-5 mb-5 border border-slate-700/60 transition-all">
@@ -465,17 +466,28 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                 </div>
 
-                {/* Admin-only User Management Button */}
+                {/* Admin-only User Management & Activity Log Buttons */}
                 {isAdmin && (
-                  <button
-                    onClick={openUserManagement}
-                    id="btn-header-user-management"
-                    className="w-full h-[30px] px-2.5 bg-purple-600/35 hover:bg-purple-600/55 text-purple-100 rounded-lg text-xs font-bold border border-purple-400/50 transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
-                    title="إدارة المستخدمين والصلاحيات وكلمات المرور (Admin Only)"
-                  >
-                    <Users className="w-3.5 h-3.5 text-purple-200" />
-                    <span>إدارة المستخدمين</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={openUserManagement}
+                      id="btn-header-user-management"
+                      className="flex-1 h-[30px] px-2.5 bg-purple-600/35 hover:bg-purple-600/55 text-purple-100 rounded-lg text-[11px] font-bold border border-purple-400/50 transition shadow-xs cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap"
+                      title="إدارة المستخدمين والصلاحيات وكلمات المرور (Admin Only)"
+                    >
+                      <Users className="w-3.5 h-3.5 text-purple-200 shrink-0" />
+                      <span>إدارة المستخدمين</span>
+                    </button>
+                    <button
+                      onClick={openAuditLog}
+                      id="btn-header-audit-log"
+                      className="flex-1 h-[30px] px-2.5 bg-sky-600/35 hover:bg-sky-600/55 text-sky-100 rounded-lg text-[11px] font-bold border border-sky-400/50 transition shadow-xs cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap"
+                      title="سجل النشاط والجلسات والحضور (Admin Only)"
+                    >
+                      <Activity className="w-3.5 h-3.5 text-sky-200 shrink-0" />
+                      <span>سجل النشاط والجلسات</span>
+                    </button>
+                  </div>
                 )}
               </div>
 

@@ -16,6 +16,7 @@ import {
   SYNC_DELETED_CODES_ID,
   SYNC_DELETED_CODES_SITE_CODE,
 } from '../utils/deletedSitesSync';
+import { logActivity, buildRecordDiffSummary, getActiveActor } from '../utils/auditService';
 
 const STORAGE_KEY = 'ftts_vodafone_records_v1';
 const VODAFONE_TABLE_CANDIDATES = ['vodafone_records', 'vodafone', 'we_records'];
@@ -302,6 +303,7 @@ export function useVodafoneAPI() {
       );
 
       const docUrl = record.documentUrl || record.attachmentUrl || '';
+      const actor = getActiveActor();
       const enriched: VodafoneRecord = {
         ...record,
         company: 'Vodafone',
@@ -317,9 +319,12 @@ export function useVodafoneAPI() {
         special_target: isSpecial,
         'سبيشال تارجت': isSpecial,
         _updatedAt: now,
+        _lastModifiedBy: actor.displayName,
+        _lastModifiedAt: now,
       };
 
       // 1. Instant local optimistic update: immediate reflection across localStorage & all dashboard counters
+      const oldRec = idx >= 0 ? current[idx] : null;
       let updated: VodafoneRecord[];
       if (idx >= 0) {
         updated = [...current];
@@ -330,6 +335,13 @@ export function useVodafoneAPI() {
       }
       saveStoredVodafoneRecords(updated);
       setVodafoneRecords(updated);
+
+      logActivity({
+        actionType: oldRec ? 'تعديل موقع' : 'إضافة موقع',
+        module: 'Vodafone',
+        siteCode: code,
+        details: buildRecordDiffSummary(oldRec, enriched, docUrl ? `مرفق: ${enriched['المستند']}` : undefined),
+      });
 
       // Safe payload matching physical Supabase table columns + JSONB data
       // (Preserves specialTarget and all operator attributes inside data: enriched)
@@ -448,6 +460,13 @@ export function useVodafoneAPI() {
       // Persist to authoritative Cloud Deleted Codes in Supabase for cross-device sync
       await addCloudDeletedCodes(targetList);
 
+      logActivity({
+        actionType: 'حذف موقع',
+        module: 'Vodafone',
+        siteCode: cleanNorm,
+        details: `حذف موقع Vodafone (${cleanNorm})`,
+      });
+
       // Delete from Supabase tables across active clients (Client 2 Fallback hosts active live dataset)
       for (const client of supabaseClients) {
         for (const table of VODAFONE_TABLE_CANDIDATES) {
@@ -496,6 +515,13 @@ export function useVodafoneAPI() {
 
       // Persist to authoritative Cloud Deleted Codes in Supabase for cross-device sync
       await addCloudDeletedCodes(codeArray);
+
+      logActivity({
+        actionType: 'حذف جماعي',
+        module: 'Vodafone',
+        siteCode: `${codes.length} مواقع`,
+        details: `حذف جماعي لمواقع Vodafone (${codes.slice(0, 10).join(', ')}${codes.length > 10 ? '...' : ''})`,
+      });
 
       for (const client of supabaseClients) {
         for (const table of VODAFONE_TABLE_CANDIDATES) {

@@ -18,6 +18,7 @@ import {
   SYNC_DELETED_CODES_ID,
   SYNC_DELETED_CODES_SITE_CODE,
 } from '../utils/deletedSitesSync';
+import { logActivity, buildRecordDiffSummary, getActiveActor } from '../utils/auditService';
 
 export const API_BASE = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
   ? '/api'
@@ -578,6 +579,7 @@ export async function saveRecord(
     const isInlineDataUrl = docUrl.startsWith('data:');
     // Avoid duplicating large Base64 data URLs across two keys in the JSONB payload
     const safeAttachmentUrl = isInlineDataUrl ? '' : docUrl;
+    const actor = getActiveActor();
     const fullData: WeRecord = {
       ...record,
       documentUrl: docUrl,
@@ -591,7 +593,9 @@ export async function saveRecord(
       _id: targetId || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `we-${Date.now()}`),
       _updatedAt: now,
       _createdAt: record._createdAt || now,
-      _createdBy: record._createdBy || 'user',
+      _createdBy: record._createdBy || actor.displayName,
+      _lastModifiedBy: actor.displayName,
+      _lastModifiedAt: now,
     };
 
     // Instant local optimistic update to guarantee persistence in we_records_live_v3 immediately
@@ -601,6 +605,7 @@ export async function saveRecord(
       const c = String(r['site code'] || (r as any).site_code || '').trim().toUpperCase();
       return c === cleanCode;
     });
+    const oldRec = sIdx >= 0 ? currentStored[sIdx] : null;
     let nextStored: WeRecord[];
     if (sIdx >= 0) {
       nextStored = [...currentStored];
@@ -609,6 +614,13 @@ export async function saveRecord(
       nextStored = [fullData, ...currentStored];
     }
     saveStoredWeRecords(nextStored);
+
+    logActivity({
+      actionType: oldRec ? 'تعديل موقع' : 'إضافة موقع',
+      module: 'WE',
+      siteCode,
+      details: buildRecordDiffSummary(oldRec, fullData, docUrl ? `مرفق: ${fullData['المستند']}` : undefined),
+    });
 
     // Build payload for Supabase (avoid storing duplicate Base64 copy inside JSONB)
     const cloudData: WeRecord = isInlineDataUrl
@@ -947,6 +959,13 @@ export async function deleteRecord(idOrCode: string): Promise<{ success: boolean
       await fetch(`${LOCAL_API_BASE}/records/${encodeURIComponent(clean)}`, { method: 'DELETE' });
     } catch { }
 
+    logActivity({
+      actionType: 'حذف موقع',
+      module: 'WE',
+      siteCode: cleanNorm,
+      details: `حذف موقع WE (${cleanNorm})`,
+    });
+
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || 'فشل في حذف السجل' };
@@ -977,6 +996,13 @@ export async function deleteRecordsBulk(idsOrCodes: string[]): Promise<{ success
 
     // 2. Persist to authoritative Cloud Deleted Codes in Supabase for cross-device sync
     await addCloudDeletedCodes(combinedList);
+
+    logActivity({
+      actionType: 'حذف جماعي',
+      module: 'WE',
+      siteCode: `${cleanList.length} مواقع`,
+      details: `حذف جماعي لمواقع WE (${cleanList.slice(0, 10).join(', ')}${cleanList.length > 10 ? '...' : ''})`,
+    });
 
     // 3. Delete across all active Supabase clients in batches
     const batchSize = 50;

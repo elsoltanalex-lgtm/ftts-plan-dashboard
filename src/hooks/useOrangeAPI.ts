@@ -17,6 +17,7 @@ import {
   SYNC_DELETED_CODES_ID,
   SYNC_DELETED_CODES_SITE_CODE,
 } from '../utils/deletedSitesSync';
+import { logActivity, buildRecordDiffSummary, getActiveActor } from '../utils/auditService';
 
 const STORAGE_KEY = 'ftts_orange_records_v3';
 const ORANGE_TABLE_CANDIDATES = ['orange_records', 'orange', 'we_records'];
@@ -308,6 +309,7 @@ export function useOrangeAPI() {
       const canonSec = normalizeSectorName(
         record['رئاسة قطاعات التنفيذ'] || record['رئاسة القطاعات '] || record['رئاسة القطاعات'] || record['قطاع التنفيذ'] || ''
       );
+      const actor = getActiveActor();
       const enriched: OrangeRecord = {
         ...record,
         company: 'Orange',
@@ -330,9 +332,12 @@ export function useOrangeAPI() {
         special_target: isSpecial,
         'سبيشال تارجت': isSpecial,
         _updatedAt: now,
+        _lastModifiedBy: actor.displayName,
+        _lastModifiedAt: now,
       };
 
       // 1. Instant local optimistic update: immediate reflection across localStorage & all dashboard counters
+      const oldRec = idx >= 0 ? current[idx] : null;
       let updated: OrangeRecord[];
       if (idx >= 0) {
         updated = [...current];
@@ -341,6 +346,12 @@ export function useOrangeAPI() {
         enriched._createdAt = now;
         updated = [enriched, ...current];
       }
+      logActivity({
+        actionType: oldRec ? 'تعديل موقع' : 'إضافة موقع',
+        module: 'Orange',
+        siteCode: code,
+        details: buildRecordDiffSummary(oldRec, enriched, docUrl ? `مرفق: ${enriched['المستند']}` : undefined),
+      });
       saveStoredOrangeRecords(updated);
       setOrangeRecords(updated);
 
@@ -465,6 +476,13 @@ export function useOrangeAPI() {
       // Persist to authoritative Cloud Deleted Codes in Supabase for cross-device sync
       await addCloudDeletedCodes(targetList);
 
+      logActivity({
+        actionType: 'حذف موقع',
+        module: 'Orange',
+        siteCode: norm,
+        details: `حذف موقع Orange (${norm})`,
+      });
+
       // Delete from Supabase tables across active clients (Client 2 Fallback hosts active live dataset)
       for (const client of supabaseClients) {
         for (const table of ORANGE_TABLE_CANDIDATES) {
@@ -512,6 +530,13 @@ export function useOrangeAPI() {
 
       // Persist to authoritative Cloud Deleted Codes in Supabase for cross-device sync
       await addCloudDeletedCodes(codeArray);
+
+      logActivity({
+        actionType: 'حذف جماعي',
+        module: 'Orange',
+        siteCode: `${codes.length} مواقع`,
+        details: `حذف جماعي لمواقع Orange (${codes.slice(0, 10).join(', ')}${codes.length > 10 ? '...' : ''})`,
+      });
 
       for (const client of supabaseClients) {
         for (const table of ORANGE_TABLE_CANDIDATES) {
