@@ -7,6 +7,12 @@ import { ETAHA_RAW_RECORDS, type EtahaRecord } from '../data/etahaSites';
 import type { SiteRecord } from '../types/dashboard';
 import { useAuth } from '../context/AuthContext';
 import { uploadAttachment } from '../lib/supabase';
+import {
+  findDuplicateInLocalSites,
+  checkDuplicateSiteInSupabase,
+  type DuplicateSiteInfo,
+} from '../utils/siteValidation';
+import DuplicateSiteAlertBanner from './DuplicateSiteAlertBanner';
 import { parseToDateInputValue } from '../utils/filterUtils';
 import {
   normalizeArabicText,
@@ -192,6 +198,7 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
   );
   const [siteCodeSearch, setSiteCodeSearch] = useState('');
   const [masterRecord, setMasterRecord] = useState<EtahaRecord | null>(initialRecord || null);
+  const [cloudDuplicate, setCloudDuplicate] = useState<DuplicateSiteInfo | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -830,12 +837,25 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
     }
   };
 
+  const existingDuplicateSite = useMemo<DuplicateSiteInfo | null>(() => {
+    if (activeMode !== 'add') return null;
+    const rawCode = String(formData.Code || '').trim();
+    if (!rawCode) return null;
+    return findDuplicateInLocalSites(rawCode, sitesData);
+  }, [activeMode, formData.Code, sitesData]);
+
+  useEffect(() => {
+    setCloudDuplicate(null);
+  }, [formData.Code, activeMode]);
+
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
     // 1. Core Project & Client fields
     if (!String(formData.Code || '').trim()) {
-      newErrors.Code = 'كود المشروع مطلوب';
+      newErrors.Code = 'يرجى إدخال كود الموقع / المشروع قبل الحفظ (Code)';
+    } else if (activeMode === 'add' && existingDuplicateSite) {
+      newErrors.Code = existingDuplicateSite.message;
     }
     if (!String(formData['اسم العميل'] || '').trim()) {
       newErrors['اسم العميل'] = 'اسم العميل / الجهة مطلوب';
@@ -875,9 +895,19 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
     if (!validateForm()) return;
 
     setSaving(true);
+    setCloudDuplicate(null);
     setSuccessMessage('');
     try {
       const code = String(formData.Code).trim();
+      if (activeMode === 'add') {
+        const liveDup = existingDuplicateSite || (await checkDuplicateSiteInSupabase('الإتاحة', code));
+        if (liveDup) {
+          setCloudDuplicate(liveDup);
+          setErrors({ Code: liveDup.message, general: liveDup.message });
+          setSaving(false);
+          return;
+        }
+      }
       const cleanedData: EtahaRecord = { ...formData };
       const paymentDate = String(
         formData['تاريخ السداد والبدء في التنفيذ'] ||
@@ -1524,6 +1554,17 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
             {/* STEP 2: Fill or Edit Form */}
             {(activeMode === 'add' || step === 'fill-form') && (
               <form onSubmit={handleSubmit} className="space-y-6">
+                {activeMode === 'add' && (cloudDuplicate || existingDuplicateSite) && (
+                  <DuplicateSiteAlertBanner
+                    duplicate={(cloudDuplicate || existingDuplicateSite)!}
+                    onSwitchToEdit={(dupCode) => {
+                      setCloudDuplicate(null);
+                      setErrors({});
+                      setActiveMode('edit');
+                      handleSelectSiteCode(dupCode);
+                    }}
+                  />
+                )}
                 {activeMode === 'edit' && masterRecord && (
                   <div className="flex items-center justify-between p-3 bg-teal-50 rounded-xl border border-teal-200 text-xs">
                     <div className="flex items-center gap-2">
@@ -1876,8 +1917,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                         value={formData['موقف التسليم'] || 'لم يتم'}
                         onChange={(e) => handleDeliveryChange(e.target.value)}
                         className={`w-full px-3 py-2 border rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer ${formData['موقف التسليم'] === 'تم التسليم'
-                            ? 'bg-purple-50 border-purple-300 text-purple-900 font-black'
-                            : 'bg-slate-50 border-slate-300 text-slate-800'
+                          ? 'bg-purple-50 border-purple-300 text-purple-900 font-black'
+                          : 'bg-slate-50 border-slate-300 text-slate-800'
                           }`}
                       >
                         {APPROVED_DELIVERY_STATUSES.map((item) => (
@@ -1902,8 +1943,8 @@ export const EtahaAddDataModal: React.FC<EtahaAddDataModalProps> = ({
                           handleInputChange('deliveryDate', e.target.value);
                         }}
                         className={`w-full px-3 py-2 border rounded-xl text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 text-slate-800 ${formData['موقف التسليم'] === 'تم التسليم'
-                            ? 'bg-purple-50/60 border-purple-300 text-purple-950 ring-1 ring-purple-200'
-                            : 'bg-slate-50 border-slate-300'
+                          ? 'bg-purple-50/60 border-purple-300 text-purple-950 ring-1 ring-purple-200'
+                          : 'bg-slate-50 border-slate-300'
                           }`}
                       />
                     </div>

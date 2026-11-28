@@ -26,6 +26,12 @@ import { useAuth } from '../context/AuthContext';
 import { isRecordInSector, normalizeSectorName } from '../utils/sectorPermissions';
 import { uploadAttachment } from '../lib/supabase';
 import {
+  findDuplicateInLocalSites,
+  checkDuplicateSiteInSupabase,
+  type DuplicateSiteInfo,
+} from '../utils/siteValidation';
+import DuplicateSiteAlertBanner from './DuplicateSiteAlertBanner';
+import {
   Lock,
   ShieldCheck,
   CheckCircle2,
@@ -518,6 +524,18 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
     message: string;
     existingRecord: WeRecord;
   } | null>(null);
+  const [cloudDuplicate, setCloudDuplicate] = useState<DuplicateSiteInfo | null>(null);
+
+  const existingDuplicateSite = useMemo<DuplicateSiteInfo | null>(() => {
+    if (activeMode !== 'add') return null;
+    const rawCode = String(formData['site code'] || '').trim();
+    if (!rawCode) return null;
+    return findDuplicateInLocalSites(rawCode, sitesData);
+  }, [activeMode, formData, sitesData]);
+
+  useEffect(() => {
+    setCloudDuplicate(null);
+  }, [formData['site code'], activeMode]);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const sitesDataRef = useRef(sitesData);
@@ -1630,7 +1648,9 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
     const code = String(formData['site code'] || masterRecord?.['site code'] || '').trim();
     if (!code) {
-      newErrors['site code'] = 'كود الموقع مطلوب (Site Code)';
+      newErrors['site code'] = 'يرجى إدخال كود الموقع قبل الحفظ (Site Code)';
+    } else if (activeMode === 'add' && existingDuplicateSite) {
+      newErrors['site code'] = existingDuplicateSite.message;
     }
 
     if (activeMode === 'add') {
@@ -1720,10 +1740,21 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
 
     setSaving(true);
     setDuplicateWarning(null);
+    setCloudDuplicate(null);
     setSuccessMessage('');
 
     try {
       const isEdit = activeMode === 'edit';
+      if (!isEdit) {
+        const cleanCode = String(formData['site code'] || '').trim();
+        const liveDup = existingDuplicateSite || (await checkDuplicateSiteInSupabase('WE', cleanCode));
+        if (liveDup) {
+          setCloudDuplicate(liveDup);
+          setErrors({ 'site code': liveDup.message, _general: liveDup.message });
+          setSaving(false);
+          return;
+        }
+      }
       const dataToSave = { ...formData };
 
       // Ensure Special Target boolean is consistently populated
@@ -2218,6 +2249,17 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
           {/* ── Step 2: Full Form (Edit mode & Add mode) ── */}
           {step === 'fill-form' && (
             <form id="we-data-form" onSubmit={handleFormSubmit} className="space-y-5">
+              {activeMode === 'add' && (cloudDuplicate || existingDuplicateSite) && (
+                <DuplicateSiteAlertBanner
+                  duplicate={(cloudDuplicate || existingDuplicateSite)!}
+                  onSwitchToEdit={(dupCode) => {
+                    setCloudDuplicate(null);
+                    setErrors({});
+                    setActiveMode('edit');
+                    handleSelectSiteCode(dupCode);
+                  }}
+                />
+              )}
 
               {isReadOnly && (
                 <div className="p-3.5 bg-rose-50 border border-rose-300 rounded-xl flex items-start gap-3 text-rose-900 shadow-xs">
@@ -3252,8 +3294,8 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                             onChange={(e) => handleFieldChange('site code', e.target.value)}
                             placeholder="مثال: LALXN33439"
                             className={`border rounded-lg px-3 py-2 text-sm font-mono font-bold focus:outline-none transition ${errors['site code']
-                                ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
-                                : 'border-blue-300 bg-white text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                              ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
+                              : 'border-blue-300 bg-white text-blue-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
                               }`}
                           />
                           {errors['site code'] && (
@@ -3273,8 +3315,8 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                             value={currentPresidency}
                             onChange={(e) => handlePresidencyChange(e.target.value)}
                             className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition cursor-pointer font-bold ${errors['Exc Sectores']
-                                ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
-                                : 'border-blue-300 bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                              ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
+                              : 'border-blue-300 bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
                               }`}
                           >
                             <option value="">-- اختر رئاسة القطاعات --</option>
@@ -3302,8 +3344,8 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                             value={currentSector}
                             onChange={(e) => handleSectorChange(e.target.value)}
                             className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition cursor-pointer font-bold disabled:bg-slate-100 disabled:cursor-not-allowed ${errors['Exc sector']
-                                ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
-                                : 'border-blue-300 bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                              ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
+                              : 'border-blue-300 bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
                               }`}
                           >
                             <option value="">
@@ -3358,8 +3400,8 @@ export const WeAddDataModal: React.FC<WeAddDataModalProps> = ({
                             value={currentCompAdmin}
                             onChange={(e) => handleCompAdminChange(e.target.value)}
                             className={`border rounded-lg px-3 py-2 text-sm focus:outline-none transition cursor-pointer font-bold disabled:bg-slate-100 disabled:cursor-not-allowed ${errors['اداره التنفيذ المختصه']
-                                ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
-                                : 'border-blue-300 bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                              ? 'border-red-400 bg-red-50 text-red-900 ring-2 ring-red-200'
+                              : 'border-blue-300 bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
                               }`}
                           >
                             <option value="">

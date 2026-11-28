@@ -17,6 +17,7 @@ import {
   SYNC_DELETED_CODES_SITE_CODE,
 } from '../utils/deletedSitesSync';
 import { logActivity, buildRecordDiffSummary, getActiveActor } from '../utils/auditService';
+import { formatSupabaseSaveError } from '../utils/siteValidation';
 
 const STORAGE_KEY = 'ftts_vodafone_records_v1';
 const VODAFONE_TABLE_CANDIDATES = ['vodafone_records', 'vodafone', 'we_records'];
@@ -511,7 +512,7 @@ export function useVodafoneAPI() {
         return {
           success: false,
           cloudSaved: false,
-          error: `تم الحفظ محلياً لكن تعذر المزامنة مع السحابة (${lastCloudError?.message || lastCloudError?.code || 'خطأ اتصال'}). يرجى المحاولة مرة أخرى.`,
+          error: formatSupabaseSaveError(lastCloudError, code),
         };
       }
 

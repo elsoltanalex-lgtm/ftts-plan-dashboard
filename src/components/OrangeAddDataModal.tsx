@@ -13,6 +13,12 @@ import {
 } from '../types/orange';
 import { isDocumentRequired } from '../config/fieldConfig';
 import { uploadAttachment } from '../lib/supabase';
+import {
+  findDuplicateInLocalSites,
+  checkDuplicateSiteInSupabase,
+  type DuplicateSiteMatch,
+} from '../utils/siteValidation';
+import { DuplicateSiteAlertBanner } from './DuplicateSiteAlertBanner';
 import { normalizeSectorName } from '../utils/sectorPermissions';
 import {
   Lock,
@@ -409,13 +415,25 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
     });
   };
 
-  // Submit Handler with Conditional Document Validation
+  const [cloudDuplicate, setCloudDuplicate] = useState<DuplicateSiteMatch | null>(null);
+
+  const existingDuplicateSite = useMemo(() => {
+    if (activeMode !== 'add') return null;
+    const rawCode = formData['Site code'] || (formData as any)['site code'] || '';
+    return findDuplicateInLocalSites(String(rawCode), sitesData, allSiteCodes) || cloudDuplicate;
+  }, [activeMode, formData['Site code'], sitesData, allSiteCodes, cloudDuplicate]);
+
+  // Submit Handler with Conditional Document Validation & Duplicate Protection
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
-    if (!String(formData['Site code'] || '').trim()) {
-      newErrors['Site code'] = 'كود الموقع مطلوب.';
+    const cleanCode = String(formData['Site code'] || '').trim().toUpperCase();
+    if (!cleanCode) {
+      newErrors['Site code'] = 'يرجى إدخال كود الموقع قبل الحفظ.';
+    } else if (activeMode === 'add' && existingDuplicateSite) {
+      newErrors['Site code'] = existingDuplicateSite.message;
+      newErrors._general = existingDuplicateSite.message;
     }
 
     if (!formData['التصنيف (مدني)']) {
@@ -444,7 +462,17 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
 
     setSaving(true);
     setErrors({});
+    setCloudDuplicate(null);
     try {
+      if (activeMode === 'add') {
+        const remoteDup = await checkDuplicateSiteInSupabase('Orange', cleanCode);
+        if (remoteDup) {
+          setCloudDuplicate(remoteDup);
+          setErrors({ 'Site code': remoteDup.message, _general: remoteDup.message });
+          setSaving(false);
+          return;
+        }
+      }
       const isSpecial = Boolean(
         formData.specialTarget ||
         formData.special_target ||
@@ -595,6 +623,17 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
+              {isAddMode && (cloudDuplicate || existingDuplicateSite) && (
+                <DuplicateSiteAlertBanner
+                  duplicate={(cloudDuplicate || existingDuplicateSite)!}
+                  onSwitchToEdit={(dupCode) => {
+                    setCloudDuplicate(null);
+                    setErrors({});
+                    setActiveMode('edit');
+                    handleSelectSiteCode(dupCode);
+                  }}
+                />
+              )}
 
               {/* SECTION 1: Baseline Data (Fully Unlocked in Add Mode, Protected in Edit Mode) */}
               <div className={`border rounded-2xl p-4 sm:p-5 ${isAddMode ? 'bg-orange-50/40 border-orange-200' : 'bg-slate-50/80 border-slate-200'}`}>

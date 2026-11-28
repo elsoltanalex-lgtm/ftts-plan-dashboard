@@ -9,6 +9,12 @@ import {
   computeTahawolOverallStatus,
 } from '../hooks/useTahawolAPI';
 import {
+  findDuplicateInLocalSites,
+  checkDuplicateSiteInSupabase,
+  type DuplicateSiteMatch,
+} from '../utils/siteValidation';
+import { DuplicateSiteAlertBanner } from './DuplicateSiteAlertBanner';
+import {
   X,
   PlusCircle,
   Edit3,
@@ -233,14 +239,25 @@ export const TahawolAddDataModal: React.FC<TahawolAddDataModalProps> = ({
     }
   };
 
+  const [cloudDuplicate, setCloudDuplicate] = useState<DuplicateSiteMatch | null>(null);
+
+  const existingDuplicateSite = useMemo(() => {
+    if (activeMode !== 'add') return null;
+    return findDuplicateInLocalSites(String(formData['الكود'] || ''), sitesData, allSiteCodes) || cloudDuplicate;
+  }, [activeMode, formData['الكود'], sitesData, allSiteCodes, cloudDuplicate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
-    if (!String(formData['الكود'] || '').trim()) {
-      newErrors['الكود'] = 'كود الموقع مطلوب';
+    const cleanCode = String(formData['الكود'] || '').trim();
+    if (!cleanCode) {
+      newErrors['الكود'] = 'يرجى إدخال كود الموقع قبل الحفظ';
+    } else if (activeMode === 'add' && existingDuplicateSite) {
+      newErrors['الكود'] = existingDuplicateSite.message;
+      newErrors._general = existingDuplicateSite.message;
     }
     if (!String(formData['قطاع التنفيذ'] || '').trim()) {
-      newErrors['قطاع التنفيذ'] = 'قطاع التنفيذ مطلوب';
+      newErrors['قطاع التنفيذ'] = 'يرجى اختيار قطاع التنفيذ قبل الحفظ';
     }
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -249,7 +266,17 @@ export const TahawolAddDataModal: React.FC<TahawolAddDataModalProps> = ({
 
     setSaving(true);
     setErrors({});
+    setCloudDuplicate(null);
     try {
+      if (activeMode === 'add') {
+        const remoteDup = await checkDuplicateSiteInSupabase('التحول الرقمي', cleanCode);
+        if (remoteDup) {
+          setCloudDuplicate(remoteDup);
+          setErrors({ 'الكود': remoteDup.message, _general: remoteDup.message });
+          setSaving(false);
+          return;
+        }
+      }
       const computedOverall = computeTahawolOverallStatus(
         formData['المسار الخارجي'],
         formData['المسار الداخلى']
@@ -353,6 +380,17 @@ export const TahawolAddDataModal: React.FC<TahawolAddDataModalProps> = ({
             </div>
           ) : (
             <form id="tahawol-data-form" onSubmit={handleSubmit} className="space-y-5">
+              {activeMode === 'add' && (
+                <DuplicateSiteAlertBanner
+                  duplicate={existingDuplicateSite}
+                  onSwitchToEdit={(dupCode) => {
+                    setActiveMode('edit');
+                    setCloudDuplicate(null);
+                    setErrors({});
+                    handleSelectSiteCode(dupCode);
+                  }}
+                />
+              )}
               {/* Section 1: Basic Site & Ministry Info */}
               <div className="bg-amber-50/40 border border-amber-200 rounded-2xl p-4 sm:p-5 space-y-3">
                 <div className="flex items-center gap-2 pb-2 border-b border-amber-200">

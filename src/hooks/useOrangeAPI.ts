@@ -18,6 +18,7 @@ import {
   SYNC_DELETED_CODES_SITE_CODE,
 } from '../utils/deletedSitesSync';
 import { logActivity, buildRecordDiffSummary, getActiveActor } from '../utils/auditService';
+import { formatSupabaseSaveError } from '../utils/siteValidation';
 
 const STORAGE_KEY = 'ftts_orange_records_v3';
 const ORANGE_TABLE_CANDIDATES = ['orange_records', 'orange', 'we_records'];
@@ -442,14 +443,20 @@ export function useOrangeAPI() {
 
       if (cloudSaved) {
         await removeCloudDeletedCode(code);
+        return {
+          success: true,
+          cloudSaved: true,
+          message: `تم حفظ وتحديث بيانات موقع Orange (${code}) وتصنيفه بنجاح في قاعدة بيانات Supabase السحابية ✅`,
+        };
       }
 
+      // Cloud save failed — rollback optimistic local cache & report explicit Arabic reason
+      saveStoredOrangeRecords(current);
+      setOrangeRecords(current);
       return {
-        success: true,
-        cloudSaved,
-        message: cloudSaved
-          ? `تم حفظ وتحديث بيانات موقع Orange (${code}) وتصنيفه بنجاح في قاعدة بيانات Supabase السحابية ✅`
-          : `تم حفظ بيانات موقع Orange (${code}) محلياً وتحديث النظام فورياً ✅`,
+        success: false,
+        cloudSaved: false,
+        error: formatSupabaseSaveError(lastCloudError, code),
       };
     } catch (err: any) {
       return { success: false, error: err?.message || 'فشل حفظ بيانات الموقع' };

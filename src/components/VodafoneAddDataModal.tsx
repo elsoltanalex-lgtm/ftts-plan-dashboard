@@ -8,6 +8,12 @@ import type { SiteRecord } from '../types/dashboard';
 import { VODAFONE_RAW_RECORDS } from '../data/vodafoneSites';
 import { useAuth } from '../context/AuthContext';
 import { uploadAttachment } from '../lib/supabase';
+import {
+  findDuplicateInLocalSites,
+  checkDuplicateSiteInSupabase,
+  type DuplicateSiteMatch,
+} from '../utils/siteValidation';
+import { DuplicateSiteAlertBanner } from './DuplicateSiteAlertBanner';
 import { normalizeSectorName } from '../utils/sectorPermissions';
 import {
   X,
@@ -486,44 +492,22 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
     }
   };
 
+  const [cloudDuplicate, setCloudDuplicate] = useState<DuplicateSiteMatch | null>(null);
+
   // Detect if the entered Site Code ALREADY exists in Vodafone when in Add New Site mode
   const existingDuplicateSite = useMemo(() => {
     if (activeMode !== 'add') return null;
     const rawCode = formData['Site code'] || formData['site code'] || formData.site_code;
-    const norm = String(rawCode ?? '').trim().toUpperCase();
-    if (!norm) return null;
-    const matchedSite = (sitesData || []).find(
-      (s) => String(s?.siteCode || '').trim().toUpperCase() === norm
-    );
-    if (matchedSite) {
-      return {
-        siteCode: String(matchedSite.siteCode).trim(),
-        sector: matchedSite.sector || matchedSite.rawRecord?.['رئاسة قطاعات التنفيذ'] || matchedSite.rawRecord?.['قطاع التنفيذ'] || 'غير محدد',
-        central: matchedSite.central || matchedSite.rawRecord?.['سنترال الربط'] || 'غير محدد',
-        status: matchedSite.classification || matchedSite.status || matchedSite.rawRecord?.['التصنيف'] || 'غير محدد',
-      };
-    }
-    const matchedInList = (allSiteCodes || []).find(
-      (c) => String(c ?? '').trim().toUpperCase() === norm
-    );
-    if (matchedInList) {
-      return {
-        siteCode: String(matchedInList).trim(),
-        sector: 'غير محدد',
-        central: 'غير محدد',
-        status: 'مسجل مسبقاً',
-      };
-    }
-    return null;
-  }, [activeMode, formData['Site code'], formData['site code'], formData.site_code, sitesData, allSiteCodes]);
+    return findDuplicateInLocalSites(String(rawCode ?? ''), sitesData, allSiteCodes) || cloudDuplicate;
+  }, [activeMode, formData['Site code'], formData['site code'], formData.site_code, sitesData, allSiteCodes, cloudDuplicate]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
     const code = formData['Site code'] || formData['site code'] || formData.site_code;
     if (!String(code || '').trim()) {
-      newErrors['Site code'] = 'كود الموقع مطلوب (Site Code)';
+      newErrors['Site code'] = 'يرجى إدخال كود الموقع قبل الحفظ (Site Code)';
     } else if (activeMode === 'add' && existingDuplicateSite) {
-      newErrors['Site code'] = `كود الموقع (${existingDuplicateSite.siteCode}) مسجل بالفعل في Vodafone (${existingDuplicateSite.sector} • ${existingDuplicateSite.status}). اضغط "فتح وتعديل الموقع الحالي" بدلاً من الإضافة.`;
+      newErrors['Site code'] = existingDuplicateSite.message;
     }
     if (!String(formData['التصنيف'] || '').trim()) {
       newErrors['التصنيف'] = 'التصنيف الميداني مطلوب';
@@ -563,9 +547,21 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
 
     setSaving(true);
     setSuccessMessage('');
+    setCloudDuplicate(null);
     try {
       const rawCode = formData['Site code'] || formData['site code'] || formData.site_code;
       const code = String(rawCode).trim().toUpperCase();
+
+      // Live Supabase duplicate verification in Add mode before attempting insert
+      if (activeMode === 'add') {
+        const remoteDup = await checkDuplicateSiteInSupabase('Vodafone', code);
+        if (remoteDup) {
+          setCloudDuplicate(remoteDup);
+          setErrors({ 'Site code': remoteDup.message, _general: remoteDup.message });
+          setSaving(false);
+          return;
+        }
+      }
 
       const finalObstacleReason = isObstacle
         ? (formData['اسباب المعوق'] || formData['اسباب التعذر'] || '')
@@ -814,31 +810,16 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
               )}
 
               {/* Duplicate Site Code Warning Banner in Add Mode */}
-              {activeMode === 'add' && existingDuplicateSite && (
-                <div className="p-3.5 bg-amber-50 border-2 border-amber-400 rounded-2xl text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <div className="font-extrabold text-sm text-amber-950">
-                        كود الموقع ({existingDuplicateSite.siteCode}) مسجل بالفعل في Vodafone!
-                      </div>
-                      <div className="text-[11px] text-amber-800 mt-0.5">
-                        القطاع: <strong>{existingDuplicateSite.sector}</strong> • السنترال: <strong>{existingDuplicateSite.central}</strong> • التصنيف: <strong>{existingDuplicateSite.status}</strong>
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveMode('edit');
-                      setErrors({});
-                      handleSelectSiteCode(existingDuplicateSite.siteCode);
-                    }}
-                    className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shrink-0 cursor-pointer transition shadow-xs"
-                  >
-                    فتح وتعديل الموقع الحالي ←
-                  </button>
-                </div>
+              {activeMode === 'add' && (
+                <DuplicateSiteAlertBanner
+                  duplicate={existingDuplicateSite}
+                  onSwitchToEdit={(dupCode) => {
+                    setActiveMode('edit');
+                    setCloudDuplicate(null);
+                    setErrors({});
+                    handleSelectSiteCode(dupCode);
+                  }}
+                />
               )}
 
               {/* 1. Base Information Section */}

@@ -22,6 +22,7 @@ import {
   isSystemSyncRecord,
 } from '../utils/deletedSitesSync';
 import { logActivity, buildRecordDiffSummary, getActiveActor } from '../utils/auditService';
+import { formatSupabaseSaveError } from '../utils/siteValidation';
 
 export const API_BASE = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
   ? '/api'
@@ -808,7 +809,7 @@ export async function saveRecord(
     console.error(`[WE Supabase] All clients failed to save site ${siteCode}:`, lastCloudError);
     return {
       success: false,
-      error: `فشل حفظ وتحديث السجل لموقع ${siteCode} في قاعدة بيانات Supabase السحابية: ${lastCloudError?.message || 'يرجى التحقق من اتصال الإنترنت والمحاولة مجدداً.'}`,
+      error: formatSupabaseSaveError(lastCloudError, siteCode),
     };
   } catch (err: any) {
     return { success: false, error: err?.message || 'خطأ أثناء حفظ السجل' };
