@@ -724,12 +724,20 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         return Math.max(5, Math.ceil((maxWeekly * 1.25) / 5) * 5);
       }
     } else {
-      // Operator Mode
-      const maxSite = Math.max(
-        10,
-        ...operatorRollout.weeks.map((d) => Math.max(d.totalSites, d.targetRate, d.delivered))
-      );
-      return Math.max(10, Math.ceil((maxSite * 1.15) / 10) * 10);
+      // Operator Mode (supports both Cumulative & Weekly views)
+      if (viewMode === 'cumulative') {
+        const maxSite = Math.max(
+          10,
+          ...operatorRollout.weeks.map((d) => Math.max(d.targetRate, d.delivered, d.deliveredLast5Weeks))
+        );
+        return Math.max(10, Math.ceil((maxSite * 1.15) / 10) * 10);
+      } else {
+        const maxWeekly = Math.max(
+          5,
+          ...operatorRollout.weeks.map((d) => Math.max(d.deliveredThisWeek, d.deliveredLast5Weeks))
+        );
+        return Math.max(5, Math.ceil((maxWeekly * 1.25) / 5) * 5);
+      }
     }
   }, [isAvailability, viewMode, availabilityStats.weeklyPoints, operatorRollout.weeks]);
 
@@ -768,24 +776,26 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
     return pts;
   }, [isAvailability, availabilityStats.weeklyPoints, viewMode, originX, originY, maxY]);
 
-  // ── Operator Mode Points (Weeks 1 to 6) ──
+  // ── Operator Mode Points (8 Weeks: Oct W1-W4 & Nov W1-W4) ──
   const operatorTargetPoints = useMemo(() => {
     if (isAvailability) return [];
     const pts = [{ x: originX, y: originY }];
     operatorRollout.weeks.forEach((w, idx) => {
-      pts.push({ x: getX(idx + 1), y: getY(w.targetRate) });
+      const val = viewMode === 'cumulative' ? w.targetRate : w.deliveredLast5Weeks;
+      pts.push({ x: getX(idx + 1), y: getY(val) });
     });
     return pts;
-  }, [isAvailability, operatorRollout.weeks, originX, originY, maxY]);
+  }, [isAvailability, operatorRollout.weeks, viewMode, originX, originY, maxY]);
 
   const operatorDeliveredPoints = useMemo(() => {
     if (isAvailability) return [];
     const pts = [{ x: originX, y: originY }];
     operatorRollout.weeks.forEach((w, idx) => {
-      pts.push({ x: getX(idx + 1), y: getY(w.delivered) });
+      const val = viewMode === 'cumulative' ? w.delivered : w.deliveredThisWeek;
+      pts.push({ x: getX(idx + 1), y: getY(val) });
     });
     return pts;
-  }, [isAvailability, operatorRollout.weeks, originX, originY, maxY]);
+  }, [isAvailability, operatorRollout.weeks, viewMode, originX, originY, maxY]);
 
   const operatorTotalSitesPoints = useMemo(() => {
     if (isAvailability) return [];
@@ -878,7 +888,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
               <h3 className="text-base sm:text-lg font-black text-slate-800 leading-tight">
                 {isAvailability
                   ? 'المسار الأسبوعي ومتابعة التزام التسليم (Availability Weekly SLA & Delivery Tracking)'
-                  : 'المسار الأسبوعي لمواقع الفايبر المنتهية والمشغلة (Weekly Fiber Rollout: Target vs Delivered)'}
+                  : 'المسار الأسبوعي ومتابعة التزام التسليم (FTTS Weekly Progress & Delivery Commitment)'}
               </h3>
               <span
                 className={`text-xs px-2.5 py-0.5 rounded-full font-bold border ${isAvailability
@@ -905,7 +915,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             <p className="text-xs text-slate-500 mt-1">
               {isAvailability
                 ? `متابعة أسبوعية لمشروعات الإتاحة: نافذة التسليم القياسية (3 أشهر من السداد)، ومعدل التسليم الفعلي، وحالات التأخير من الأسبوع 1 حتى الأسبوع ${totalSteps}`
-                : `متابعة أسبوعية دقيقة لمواقع المحمول (أكتوبر - نوفمبر 2026): مقارنة المعدل المطلوب تسليمه بالمحقق فعلياً وتوزيع الإدارات العامة`}
+                : `متابعة أسبوعية لمواقع FTTS (أكتوبر - نوفمبر 2026): المستهدف التراكمي (غير المنتهي / غير المشغل فايبر)، المحقق التراكمي، والمواقع المسلمة آخر 5 أسابيع`}
             </p>
           </div>
         </div>
@@ -954,29 +964,27 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             </div>
           )}
 
-          {/* Availability View Mode Toggle */}
-          {isAvailability && (
-            <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
-              <button
-                onClick={() => setViewMode('cumulative')}
-                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${viewMode === 'cumulative'
-                  ? 'bg-white text-indigo-700 shadow-2xs font-black'
-                  : 'text-slate-600 hover:text-slate-900'
-                  }`}
-              >
-                📈 المسار التراكمي
-              </button>
-              <button
-                onClick={() => setViewMode('weekly')}
-                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${viewMode === 'weekly'
-                  ? 'bg-white text-indigo-700 shadow-2xs font-black'
-                  : 'text-slate-600 hover:text-slate-900'
-                  }`}
-              >
-                📊 الإنجاز الأسبوعي
-              </button>
-            </div>
-          )}
+          {/* View Mode Toggle (Works for BOTH Availability & FTTS Operators) */}
+          <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+            <button
+              onClick={() => setViewMode('cumulative')}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${viewMode === 'cumulative'
+                ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                : 'text-slate-600 hover:text-slate-900'
+                }`}
+            >
+              📈 المسار التراكمي
+            </button>
+            <button
+              onClick={() => setViewMode('weekly')}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${viewMode === 'weekly'
+                ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                : 'text-slate-600 hover:text-slate-900'
+                }`}
+            >
+              📊 الإنجاز الأسبوعي
+            </button>
+          </div>
 
           {/* Quick Metrics Badges */}
           {isAvailability ? (
@@ -1826,55 +1834,68 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                   </div>
                 </div>
               ) : hoveredOperatorWeek ? (
-                <div className="space-y-1.5 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-slate-300">
-                      <span className="w-2 h-2 rounded-full bg-purple-400 shrink-0"></span>
-                      <span>إجمالي مواقع النطاق:</span>
+                <div className="space-y-2 text-xs">
+                  {/* 1. المستهدف التراكمي */}
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-sky-500/30">
+                    <span className="flex items-center gap-1.5 text-slate-200">
+                      <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shrink-0"></span>
+                      <span className="font-bold">المستهدف التراكمي:</span>
                     </span>
-                    <span className="font-mono font-bold text-purple-300">
-                      {hoveredOperatorWeek.totalSites} موقع
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-slate-300">
-                      <span className="w-2 h-2 rounded-full bg-sky-400 shrink-0"></span>
-                      <span>المعدل المطلوب تسليمه:</span>
-                    </span>
-                    <span className="font-mono font-bold text-sky-400">
-                      {hoveredOperatorWeek.targetRate} موقع
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-slate-300">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
-                      <span>ما تم تسليمه فعلياً:</span>
-                    </span>
-                    <span className="font-mono font-bold text-emerald-400">
-                      {hoveredOperatorWeek.delivered} موقع
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-slate-300">
-                      <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0"></span>
-                      <span>نسبة تحقيق المطلوب:</span>
-                    </span>
-                    <span className="font-mono font-bold text-amber-300">
-                      {hoveredOperatorWeek.achievementPercent}%
+                    <span className="font-mono font-black text-sky-300 text-sm">
+                      {hoveredOperatorWeek.targetRate}{' '}
+                      <span className="text-[10px] font-sans font-normal text-slate-400">موقع</span>
                     </span>
                   </div>
 
-                  {/* Departments Mini Breakdown */}
-                  <div className="pt-2 mt-2 border-t border-slate-800 text-[10px]">
-                    <span className="text-slate-400 block mb-1 font-bold">توزيع الإدارات لهذا الأسبوع (مسلّم / مطلوب):</span>
-                    <div className="grid grid-cols-2 gap-1 font-mono">
-                      {hoveredOperatorWeek.deptRows.map((d) => (
-                        <div key={d.rawAdmin} className="bg-slate-900/80 px-1.5 py-0.5 rounded flex justify-between text-slate-300">
-                          <span className="truncate max-w-[90px]">{d.shortAdmin}</span>
-                          <span className="text-emerald-400 font-bold">{d.delivered}/{d.targetRate}</span>
-                        </div>
-                      ))}
+                  {/* 2. المحقق التراكمي */}
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-emerald-500/30">
+                    <span className="flex items-center gap-1.5 text-slate-200">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0"></span>
+                      <span className="font-bold">المحقق التراكمي:</span>
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-black text-emerald-400 text-sm">
+                        {hoveredOperatorWeek.delivered}{' '}
+                        <span className="text-[10px] font-sans font-normal text-slate-400">موقع</span>
+                      </span>
+                      <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-bold">
+                        +{hoveredOperatorWeek.deliveredThisWeek} أسبوعي
+                      </span>
                     </div>
+                  </div>
+
+                  {/* 3. المواقع المسلمة هذا الأسبوع */}
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-cyan-500/30">
+                    <span className="flex items-center gap-1.5 text-slate-200">
+                      <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shrink-0"></span>
+                      <span className="font-bold">المواقع المسلمة هذا الأسبوع:</span>
+                    </span>
+                    <span className="font-mono font-black text-cyan-300 text-sm">
+                      {hoveredOperatorWeek.deliveredThisWeek}{' '}
+                      <span className="text-[10px] font-sans font-normal text-slate-400">موقع</span>
+                    </span>
+                  </div>
+
+                  {/* 4. المواقع المسلمة آخر 5 أسابيع */}
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-teal-500/30">
+                    <span className="flex items-center gap-1.5 text-slate-200">
+                      <span className="w-2.5 h-2.5 rounded-full bg-teal-400 shrink-0"></span>
+                      <span className="font-bold">المواقع المسلمة آخر 5 أسابيع:</span>
+                    </span>
+                    <span className="font-mono font-black text-teal-300 text-sm">
+                      {hoveredOperatorWeek.deliveredLast5Weeks}{' '}
+                      <span className="text-[10px] font-sans font-normal text-slate-400">موقع</span>
+                    </span>
+                  </div>
+
+                  {/* 5. نسبة الإنجاز والفجوة المتبقية */}
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px]">
+                    <span className="text-slate-300 font-bold">
+                      نسبة الإنجاز: <strong className="font-mono text-amber-300">{hoveredOperatorWeek.achievementPercent}%</strong>
+                    </span>
+                    <span className="text-slate-300 font-bold">
+                      المتبقي: <strong className="font-mono text-rose-300">{hoveredOperatorWeek.remainingGap}</strong> موقع
+                    </span>
                   </div>
                 </div>
               ) : null}
@@ -2503,51 +2524,74 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
           </div>
         </div>
       ) : (
-        /* Operator KPI Cards */
-        <div className="mt-5 pt-4 border-t border-slate-100">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-0.5">
-              <span className="text-[11px] font-bold text-slate-500 block">إجمالي عدد المواقع</span>
-              <span className="text-lg sm:text-xl font-black text-slate-900 font-mono">
-                {operatorRollout.latestWeek.totalSites}
-              </span>
-              <span className="text-[10px] text-slate-400 block font-semibold">موقع محمول في الخطة</span>
-            </div>
+        /* Operator KPI Cards (Mirrors Availability Focus Cards — Reactive to Hovered / Selected Week) */
+        (() => {
+          const activeOpWeek =
+            hoveredOperatorWeek ||
+            (selectedWeekIndex !== null ? operatorRollout.weeks[selectedWeekIndex] : null) ||
+            operatorRollout.latestWeek;
+          return (
+            <div className="mt-5 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-indigo-600 text-white flex items-center gap-1 shadow-2xs">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>{activeOpWeek.weekDef.fullAr}</span>
+                  </span>
+                  <span className="text-xs text-slate-500 font-mono font-semibold">
+                    {activeOpWeek.weekDef.dateRangeAr}
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-500 font-semibold">
+                  المشغل: <strong className="text-indigo-700">{selectedOperator === 'All' ? 'جميع المشغلين (All Operators)' : selectedOperator}</strong>
+                </span>
+              </div>
 
-            <div className="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200 text-center space-y-0.5">
-              <span className="text-[11px] font-bold text-sky-800 block">المعدل المطلوب (W2-Nov)</span>
-              <span className="text-lg sm:text-xl font-black text-sky-700 font-mono">
-                {operatorRollout.latestWeek.targetRate}
-              </span>
-              <span className="text-[10px] text-sky-600 block font-semibold">موقع مطلوب تسليمه</span>
-            </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                <div className="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200 text-center space-y-0.5">
+                  <span className="text-[11px] font-bold text-sky-800 block">المستهدف التراكمي</span>
+                  <span className="text-lg sm:text-xl font-black text-sky-800 font-mono">
+                    {activeOpWeek.targetRate}
+                  </span>
+                  <span className="text-[10px] text-sky-600 block font-semibold">غير المنتهي / غير المشغل فايبر</span>
+                </div>
 
-            <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-center space-y-0.5">
-              <span className="text-[11px] font-bold text-emerald-800 block">ما تم تسليمه فعلياً</span>
-              <span className="text-lg sm:text-xl font-black text-emerald-700 font-mono">
-                {operatorRollout.latestWeek.delivered}
-              </span>
-              <span className="text-[10px] text-emerald-600 block font-semibold">موقع مسلم بالكامل</span>
-            </div>
+                <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-center space-y-0.5">
+                  <span className="text-[11px] font-bold text-emerald-800 block">المحقق التراكمي</span>
+                  <span className="text-lg sm:text-xl font-black text-emerald-700 font-mono">
+                    {activeOpWeek.delivered}
+                  </span>
+                  <span className="text-[10px] text-emerald-600 block font-semibold">
+                    +{activeOpWeek.deliveredThisWeek} موقع هذا الأسبوع
+                  </span>
+                </div>
 
-            <div className="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-center space-y-0.5">
-              <span className="text-[11px] font-bold text-indigo-800 block">نسبة تحقيق المطلوب</span>
-              <span className="text-lg sm:text-xl font-black text-indigo-700 font-mono">
-                {operatorRollout.latestWeek.achievementPercent}%
-              </span>
-              <span className="text-[10px] text-indigo-600 block font-semibold">
-                {operatorRollout.latestWeek.gap >= 0 ? `فائض: +${operatorRollout.latestWeek.gap}` : `عجز: ${operatorRollout.latestWeek.gap}`} موقع
-              </span>
-            </div>
-          </div>
+                <div className="p-3.5 rounded-2xl bg-teal-50/70 border border-teal-200 text-center space-y-0.5">
+                  <span className="text-[11px] font-bold text-teal-800 block">المسلّمة آخر 5 أسابيع</span>
+                  <span className="text-lg sm:text-xl font-black text-teal-700 font-mono">
+                    {activeOpWeek.deliveredLast5Weeks}
+                  </span>
+                  <span className="text-[10px] text-teal-600 block font-semibold">معدل تسليم آخر 5 أسابيع</span>
+                </div>
 
-          {/* ── General Departments Breakdown Grid (Interactive) ── */}
-          <div className="bg-slate-50/70 border border-slate-200/90 rounded-2xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-indigo-600" />
-                <h4 className="text-xs sm:text-sm font-black text-slate-800">
-                  تفصيل الإدارات العامة لتنفيذ الشبكات (حتى الأسبوع الثاني - نوفمبر 2026)
+                <div className="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-center space-y-0.5">
+                  <span className="text-[11px] font-bold text-indigo-800 block">نسبة الإنجاز والمتبقي</span>
+                  <span className="text-lg sm:text-xl font-black text-indigo-700 font-mono">
+                    {activeOpWeek.achievementPercent}%
+                  </span>
+                  <span className="text-[10px] text-indigo-600 block font-semibold">
+                    المتبقي: {activeOpWeek.remainingGap} موقع
+                  </span>
+                </div>
+              </div>
+
+              {/* ── General Departments Breakdown Grid (Interactive) ── */}
+              <div className="bg-slate-50/70 border border-slate-200/90 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-indigo-600" />
+                    <h4 className="text-xs sm:text-sm font-black text-slate-800">
+                      تفصيل الإدارات العامة لتنفيذ الشبكات (أكتوبر - نوفمبر 2026)
                 </h4>
               </div>
               <span className="text-[11px] text-slate-500 font-medium">
@@ -2620,6 +2664,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             </div>
           </div>
         </div>
+          );
+        })()
       )}
 
       {/* ── Footer Information Note ── */}

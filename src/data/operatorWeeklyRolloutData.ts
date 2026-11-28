@@ -4,7 +4,95 @@
 // Extracted from official operations tracking spreadsheet
 
 import type { SiteRecord } from '../types/dashboard';
-import { isClassificationCompleted } from './dashboardData';
+import { getSiteClassification } from './dashboardData';
+
+export type FttsOperatorKey = 'WE' | 'Vodafone' | 'Orange';
+
+export const FTTS_WEEKLY_BASELINE_STORAGE_KEY = 'ftts_weekly_delivery_baseline_v1';
+
+// Authoritative 8-week delivered counts extracted from attached Excel file (Oct W1-W4 & Nov W1-W4 2026)
+export const FTTS_WEEKLY_DELIVERED_BASELINE: Record<FttsOperatorKey, Record<string, number>> = {
+  WE: {
+    'W1-Oct-2026': 42,
+    'W2-Oct-2026': 4,
+    'W3-Oct-2026': 0,
+    'W4-Oct-2026': 4,
+    'W1-Nov-2026': 4,
+    'W2-Nov-2026': 6,
+    'W3-Nov-2026': 0,
+    'W4-Nov-2026': 0,
+  },
+  Vodafone: {
+    'W1-Oct-2026': 171,
+    'W2-Oct-2026': 1,
+    'W3-Oct-2026': 3,
+    'W4-Oct-2026': 6,
+    'W1-Nov-2026': 2,
+    'W2-Nov-2026': 1,
+    'W3-Nov-2026': 1,
+    'W4-Nov-2026': 0,
+  },
+  Orange: {
+    'W1-Oct-2026': 24,
+    'W2-Oct-2026': 0,
+    'W3-Oct-2026': 2,
+    'W4-Oct-2026': 2,
+    'W1-Nov-2026': 4,
+    'W2-Nov-2026': 0,
+    'W3-Nov-2026': 0,
+    'W4-Nov-2026': 0,
+  },
+};
+
+export function loadFttsWeeklyBaseline(): Record<FttsOperatorKey, Record<string, number>> {
+  try {
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem(FTTS_WEEKLY_BASELINE_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.WE && parsed.Vodafone && parsed.Orange) {
+          return parsed;
+        }
+      }
+      localStorage.setItem(FTTS_WEEKLY_BASELINE_STORAGE_KEY, JSON.stringify(FTTS_WEEKLY_DELIVERED_BASELINE));
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return FTTS_WEEKLY_DELIVERED_BASELINE;
+}
+
+function normArStatus(val?: string | null): string {
+  return String(val ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي');
+}
+
+/**
+ * Returns true if the site's current status/classification is "تم الانتهاء" or "تم التشغيل فايبر".
+ * Any site NOT matching these two statuses is included in the FTTS active Target.
+ */
+export function isFttsCompletedOrFiberActive(site: SiteRecord): boolean {
+  const candidates = [
+    getSiteClassification(site),
+    site.classification,
+    site.status,
+    site.rawRecord?.['التصنيف'],
+    site.rawRecord?.['التصنيف (مدني)'],
+    site.rawRecord?.['موقف العام'],
+    site.rawRecord?.['Site Status'],
+  ];
+  const doneNorm = normArStatus('تم الانتهاء');
+  const fiberNorm = normArStatus('تم التشغيل فايبر');
+  return candidates.some((c) => {
+    const n = normArStatus(String(c || ''));
+    if (!n) return false;
+    return n === doneNorm || n === fiberNorm || n.includes(doneNorm) || n.includes(fiberNorm);
+  });
+}
 
 export interface OperatorWeeklyRow {
   admin: string;
@@ -73,6 +161,22 @@ export const OPERATOR_WEEKS: OperatorWeekDef[] = [
     fullEn: 'Week 2 - Nov 2026',
     dateRangeAr: '8 - 14 نوفمبر 2026',
     weekIndex: 6
+  },
+  {
+    key: 'W3-Nov-2026',
+    shortAr: 'أسبوع 3 نوفمبر',
+    fullAr: 'الأسبوع الثالث - نوفمبر 2026',
+    fullEn: 'Week 3 - Nov 2026',
+    dateRangeAr: '15 - 21 نوفمبر 2026',
+    weekIndex: 7
+  },
+  {
+    key: 'W4-Nov-2026',
+    shortAr: 'أسبوع 4 نوفمبر',
+    fullAr: 'الأسبوع الرابع - نوفمبر 2026',
+    fullEn: 'Week 4 - Nov 2026',
+    dateRangeAr: '22 - 28 نوفمبر 2026',
+    weekIndex: 8
   }
 ];
 
@@ -1239,9 +1343,12 @@ export interface OperatorWeekAggregated {
   weekKey: string;
   weekDef: OperatorWeekDef;
   totalSites: number;
-  delivered: number;
-  targetRate: number;
+  delivered: number;            // Cumulative Achieved (المحقق التراكمي)
+  deliveredThisWeek: number;    // Weekly Delivered (المواقع المسلمة هذا الأسبوع)
+  deliveredLast5Weeks: number;  // Rolling Last 5 Weeks (المواقع المسلمة آخر 5 أسابيع)
+  targetRate: number;           // Cumulative Target (المستهدف التراكمي — غير المنتهي / غير المشغل فايبر)
   achievementPercent: number;
+  remainingGap: number;         // Remaining sites to reach target
   gap: number;
   deptRows: {
     rawAdmin: string;
@@ -1292,11 +1399,20 @@ export function getOperatorWeeklyRollout(
       ? [deptFilter]
       : [];
 
-  // Live dynamic aggregation from in-memory sites (reactive to Add / Edit / Delete)
+  // Live dynamic aggregation from in-memory sites (reactive to Add / Edit / Delete / Filters)
   const hasLiveSites = Boolean(liveSites && liveSites.length > 0);
-  const liveDeptStats = new Map<string, { total: number; delivered: number }>();
+  const liveDeptStats = new Map<string, { total: number; target: number; completed: number }>();
   let liveTotalAll = 0;
-  let liveDeliveredAll = 0;
+  let liveTargetAll = 0;
+  let liveCompletedAll = 0;
+
+  // Baseline totals per operator for proportional scaling when sector/department filters narrow liveSites
+  const BASELINE_OPERATOR_TOTALS: Record<FttsOperatorKey, number> = {
+    WE: 1029,
+    Vodafone: 699,
+    Orange: 480,
+  };
+  const expectedOperatorTotal = targetCompanies.reduce((sum, c) => sum + BASELINE_OPERATOR_TOTALS[c], 0);
 
   if (hasLiveSites && liveSites) {
     const scopedLive = liveSites.filter((s) => {
@@ -1309,136 +1425,101 @@ export function getOperatorWeeklyRollout(
     });
 
     scopedLive.forEach((s) => {
-      const rawDept = String(s.generalAdmin || s.rawRecord?.['الادارة العامة المنفذة'] || s.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] || s.rawRecord?.['الادارة العامة'] || '').trim();
+      const rawDept = String(
+        s.generalAdmin ||
+        s.rawRecord?.['الادارة العامة المنفذة'] ||
+        s.rawRecord?.['الادارة العامة لتنفيذ الشبكات'] ||
+        s.rawRecord?.['الادارة العامة'] ||
+        ''
+      ).trim();
       const cAdmin = toCanonicalDepartment(rawDept);
-      const isDel =
-        isClassificationCompleted(s.status) ||
-        isClassificationCompleted(s.classification) ||
-        s.status === 'تم الانتهاء' ||
-        s.status === 'تم التسليم' ||
-        s.status === 'تم التشغيل فايبر' ||
-        s.status === 'مشغل' ||
-        s.status === 'تم مدني' ||
-        s.executionCategory === 'Completed' ||
-        s.classification === 'تم الانتهاء والتسليم' ||
-        s.classification === 'تم التسليم' ||
-        s.classification === 'تم الانتهاء' ||
-        s.classification === 'تم التشغيل فايبر' ||
-        s.deliveryStatus === 'تم التسليم' ||
-        s.progressPercent === 100;
+      const isDoneOrFiber = isFttsCompletedOrFiberActive(s);
 
       liveTotalAll++;
-      if (isDel) liveDeliveredAll++;
+      if (isDoneOrFiber) {
+        liveCompletedAll++;
+      } else {
+        liveTargetAll++;
+      }
 
-      const curr = liveDeptStats.get(cAdmin) || { total: 0, delivered: 0 };
+      const curr = liveDeptStats.get(cAdmin) || { total: 0, target: 0, completed: 0 };
       curr.total++;
-      if (isDel) curr.delivered++;
+      if (isDoneOrFiber) curr.completed++;
+      else curr.target++;
       liveDeptStats.set(cAdmin, curr);
     });
   }
 
-  const weeksAgg: OperatorWeekAggregated[] = OPERATOR_WEEKS.map((wDef, wIdx) => {
-    let weekRows = OPERATOR_WEEKLY_DATA.filter(
-      r => r.weekKey === wDef.key && targetCompanies.includes(r.company)
-    );
+  // Filter ratio when a sector/admin filter narrows the live dataset below full operator baseline
+  const baseline = loadFttsWeeklyBaseline();
+  const scopeScale =
+    hasLiveSites && expectedOperatorTotal > 0 && liveTotalAll < expectedOperatorTotal * 0.92
+      ? liveTotalAll / expectedOperatorTotal
+      : 1;
 
-    if (activeDepts.length > 0) {
-      weekRows = weekRows.filter(r => {
-        return activeDepts.some(ad => {
-          const cAd = toCanonicalDepartment(ad);
-          return r.canonicalAdmin === cAd || r.admin === ad || toCanonicalDepartment(r.admin) === cAd;
-        });
-      });
+  // Build exact weekly delivered series across all 8 weeks (Oct W1-W4, Nov W1-W4)
+  const weeklyDeliveredSeries = OPERATOR_WEEKS.map((wDef) => {
+    const rawSum = targetCompanies.reduce((sum, comp) => sum + (baseline[comp]?.[wDef.key] || 0), 0);
+    return scopeScale < 0.999 ? Math.round(rawSum * scopeScale) : rawSum;
+  });
+
+  // Fallback target if liveSites is empty (sum of non-completed baseline targets)
+  const FALLBACK_OPERATOR_TARGETS: Record<FttsOperatorKey, number> = {
+    WE: 843,
+    Vodafone: 691,
+    Orange: 290,
+  };
+  const fallbackTarget = targetCompanies.reduce((sum, c) => sum + FALLBACK_OPERATOR_TARGETS[c], 0);
+  const effectiveTarget = hasLiveSites ? liveTargetAll : fallbackTarget;
+  const effectiveTotalSites = hasLiveSites ? liveTotalAll : expectedOperatorTotal;
+
+  let runningDelivered = 0;
+
+  const weeksAgg: OperatorWeekAggregated[] = OPERATOR_WEEKS.map((wDef, wIdx) => {
+    const deliveredThisWeek = weeklyDeliveredSeries[wIdx] || 0;
+    runningDelivered += deliveredThisWeek;
+
+    // Rolling last 5 weeks sum: [max(0, wIdx - 4) .. wIdx]
+    const windowStart = Math.max(0, wIdx - 4);
+    let deliveredLast5Weeks = 0;
+    for (let j = windowStart; j <= wIdx; j++) {
+      deliveredLast5Weeks += weeklyDeliveredSeries[j] || 0;
     }
 
-    const deptMap = new Map<string, {
-      rawAdmin: string;
-      canonicalAdmin: string;
-      shortAdmin: string;
-      totalSites: number;
-      delivered: number;
-      targetRate: number;
-    }>();
+    const cumTarget = effectiveTarget;
+    const cumAchieved = runningDelivered;
+    const achievementPercent =
+      cumTarget > 0 ? Math.min(100, Math.round((cumAchieved / cumTarget) * 100)) : cumAchieved > 0 ? 100 : 0;
+    const remainingGap = Math.max(0, cumTarget - cumAchieved);
 
-    CANONICAL_DEPARTMENTS.forEach(cd => {
-      deptMap.set(cd.canonical, {
+    const deptRows = CANONICAL_DEPARTMENTS.filter(
+      (cd) => activeDepts.length === 0 || activeDepts.some((ad) => toCanonicalDepartment(ad) === cd.canonical)
+    ).map((cd) => {
+      const stat = liveDeptStats.get(cd.canonical) || { total: 0, target: 0, completed: 0 };
+      const pct = stat.target > 0 ? Math.round((stat.completed / stat.target) * 100) : stat.completed > 0 ? 100 : 0;
+      return {
         rawAdmin: cd.raw,
         canonicalAdmin: cd.canonical,
         shortAdmin: cd.short,
-        totalSites: 0,
-        delivered: 0,
-        targetRate: 0
-      });
+        totalSites: stat.total,
+        delivered: stat.completed,
+        targetRate: stat.target,
+        achievementPercent: pct,
+      };
     });
-
-    let totalSites = 0;
-    let delivered = 0;
-    let targetRate = 0;
-
-    weekRows.forEach(r => {
-      totalSites += r.totalSites;
-      delivered += r.delivered;
-      targetRate += r.targetRate;
-
-      const curr = deptMap.get(r.canonicalAdmin);
-      if (curr) {
-        curr.totalSites += r.totalSites;
-        curr.delivered += r.delivered;
-        curr.targetRate += r.targetRate;
-      }
-    });
-
-    // If live reactive sites are present, calibrate latest week (and progressive trajectory) to live state
-    const isLatestWeek = wIdx === OPERATOR_WEEKS.length - 1;
-    if (hasLiveSites && liveTotalAll > 0) {
-      if (isLatestWeek) {
-        // Recompute with exact live counts
-        totalSites = 0;
-        delivered = 0;
-        deptMap.forEach((val, cAdmin) => {
-          const liveStat = liveDeptStats.get(cAdmin);
-          if (liveStat) {
-            val.totalSites = liveStat.total;
-            val.delivered = liveStat.delivered;
-          }
-          if (activeDepts.length === 0 || activeDepts.some((ad) => toCanonicalDepartment(ad) === cAdmin)) {
-            totalSites += val.totalSites;
-            delivered += val.delivered;
-          }
-        });
-        if (activeDepts.length === 0) {
-          totalSites = liveTotalAll;
-          delivered = liveDeliveredAll;
-        }
-      } else {
-        // Calibrate historical progress smoothly if total changed
-        const ratio = totalSites > 0 ? liveTotalAll / totalSites : 1;
-        if (Math.abs(ratio - 1) > 0.001) {
-          totalSites = Math.round(totalSites * ratio);
-        }
-      }
-    }
-
-    const deptRows = Array.from(deptMap.values())
-      .filter(d => activeDepts.length === 0 || activeDepts.some(ad => toCanonicalDepartment(ad) === d.canonicalAdmin))
-      .map(d => ({
-        ...d,
-        targetRate: Number(d.targetRate.toFixed(1)),
-        achievementPercent: d.targetRate > 0 ? Math.round((d.delivered / d.targetRate) * 100) : (d.delivered > 0 ? 100 : 0)
-      }));
-
-    targetRate = Number(targetRate.toFixed(1));
-    const achievementPercent = targetRate > 0 ? Math.round((delivered / targetRate) * 100) : (delivered > 0 ? 100 : 0);
 
     return {
       weekKey: wDef.key,
       weekDef: wDef,
-      totalSites,
-      delivered,
-      targetRate,
+      totalSites: effectiveTotalSites,
+      delivered: cumAchieved,
+      deliveredThisWeek,
+      deliveredLast5Weeks,
+      targetRate: cumTarget,
       achievementPercent,
-      gap: Number((delivered - targetRate).toFixed(1)),
-      deptRows
+      remainingGap,
+      gap: Number((cumAchieved - cumTarget).toFixed(1)),
+      deptRows,
     };
   });
 
