@@ -1994,93 +1994,46 @@ export const Dashboard: React.FC = () => {
 
               {/* View Content Rendering */}
               {executionViewMode === 'graphical' ? (
-                /* 1. Current Graphical View: Donut Chart + Summary Table */
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                  {/* Donut Chart with Hierarchical Drill-down & Separated Stalled/Obstacles */}
-                  <div className="lg:col-span-6 xl:col-span-6">
-                    <DonutChart
-                      data={statusSummaries}
-                      totalSites={kpis.totalSites}
-                      activeStatusFilter={filters.status}
-                      onSelectStatus={handleStatusSelect}
-                      sitesData={baseFilterSites}
-                      activeSector={filters.sector}
-                      onSelectSector={(sec) => handleFilterChange('sector', sec)}
-                      onSelectGeneralAdmin={(admin) => handleFilterChange('generalAdmin', admin)}
-                      onSelectCompetentAdmin={(admin) => handleFilterChange('competentAdmin', admin)}
-                      resetTrigger={donutResetKey}
-                      onResetAll={handleResetFilters}
-                    />
-                  </div>
+                /* 1. Unified Graphical View: Larger Pie Chart + Summary Table side-by-side inside a single partition */
+                <div className="pbi-card p-4 sm:p-6 bg-white/95 rounded-2xl border border-slate-200/90 shadow-xs">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+                    {/* Larger Donut Chart with Hierarchical Drill-down & Separated Stalled/Obstacles */}
+                    <div className="lg:col-span-5 xl:col-span-5 lg:pl-5 lg:border-l lg:border-slate-200/80">
+                      <DonutChart
+                        data={statusSummaries}
+                        totalSites={kpis.totalSites}
+                        activeStatusFilter={filters.status}
+                        onSelectStatus={handleStatusSelect}
+                        sitesData={baseFilterSites}
+                        activeSector={filters.sector}
+                        onSelectSector={(sec) => handleFilterChange('sector', sec)}
+                        onSelectGeneralAdmin={(admin) => handleFilterChange('generalAdmin', admin)}
+                        onSelectCompetentAdmin={(admin) => handleFilterChange('competentAdmin', admin)}
+                        resetTrigger={donutResetKey}
+                        onResetAll={handleResetFilters}
+                        embedded={true}
+                        hideStatusLegend={activeScope === 'FTTS'}
+                      />
+                    </div>
 
-                  {/* Summary Table */}
-                  <div className="lg:col-span-6 xl:col-span-6">
-                    <SummaryTable
-                      data={statusSummaries}
-                      totalSites={kpis.totalSites}
-                      totalLinks={kpis.totalLinks}
-                      activeStatusFilter={filters.status}
-                      onSelectStatus={handleStatusSelect}
-                      onOpenDetailsModal={handleOpenDetails}
-                      companyVariant={
-                        filters.company === 'Orange' ? 'orange' :
-                          filters.company === 'Vodafone' ? 'vodafone' :
-                            activeScope === 'ETAHA' ? 'etaha' :
-                              (filters.company === 'All' || !filters.company ? 'default' : 'we')
-                      }
-                      hasOperatorSubmenus={activeScope === 'FTTS' && (filters.company === 'All' || !filters.company)}
-                      onAddByOperator={handleAddByOperator}
-                      onEditByOperator={handleEditByOperator}
-                      onDeleteByOperator={handleDeleteByOperator}
-                      onAddNewSite={activeScope === 'ETAHA' || activeScope === 'AVAILABILITY' ? undefined : () => {
-                        if (filters.company === 'Orange') {
-                          setOrangeEditingSiteCode(undefined);
-                          setOrangeEditingRecord(null);
-                          setOrangeModalMode('add');
-                          setIsOrangeAddDataOpen(true);
-                        } else if (filters.company === 'Vodafone') {
-                          setVodafoneEditingSiteCode(undefined);
-                          setVodafoneEditingRecord(null);
-                          setVodafoneModalMode('add');
-                          setIsVodafoneAddDataOpen(true);
-                        } else {
-                          setEditingSiteCode(undefined);
-                          setEditingRecord(null);
-                          setWeModalMode('add');
-                          setIsWeAddDataOpen(true);
+                    {/* Summary Table (جدول حصر الموقف والمسارات) with "عرض تفاصيل المواقع" only */}
+                    <div className="lg:col-span-7 xl:col-span-7">
+                      <SummaryTable
+                        data={statusSummaries}
+                        totalSites={kpis.totalSites}
+                        totalLinks={kpis.totalLinks}
+                        activeStatusFilter={filters.status}
+                        onSelectStatus={handleStatusSelect}
+                        onOpenDetailsModal={handleOpenDetails}
+                        companyVariant={
+                          filters.company === 'Orange' ? 'orange' :
+                            filters.company === 'Vodafone' ? 'vodafone' :
+                              activeScope === 'ETAHA' ? 'etaha' :
+                                (filters.company === 'All' || !filters.company ? 'default' : 'we')
                         }
-                      }}
-                      onEditSite={activeScope === 'ETAHA' || activeScope === 'AVAILABILITY' ? undefined : () => {
-                        if (filters.company === 'Orange') {
-                          setOrangeEditingSiteCode(undefined);
-                          setOrangeEditingRecord(null);
-                          setOrangeModalMode('edit');
-                          setIsOrangeAddDataOpen(true);
-                        } else if (filters.company === 'Vodafone') {
-                          setVodafoneEditingSiteCode(undefined);
-                          setVodafoneEditingRecord(null);
-                          setVodafoneModalMode('edit');
-                          setIsVodafoneAddDataOpen(true);
-                        } else {
-                          setEditingSiteCode(undefined);
-                          setEditingRecord(null);
-                          setWeModalMode('edit');
-                          setIsWeAddDataOpen(true);
-                        }
-                      }}
-                      onDeleteSite={activeScope === 'ETAHA' || activeScope === 'AVAILABILITY' ? undefined : () => {
-                        setQuickDeleteTargetCompany(
-                          filters.company === 'Orange'
-                            ? 'Orange'
-                            : filters.company === 'Vodafone'
-                              ? 'Vodafone'
-                              : filters.company === 'WE'
-                                ? 'WE'
-                                : undefined
-                        );
-                        setIsQuickDeleteModalOpen(true);
-                      }}
-                    />
+                        embedded={true}
+                      />
+                    </div>
                   </div>
                 </div>
               ) : (

@@ -28,6 +28,8 @@ interface DonutChartProps {
   onSelectCompetentAdmin?: (admin: string) => void;
   resetTrigger?: number;
   onResetAll?: () => void;
+  embedded?: boolean;
+  hideStatusLegend?: boolean;
 }
 
 const DRILL_COLORS = [
@@ -59,6 +61,8 @@ export const DonutChart: React.FC<DonutChartProps> = ({
   onSelectCompetentAdmin,
   resetTrigger,
   onResetAll,
+  embedded = false,
+  hideStatusLegend = false,
 }) => {
   // Hierarchical Drill-down navigation levels:
   // Level 0: Main Status Overview (الموقف العام)
@@ -436,9 +440,10 @@ export const DonutChart: React.FC<DonutChartProps> = ({
   };
 
   const activeDisplay = hoveredSlice || null;
+  const showLegend = !(hideStatusLegend && drillLevel === 0);
 
   return (
-    <div className="pbi-card p-5 flex flex-col justify-between h-full bg-white/95">
+    <div className={embedded ? 'flex flex-col justify-between h-full' : 'pbi-card p-5 flex flex-col justify-between h-full bg-white/95'}>
       {/* Visual Header with Drill Breadcrumbs */}
       <div className="pb-3 mb-3 border-b border-slate-100">
         <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
@@ -561,12 +566,16 @@ export const DonutChart: React.FC<DonutChartProps> = ({
         </div>
       </div>
 
-      {/* Main SVG Donut + Center Overlay + Legend */}
-      <div className="flex flex-col xl:flex-row items-center justify-center gap-6 my-2">
+      {/* Main SVG Donut + Center Overlay (+ Drill Legend only when drilling down or not hidden) */}
+      <div className={`flex flex-col ${showLegend ? 'xl:flex-row' : ''} items-center justify-center gap-6 my-3 flex-1`}>
         <div className="relative flex items-center justify-center">
           <svg
             viewBox="0 0 320 320"
-            className="w-64 h-64 sm:w-72 sm:h-72 drop-shadow-sm select-none"
+            className={
+              showLegend
+                ? 'w-64 h-64 sm:w-72 sm:h-72 drop-shadow-sm select-none'
+                : 'w-72 h-72 sm:w-80 sm:h-80 xl:w-[345px] xl:h-[345px] drop-shadow-md select-none transition-all'
+            }
           >
             {/* Background ring */}
             <circle
@@ -653,50 +662,52 @@ export const DonutChart: React.FC<DonutChartProps> = ({
           </div>
         </div>
 
-        {/* Legend List */}
-        <div className="flex-1 w-full space-y-1.5 max-w-md max-h-56 overflow-y-auto pr-1">
-          {slices.map((item) => {
-            const isHovered = hoveredSlice?.label === item.label;
+        {/* Legend List (hidden at top level in unified FTTS layout to avoid duplicating Summary Table) */}
+        {showLegend && (
+          <div className="flex-1 w-full space-y-1.5 max-w-md max-h-56 overflow-y-auto pr-1">
+            {slices.map((item) => {
+              const isHovered = hoveredSlice?.label === item.label;
 
-            return (
-              <div
-                key={item.id}
-                onMouseEnter={() =>
-                  setHoveredSlice({
-                    label: item.label,
-                    count: item.count,
-                    percentage: item.percentage,
-                    color: item.color,
-                  })
-                }
-                onMouseLeave={() => setHoveredSlice(null)}
-                onClick={() => handleSliceClick(item)}
-                className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all text-xs border ${isHovered
-                  ? 'bg-purple-50 text-purple-900 border-purple-300 shadow-2xs font-bold'
-                  : 'bg-white hover:bg-slate-50 border-slate-200/80 text-slate-700'
-                  }`}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span
-                    className="w-3 h-3 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="font-semibold truncate max-w-[160px] sm:max-w-[200px]">
-                    {item.label}
-                  </span>
-                </div>
+              return (
+                <div
+                  key={item.id}
+                  onMouseEnter={() =>
+                    setHoveredSlice({
+                      label: item.label,
+                      count: item.count,
+                      percentage: item.percentage,
+                      color: item.color,
+                    })
+                  }
+                  onMouseLeave={() => setHoveredSlice(null)}
+                  onClick={() => handleSliceClick(item)}
+                  className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all text-xs border ${isHovered
+                    ? 'bg-purple-50 text-purple-900 border-purple-300 shadow-2xs font-bold'
+                    : 'bg-white hover:bg-slate-50 border-slate-200/80 text-slate-700'
+                    }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="w-3 h-3 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="font-semibold truncate max-w-[160px] sm:max-w-[200px]">
+                      {item.label}
+                    </span>
+                  </div>
 
-                <div className="flex items-center gap-2 font-mono flex-shrink-0">
-                  <span className="font-bold text-slate-800">{item.count}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">
-                    {item.percentage}%
-                  </span>
-                  <span className="text-[10px] text-purple-500">▶</span>
+                  <div className="flex items-center gap-2 font-mono flex-shrink-0">
+                    <span className="font-bold text-slate-800">{item.count}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">
+                      {item.percentage}%
+                    </span>
+                    <span className="text-[10px] text-purple-500">▶</span>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Requirement 7: Dedicated Independent Sections for "المتعذرات" and "المعوقات" */}

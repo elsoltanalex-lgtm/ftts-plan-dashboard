@@ -11,7 +11,6 @@ import {
 
 import type { StatusSummary } from '../types/dashboard';
 import { toFilterArray } from '../utils/filterUtils';
-import { SiteActionDropdown } from './SiteActionDropdown';
 
 interface SummaryTableProps {
   data: StatusSummary[];
@@ -20,14 +19,8 @@ interface SummaryTableProps {
   activeStatusFilter?: string | string[];
   onSelectStatus: (status: string) => void;
   onOpenDetailsModal?: (status?: string) => void;
-  onAddNewSite?: () => void;
-  onEditSite?: () => void;
-  onDeleteSite?: () => void;
-  onAddByOperator?: (operator: 'WE' | 'Vodafone' | 'Orange') => void;
-  onEditByOperator?: (operator: 'WE' | 'Vodafone' | 'Orange') => void;
-  onDeleteByOperator?: (operator: 'WE' | 'Vodafone' | 'Orange') => void;
-  hasOperatorSubmenus?: boolean;
   companyVariant?: 'orange' | 'vodafone' | 'we' | 'etaha' | 'default';
+  embedded?: boolean;
 }
 
 type SortField = 'status' | 'sitesCount' | 'linksCount';
@@ -40,14 +33,8 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
   activeStatusFilter,
   onSelectStatus,
   onOpenDetailsModal,
-  onAddNewSite,
-  onEditSite,
-  onDeleteSite,
-  onAddByOperator,
-  onEditByOperator,
-  onDeleteByOperator,
-  hasOperatorSubmenus,
   companyVariant,
+  embedded = false,
 }) => {
   const [sortField, setSortField] = useState<SortField>('sitesCount');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -95,7 +82,7 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
   };
 
   return (
-    <div className="pbi-card p-5 flex flex-col justify-between h-full">
+    <div className={embedded ? 'flex flex-col justify-between h-full' : 'pbi-card p-5 flex flex-col justify-between h-full'}>
       {/* Table Title and Actions */}
       <div>
         <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 flex-wrap gap-2">
@@ -114,27 +101,13 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {companyVariant !== 'etaha' && onAddNewSite && onEditSite && onDeleteSite && (
-              <SiteActionDropdown
-                variant={companyVariant || 'default'}
-                label="إدارة المواقع"
-                itemTypeLabel="موقع"
-                onAdd={onAddNewSite}
-                onEdit={onEditSite}
-                onDelete={onDeleteSite}
-                onAddByOperator={onAddByOperator}
-                onEditByOperator={onEditByOperator}
-                onDeleteByOperator={onDeleteByOperator}
-                hasOperatorSubmenus={hasOperatorSubmenus}
-              />
-            )}
             {onOpenDetailsModal && (
               <button
                 onClick={() => {
                   const list = toFilterArray(activeStatusFilter);
                   onOpenDetailsModal(list.length > 0 ? list[0] : undefined);
                 }}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-lg transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-lg transition-colors cursor-pointer shadow-2xs"
               >
                 <Eye className="w-3.5 h-3.5" />
                 <span>{companyVariant === 'etaha' ? 'عرض تفاصيل المشروعات' : 'عرض تفاصيل المواقع'}</span>
