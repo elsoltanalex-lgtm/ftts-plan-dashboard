@@ -116,66 +116,66 @@ export interface OperatorWeekDef {
 export const OPERATOR_WEEKS: OperatorWeekDef[] = [
   {
     key: 'W1-Oct-2026',
-    shortAr: 'أسبوع 1 أكتوبر',
-    fullAr: 'الأسبوع الأول - أكتوبر 2026',
+    shortAr: 'Oct W1',
+    fullAr: 'Week 1 - Oct 2026',
     fullEn: 'Week 1 - Oct 2026',
-    dateRangeAr: '1 - 7 أكتوبر 2026',
+    dateRangeAr: 'Oct 1 - 7, 2026',
     weekIndex: 1
   },
   {
     key: 'W2-Oct-2026',
-    shortAr: 'أسبوع 2 أكتوبر',
-    fullAr: 'الأسبوع الثاني - أكتوبر 2026',
+    shortAr: 'Oct W2',
+    fullAr: 'Week 2 - Oct 2026',
     fullEn: 'Week 2 - Oct 2026',
-    dateRangeAr: '8 - 14 أكتوبر 2026',
+    dateRangeAr: 'Oct 8 - 14, 2026',
     weekIndex: 2
   },
   {
     key: 'W3-Oct-2026',
-    shortAr: 'أسبوع 3 أكتوبر',
-    fullAr: 'الأسبوع الثالث - أكتوبر 2026',
+    shortAr: 'Oct W3',
+    fullAr: 'Week 3 - Oct 2026',
     fullEn: 'Week 3 - Oct 2026',
-    dateRangeAr: '15 - 21 أكتوبر 2026',
+    dateRangeAr: 'Oct 15 - 21, 2026',
     weekIndex: 3
   },
   {
     key: 'W4-Oct-2026',
-    shortAr: 'أسبوع 4 أكتوبر',
-    fullAr: 'الأسبوع الرابع - أكتوبر 2026',
+    shortAr: 'Oct W4',
+    fullAr: 'Week 4 - Oct 2026',
     fullEn: 'Week 4 - Oct 2026',
-    dateRangeAr: '22 - 28 أكتوبر 2026',
+    dateRangeAr: 'Oct 22 - 28, 2026',
     weekIndex: 4
   },
   {
     key: 'W1-Nov-2026',
-    shortAr: 'أسبوع 1 نوفمبر',
-    fullAr: 'الأسبوع الأول - نوفمبر 2026',
+    shortAr: 'Nov W1',
+    fullAr: 'Week 1 - Nov 2026',
     fullEn: 'Week 1 - Nov 2026',
-    dateRangeAr: '1 - 7 نوفمبر 2026',
+    dateRangeAr: 'Nov 1 - 7, 2026',
     weekIndex: 5
   },
   {
     key: 'W2-Nov-2026',
-    shortAr: 'أسبوع 2 نوفمبر',
-    fullAr: 'الأسبوع الثاني - نوفمبر 2026',
+    shortAr: 'Nov W2',
+    fullAr: 'Week 2 - Nov 2026',
     fullEn: 'Week 2 - Nov 2026',
-    dateRangeAr: '8 - 14 نوفمبر 2026',
+    dateRangeAr: 'Nov 8 - 14, 2026',
     weekIndex: 6
   },
   {
     key: 'W3-Nov-2026',
-    shortAr: 'أسبوع 3 نوفمبر',
-    fullAr: 'الأسبوع الثالث - نوفمبر 2026',
+    shortAr: 'Nov W3',
+    fullAr: 'Week 3 - Nov 2026',
     fullEn: 'Week 3 - Nov 2026',
-    dateRangeAr: '15 - 21 نوفمبر 2026',
+    dateRangeAr: 'Nov 15 - 21, 2026',
     weekIndex: 7
   },
   {
     key: 'W4-Nov-2026',
-    shortAr: 'أسبوع 4 نوفمبر',
-    fullAr: 'الأسبوع الرابع - نوفمبر 2026',
+    shortAr: 'Nov W4',
+    fullAr: 'Week 4 - Nov 2026',
     fullEn: 'Week 4 - Nov 2026',
-    dateRangeAr: '22 - 28 نوفمبر 2026',
+    dateRangeAr: 'Nov 22 - 28, 2026',
     weekIndex: 8
   }
 ];

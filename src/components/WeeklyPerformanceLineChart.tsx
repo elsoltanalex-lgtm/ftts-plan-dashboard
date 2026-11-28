@@ -148,12 +148,12 @@ const ARABIC_ORDINALS: Record<number, string> = {
 function getWeekDateRange(w: number, year = 2026): string {
   const weekStart = new Date(year, 0, 1 + (w - 1) * 7);
   const weekEnd = new Date(year, 0, 1 + (w - 1) * 7 + 6);
-  const startMonth = weekStart.toLocaleDateString('ar-EG', { month: 'short' });
-  const endMonth = weekEnd.toLocaleDateString('ar-EG', { month: 'short' });
+  const startMonth = weekStart.toLocaleDateString('en-US', { month: 'short' });
+  const endMonth = weekEnd.toLocaleDateString('en-US', { month: 'short' });
   if (startMonth === endMonth) {
-    return `${weekStart.getDate()} - ${weekEnd.getDate()} ${startMonth} ${year}`;
+    return `${startMonth} ${weekStart.getDate()} - ${weekEnd.getDate()}, ${year}`;
   }
-  return `${weekStart.getDate()} ${startMonth} - ${weekEnd.getDate()} ${endMonth} ${year}`;
+  return `${startMonth} ${weekStart.getDate()} - ${endMonth} ${weekEnd.getDate()}, ${year}`;
 }
 
 // Robust date parser supporting Excel serial numbers, ISO strings, and standard dates
@@ -343,7 +343,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `${title.replace(/[\/\s:]+/g, '_')}_اسبوع_${weekNum}.csv`);
+    link.setAttribute('download', `${title.replace(/[\/\s:]+/g, '_')}_Week_${weekNum}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -856,17 +856,17 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
     return operatorDeliveredPoints[hoveredWeekIndex + 1] || operatorTargetPoints[hoveredWeekIndex + 1] || null;
   }, [hoveredWeekIndex, isAvailability, availabilityAchievedPoints, availabilityTargetPoints, operatorDeliveredPoints, operatorTargetPoints]);
 
-  // Company Name in Arabic
-  const companyLabelAr = useMemo(() => {
+  // Standardized English Company / Operator Label
+  const companyLabelEn = useMemo(() => {
     switch (selectedOperator) {
       case 'WE':
-        return 'المصرية للاتصالات (WE)';
+        return 'FTTS • WE';
       case 'Vodafone':
-        return 'فودافون (Vodafone)';
+        return 'FTTS • Vodafone';
       case 'Orange':
-        return 'أورنج (Orange)';
+        return 'FTTS • Orange';
       default:
-        return 'كافة المشغلين (WE - Vodafone - Orange)';
+        return 'FTTS • All Operators';
     }
   }, [selectedOperator]);
 
@@ -896,7 +896,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                   : 'bg-indigo-50 text-indigo-700 border-indigo-200/80'
                   }`}
               >
-                {isAvailability ? 'مشاريع الإتاحة (Availability Projects)' : companyLabelAr}
+                {isAvailability ? 'Availability' : companyLabelEn}
               </span>
               {selectedDeptFilter && (
                 <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
@@ -914,8 +914,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             </div>
             <p className="text-xs text-slate-500 mt-1">
               {isAvailability
-                ? `متابعة أسبوعية لمشروعات الإتاحة: نافذة التسليم القياسية (3 أشهر من السداد)، ومعدل التسليم الفعلي، وحالات التأخير من الأسبوع 1 حتى الأسبوع ${totalSteps}`
-                : `متابعة أسبوعية لمواقع FTTS (أكتوبر - نوفمبر 2026): المستهدف التراكمي (غير المنتهي / غير المشغل فايبر)، المحقق التراكمي، والمواقع المسلمة آخر 5 أسابيع`}
+                ? `Availability Weekly SLA & Delivery Tracking (W1 – W${totalSteps}, 2026)`
+                : `FTTS Weekly Progress (Oct – Nov 2026): Cumulative Target, Cumulative Achieved, & Last 5 Weeks`}
             </p>
           </div>
         </div>
@@ -932,7 +932,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                   : 'text-slate-600 hover:text-slate-900'
                   }`}
               >
-                الكل
+                All Operators
               </button>
               <button
                 onClick={() => setSelectedOperator('WE')}
@@ -1058,7 +1058,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
         )}
 
         <div className="text-[11px] text-slate-500 font-normal">
-          <span>البيانات معتمدة من خطة التشغيل الميدانية • أكتوبر & نوفمبر 2026</span>
+          <span>{isAvailability ? 'Availability Weekly Tracking • 2026' : 'FTTS Weekly Rollout • Oct – Nov 2026'}</span>
         </div>
       </div>
 
@@ -1134,7 +1134,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                     className={`text-[11px] font-mono ${w === totalSteps ? 'font-black fill-teal-700 font-bold' : 'font-semibold fill-slate-500'
                       }`}
                   >
-                    {w === totalSteps ? `أسبوع ${w} (الحالي)` : `أسبوع ${w}`}
+                    {w === totalSteps ? `W${w} (Current)` : `W${w}`}
                   </text>
                 </g>
               );
@@ -1159,7 +1159,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                     textAnchor="middle"
                     className="text-[9px] font-mono fill-slate-400"
                   >
-                    {w.weekDef.dateRangeAr.replace(' 2026', '')}
+                    {w.weekDef.dateRangeAr.replace(', 2026', '')}
                   </text>
                 </g>
               );
@@ -1403,8 +1403,8 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                   <Calendar className="w-3.5 h-3.5 shrink-0" />
                   <span>
                     {isAvailability
-                      ? `الأسبوع ${hoveredAvailabilityWeek?.arabicName} (${hoveredAvailabilityWeek?.week})`
-                      : hoveredOperatorWeek?.weekDef.fullAr}
+                      ? `Week ${hoveredAvailabilityWeek?.week} (2026)`
+                      : hoveredOperatorWeek?.weekDef.fullEn}
                   </span>
                 </span>
                 <span className="text-[10px] text-slate-300 font-mono">
@@ -1930,7 +1930,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-teal-600 text-white flex items-center gap-1 shadow-2xs">
                       <Calendar className="w-3.5 h-3.5" />
-                      <span>الأسبوع {activeWeekData.arabicName} (أسبوع {activeWeekData.week})</span>
+                      <span>Week {activeWeekData.week} (2026)</span>
                     </span>
                     <span className="text-xs text-slate-600 font-mono font-semibold">
                       {activeWeekData.dateRange}
@@ -2536,14 +2536,14 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-indigo-600 text-white flex items-center gap-1 shadow-2xs">
                     <Calendar className="w-3.5 h-3.5" />
-                    <span>{activeOpWeek.weekDef.fullAr}</span>
+                    <span>{activeOpWeek.weekDef.fullEn}</span>
                   </span>
                   <span className="text-xs text-slate-500 font-mono font-semibold">
                     {activeOpWeek.weekDef.dateRangeAr}
                   </span>
                 </div>
                 <span className="text-[11px] text-slate-500 font-semibold">
-                  المشغل: <strong className="text-indigo-700">{selectedOperator === 'All' ? 'جميع المشغلين (All Operators)' : selectedOperator}</strong>
+                  Operator: <strong className="text-indigo-700">{selectedOperator === 'All' ? 'All Operators' : selectedOperator}</strong>
                 </span>
               </div>
 
@@ -2591,7 +2591,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-indigo-600" />
                     <h4 className="text-xs sm:text-sm font-black text-slate-800">
-                      تفصيل الإدارات العامة لتنفيذ الشبكات (أكتوبر - نوفمبر 2026)
+                      تفصيل الإدارات العامة لتنفيذ الشبكات (Oct – Nov 2026)
                 </h4>
               </div>
               <span className="text-[11px] text-slate-500 font-medium">
@@ -2679,7 +2679,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
           </span>
         </div>
         <span className="font-mono text-[11px] text-slate-400">
-          {isAvailability ? `إجمالي الأسابيع المعروضة: ${totalSteps} أسبوعاً • سنة 2026` : '6 أسابيع (أكتوبر ونوفمبر 2026)'}
+          {isAvailability ? `Total Weeks: ${totalSteps} • 2026` : '8 Weeks (Oct W1 – Nov W4, 2026)'}
         </span>
       </div>
 
@@ -2710,7 +2710,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                       <span>{inspectionModal.title}</span>
                     </h3>
                     <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">
-                      الأسبوع {inspectionModal.weekNumber}
+                      Week {inspectionModal.weekNumber}
                     </span>
                   </div>
                   <p className="text-xs text-slate-300 mt-0.5">{inspectionModal.subtitle}</p>
