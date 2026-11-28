@@ -50,11 +50,31 @@ export function getCodeVariants(code?: string | null): string[] {
   const norm = normalizeSiteCode(code);
   if (!norm) return [];
   const variants = [norm];
-  const bare = norm.replace(/^(VDF-|ORG-|ORANGE-|ETAH-|WE-)/i, '').trim();
+  const bare = norm.replace(/^(VDF-|VODAFONE-|ORG-|ORANGE-|ETAH-|WE-)/i, '').trim();
   if (bare && bare !== norm) {
     variants.push(bare);
   }
   return variants;
+}
+
+/**
+ * Returns all possible bare + operator-prefixed variants to ensure complete restoration when re-adding a site
+ */
+export function getAllRestoreVariants(code?: string | null): string[] {
+  const norm = normalizeSiteCode(code);
+  if (!norm) return [];
+  const bare = norm.replace(/^(VDF-|VODAFONE-|ORG-|ORANGE-|ETAH-|WE-)/i, '').trim();
+  const set = new Set<string>([norm]);
+  if (bare) {
+    set.add(bare);
+    set.add(`VDF-${bare}`);
+    set.add(`VODAFONE-${bare}`);
+    set.add(`ORG-${bare}`);
+    set.add(`ORANGE-${bare}`);
+    set.add(`ETAH-${bare}`);
+    set.add(`WE-${bare}`);
+  }
+  return Array.from(set);
 }
 
 /**
@@ -198,12 +218,14 @@ export async function fetchCloudDeletedCodes(): Promise<Set<string>> {
         const row = data[0];
         const cloudCodes: string[] = row.data?.codes || [];
         if (Array.isArray(cloudCodes)) {
+          // Authoritative cloud list replaces stale local deleted cache so restored sites are never re-hidden
+          const authoritativeSet = new Set<string>();
           cloudCodes.forEach((c) => {
-            getCodeVariants(c).forEach((v) => localSet.add(v));
+            getCodeVariants(c).forEach((v) => authoritativeSet.add(v));
           });
-          persistLocalDeletedCodes(localSet);
-          purgeDeletedCodesFromAllCaches(localSet);
-          return localSet;
+          persistLocalDeletedCodes(authoritativeSet);
+          purgeDeletedCodesFromAllCaches(authoritativeSet);
+          return authoritativeSet;
         }
       }
     } catch (err) {
@@ -270,47 +292,69 @@ export async function addCloudDeletedCodes(codesToAdd: string[]): Promise<Set<st
 }
 
 /**
- * Removes a code from the deleted codes set (used if a user deliberately re-adds or restores a site)
+ * Removes a code (and all its operator-prefixed/bare variants) from both local and Supabase cloud deleted codes
  */
 export async function removeCloudDeletedCode(codeToRestore: string): Promise<Set<string>> {
-  const currentSet = getLocalDeletedCodes();
-  const variants = getCodeVariants(codeToRestore);
-  let changed = false;
+  const restoreVariants = new Set(getAllRestoreVariants(codeToRestore));
+  if (restoreVariants.size === 0) return getLocalDeletedCodes();
 
-  variants.forEach((v) => {
-    if (currentSet.has(v)) {
-      currentSet.delete(v);
-      changed = true;
+  // 1. Remove immediately from local set & notify UI synchronously
+  const localSet = getLocalDeletedCodes();
+  let localChanged = false;
+  restoreVariants.forEach((v) => {
+    if (localSet.has(v)) {
+      localSet.delete(v);
+      localChanged = true;
     }
   });
+  if (localChanged) {
+    persistLocalDeletedCodes(localSet);
+  }
 
-  if (!changed) return currentSet;
-
-  persistLocalDeletedCodes(currentSet);
-
-  const now = new Date().toISOString();
-  const payload = {
-    id: SYNC_DELETED_CODES_ID,
-    site_code: SYNC_DELETED_CODES_SITE_CODE,
-    'site code': SYNC_DELETED_CODES_SITE_CODE,
-    'Site Status': 'SYSTEM_METADATA',
-    Type: 'METADATA',
-    data: {
-      type: 'DELETED_CODES',
-      codes: Array.from(currentSet),
-      updated_at: now,
-    },
-    updated_at: now,
-  };
-
+  // 2. Fetch authoritative cloud list and purge all variants in Supabase so refetch never re-hides the site
   for (const client of supabaseClients) {
     try {
-      const { error } = await client.from('we_records').upsert(payload).select();
-      if (!error) break;
+      const { data, error } = await client
+        .from('we_records')
+        .select('id, data')
+        .eq('id', SYNC_DELETED_CODES_ID)
+        .limit(1);
+
+      if (!error && data && data.length > 0) {
+        const cloudCodes: string[] = Array.isArray(data[0]?.data?.codes) ? data[0].data.codes : [];
+        const filteredCloud = cloudCodes.filter((c) => {
+          const cVariants = getCodeVariants(c);
+          return !cVariants.some((cv) => restoreVariants.has(cv));
+        });
+
+        if (filteredCloud.length !== cloudCodes.length) {
+          const now = new Date().toISOString();
+          const payload = {
+            id: SYNC_DELETED_CODES_ID,
+            site_code: SYNC_DELETED_CODES_SITE_CODE,
+            'site code': SYNC_DELETED_CODES_SITE_CODE,
+            'Site Status': 'SYSTEM_METADATA',
+            Type: 'METADATA',
+            data: {
+              type: 'DELETED_CODES',
+              codes: filteredCloud,
+              updated_at: now,
+            },
+            updated_at: now,
+          };
+          await client.from('we_records').upsert(payload, { onConflict: 'id' }).select('id');
+
+          const nextSet = new Set<string>();
+          filteredCloud.forEach((c) => getCodeVariants(c).forEach((v) => nextSet.add(v)));
+          persistLocalDeletedCodes(nextSet);
+          return nextSet;
+        }
+        break;
+      }
     } catch { }
   }
 
-  return currentSet;
+  return localSet;
 }
 
 /**

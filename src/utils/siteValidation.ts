@@ -53,22 +53,30 @@ export function formatSupabaseSaveError(error: any, siteCode?: string): string {
 /**
  * Synchronous check against currently loaded sites array (instant UI warning while typing)
  */
+function normalizeComparableCode(code: unknown): string {
+  return String(code ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/^(VDF-|VODAFONE-|ORG-|ORANGE-|ETAH-|WE-)/i, '')
+    .trim();
+}
+
 export function findDuplicateInLocalSites(
   siteCode: string,
   sitesData?: any[],
   allSiteCodes?: string[]
 ): DuplicateSiteMatch | null {
-  const norm = String(siteCode ?? '').trim().toUpperCase();
+  const norm = normalizeComparableCode(siteCode);
   if (!norm) return null;
 
   const deleted = getLocalDeletedCodes();
-  if (deleted.has(norm)) return null;
+  if (deleted.has(norm) || deleted.has(`VDF-${norm}`)) return null;
 
   if (Array.isArray(sitesData)) {
     const matched = sitesData.find((s) => {
-      const c = String(
-        s?.siteCode || s?.['Site code'] || s?.['site code'] || s?.[' Site code'] || s?.Code || s?.['الكود'] || ''
-      ).trim().toUpperCase();
+      const c = normalizeComparableCode(
+        s?.siteCode || s?.site_code || s?.['Site code'] || s?.['site code'] || s?.[' Site code'] || s?.Code || s?.['الكود'] || ''
+      );
       return c === norm;
     });
     if (matched) {
@@ -125,11 +133,11 @@ export async function checkDuplicateSiteInSupabase(
   module: SiteModuleType,
   siteCode: string
 ): Promise<DuplicateSiteMatch | null> {
-  const norm = String(siteCode ?? '').trim().toUpperCase();
+  const norm = normalizeComparableCode(siteCode);
   if (!norm) return null;
 
   const deleted = getLocalDeletedCodes();
-  if (deleted.has(norm)) return null;
+  if (deleted.has(norm) || deleted.has(`VDF-${norm}`)) return null;
 
   try {
     if (module === 'Vodafone') {
