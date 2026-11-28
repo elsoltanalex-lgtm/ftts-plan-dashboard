@@ -486,11 +486,44 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
     }
   };
 
+  // Detect if the entered Site Code ALREADY exists in Vodafone when in Add New Site mode
+  const existingDuplicateSite = useMemo(() => {
+    if (activeMode !== 'add') return null;
+    const rawCode = formData['Site code'] || formData['site code'] || formData.site_code;
+    const norm = String(rawCode ?? '').trim().toUpperCase();
+    if (!norm) return null;
+    const matchedSite = (sitesData || []).find(
+      (s) => String(s?.siteCode || '').trim().toUpperCase() === norm
+    );
+    if (matchedSite) {
+      return {
+        siteCode: String(matchedSite.siteCode).trim(),
+        sector: matchedSite.sector || matchedSite.rawRecord?.['رئاسة قطاعات التنفيذ'] || matchedSite.rawRecord?.['قطاع التنفيذ'] || 'غير محدد',
+        central: matchedSite.central || matchedSite.rawRecord?.['سنترال الربط'] || 'غير محدد',
+        status: matchedSite.classification || matchedSite.status || matchedSite.rawRecord?.['التصنيف'] || 'غير محدد',
+      };
+    }
+    const matchedInList = (allSiteCodes || []).find(
+      (c) => String(c ?? '').trim().toUpperCase() === norm
+    );
+    if (matchedInList) {
+      return {
+        siteCode: String(matchedInList).trim(),
+        sector: 'غير محدد',
+        central: 'غير محدد',
+        status: 'مسجل مسبقاً',
+      };
+    }
+    return null;
+  }, [activeMode, formData['Site code'], formData['site code'], formData.site_code, sitesData, allSiteCodes]);
+
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
     const code = formData['Site code'] || formData['site code'] || formData.site_code;
     if (!String(code || '').trim()) {
       newErrors['Site code'] = 'كود الموقع مطلوب (Site Code)';
+    } else if (activeMode === 'add' && existingDuplicateSite) {
+      newErrors['Site code'] = `كود الموقع (${existingDuplicateSite.siteCode}) مسجل بالفعل في Vodafone (${existingDuplicateSite.sector} • ${existingDuplicateSite.status}). اضغط "فتح وتعديل الموقع الحالي" بدلاً من الإضافة.`;
     }
     if (!String(formData['التصنيف'] || '').trim()) {
       newErrors['التصنيف'] = 'التصنيف الميداني مطلوب';
@@ -776,6 +809,34 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
                     className="text-xs text-rose-600 hover:text-rose-800 font-bold hover:underline"
                   >
                     ← اختيار موقع آخر
+                  </button>
+                </div>
+              )}
+
+              {/* Duplicate Site Code Warning Banner in Add Mode */}
+              {activeMode === 'add' && existingDuplicateSite && (
+                <div className="p-3.5 bg-amber-50 border-2 border-amber-400 rounded-2xl text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-extrabold text-sm text-amber-950">
+                        كود الموقع ({existingDuplicateSite.siteCode}) مسجل بالفعل في Vodafone!
+                      </div>
+                      <div className="text-[11px] text-amber-800 mt-0.5">
+                        القطاع: <strong>{existingDuplicateSite.sector}</strong> • السنترال: <strong>{existingDuplicateSite.central}</strong> • التصنيف: <strong>{existingDuplicateSite.status}</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveMode('edit');
+                      setErrors({});
+                      handleSelectSiteCode(existingDuplicateSite.siteCode);
+                    }}
+                    className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shrink-0 cursor-pointer transition shadow-xs"
+                  >
+                    فتح وتعديل الموقع الحالي ←
                   </button>
                 </div>
               )}
