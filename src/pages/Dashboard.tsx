@@ -5,6 +5,7 @@ import { KpiCards } from '../components/KpiCards';
 import { EtahaKpiCards } from '../components/EtahaKpiCards';
 import { DonutChart } from '../components/DonutChart';
 import { SummaryTable } from '../components/SummaryTable';
+import { ReasonBreakdownModal } from '../components/ReasonBreakdownModal';
 import { Filters } from '../components/Filters';
 import { SiteDetailsModal } from '../components/SiteDetailsModal';
 import { BulkDeleteModal } from '../components/BulkDeleteModal';
@@ -284,6 +285,8 @@ export const Dashboard: React.FC = () => {
   const [vodafoneEditingSiteCode, setVodafoneEditingSiteCode] = useState<string | undefined>(undefined);
   const [vodafoneEditingRecord, setVodafoneEditingRecord] = useState<VodafoneRecord | null>(null);
   const [vodafoneModalMode, setVodafoneModalMode] = useState<'add' | 'edit'>('edit');
+  const [reasonBreakdownStatus, setReasonBreakdownStatus] = useState<string | null>(null);
+  const [customDetailsModal, setCustomDetailsModal] = useState<{ title: string; sites: SiteRecord[] } | null>(null);
 
   // Availability / Etaha specific UI states & live dataset
   const {
@@ -1287,6 +1290,7 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleOpenDetails = (status?: string) => {
+    setCustomDetailsModal(null);
     setModalFilterStatus(status);
     setIsDetailsModalOpen(true);
   };
@@ -2025,6 +2029,11 @@ export const Dashboard: React.FC = () => {
                         activeStatusFilter={filters.status}
                         onSelectStatus={handleStatusSelect}
                         onOpenDetailsModal={handleOpenDetails}
+                        onOpenReasonBreakdown={
+                          activeScope === 'FTTS'
+                            ? (status) => setReasonBreakdownStatus(status)
+                            : undefined
+                        }
                         companyVariant={
                           filters.company === 'Orange' ? 'orange' :
                             filters.company === 'Vodafone' ? 'vodafone' :
@@ -2076,13 +2085,64 @@ export const Dashboard: React.FC = () => {
         </footer>
       </div>
 
+      {/* Reason-by-Reason Breakdown Modal for متعذر & معوقات */}
+      <ReasonBreakdownModal
+        isOpen={Boolean(reasonBreakdownStatus)}
+        onClose={() => setReasonBreakdownStatus(null)}
+        sites={filteredSites}
+        statusLabel={reasonBreakdownStatus || ''}
+        operatorLabel={
+          filters.company === 'WE'
+            ? 'WE'
+            : filters.company === 'Vodafone'
+              ? 'Vodafone'
+              : filters.company === 'Orange'
+                ? 'Orange'
+                : 'All Operators'
+        }
+        activeSectorLabel={(() => {
+          const secs = toFilterArray(filters.sector);
+          if (secs.length > 0) return secs.join(' • ');
+          if (user && user.role !== 'admin' && user.sector && user.sector !== 'ALL') return user.sector;
+          return undefined;
+        })()}
+        onSelectReasonSites={(reasonLabel, reasonSites) => {
+          const parentStatus = reasonBreakdownStatus || '';
+          setReasonBreakdownStatus(null);
+          setCustomDetailsModal({
+            title: `${parentStatus} — ${reasonLabel}`,
+            sites: reasonSites,
+          });
+          setIsDetailsModalOpen(true);
+        }}
+        onViewAllCategorySites={(allCategorySites) => {
+          const parentStatus = reasonBreakdownStatus || '';
+          setReasonBreakdownStatus(null);
+          setCustomDetailsModal({
+            title: parentStatus,
+            sites: allCategorySites,
+          });
+          setIsDetailsModalOpen(true);
+        }}
+      />
+
       {/* Drill-down Modal with Error Boundary */}
-      <ModalErrorBoundary isOpen={isDetailsModalOpen} onClose={() => setIsDetailsModalOpen(false)} title="نافذة تفاصيل المواقع">
+      <ModalErrorBoundary
+        isOpen={isDetailsModalOpen}
+        onClose={() => {
+          setIsDetailsModalOpen(false);
+          setCustomDetailsModal(null);
+        }}
+        title="نافذة تفاصيل المواقع"
+      >
         <SiteDetailsModal
           isOpen={isDetailsModalOpen}
-          onClose={() => setIsDetailsModalOpen(false)}
-          sites={filteredSites}
-          activeStatusFilter={modalFilterStatus || filters.status || undefined}
+          onClose={() => {
+            setIsDetailsModalOpen(false);
+            setCustomDetailsModal(null);
+          }}
+          sites={customDetailsModal ? customDetailsModal.sites : filteredSites}
+          activeStatusFilter={customDetailsModal ? customDetailsModal.title : (modalFilterStatus || filters.status || undefined)}
           onEditSite={isViewer ? undefined : (siteCode) => {
             try {
               const targetCode = String(siteCode || '').trim().toUpperCase();

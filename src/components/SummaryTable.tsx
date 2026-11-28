@@ -6,11 +6,13 @@ import {
   Search,
   Table as TableIcon,
   Eye,
-  CheckCircle2
+  CheckCircle2,
+  BarChart3
 } from 'lucide-react';
 
 import type { StatusSummary } from '../types/dashboard';
 import { toFilterArray } from '../utils/filterUtils';
+import { getBreakdownKind } from '../utils/reasonBreakdown';
 
 interface SummaryTableProps {
   data: StatusSummary[];
@@ -19,6 +21,7 @@ interface SummaryTableProps {
   activeStatusFilter?: string | string[];
   onSelectStatus: (status: string) => void;
   onOpenDetailsModal?: (status?: string) => void;
+  onOpenReasonBreakdown?: (status: string) => void;
   companyVariant?: 'orange' | 'vodafone' | 'we' | 'etaha' | 'default';
   embedded?: boolean;
 }
@@ -33,6 +36,7 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
   activeStatusFilter,
   onSelectStatus,
   onOpenDetailsModal,
+  onOpenReasonBreakdown,
   companyVariant,
   embedded = false,
 }) => {
@@ -200,12 +204,31 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
                       </div>
                     </td>
 
-                    {/* N.Sites Column with Data-bar */}
+                    {/* N.Sites Column with Data-bar (Clickable Breakdown for متعذر & معوقات) */}
                     <td className="py-2 px-3 text-center">
                       <div className="flex flex-col items-center">
-                        <span className="font-mono font-bold text-slate-800 text-sm">
-                          {row.sitesCount}
-                        </span>
+                        {onOpenReasonBreakdown && getBreakdownKind(row.status) && row.sitesCount > 0 ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenReasonBreakdown(row.status);
+                            }}
+                            title={`عرض تفصيل أسباب (${row.status})`}
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-mono font-extrabold text-sm border transition-all duration-150 cursor-pointer shadow-2xs hover:scale-105 ${
+                              getBreakdownKind(row.status) === 'obstacles'
+                                ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300 hover:border-amber-500'
+                                : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-300 hover:border-rose-500'
+                            }`}
+                          >
+                            <span>{row.sitesCount}</span>
+                            <BarChart3 className="w-3 h-3 opacity-80" />
+                          </button>
+                        ) : (
+                          <span className="font-mono font-bold text-slate-800 text-sm">
+                            {row.sitesCount}
+                          </span>
+                        )}
                         {/* Power BI style mini data-bar */}
                         <div className="w-16 sm:w-20 bg-slate-100 h-1.5 rounded-full overflow-hidden mt-1">
                           <div
