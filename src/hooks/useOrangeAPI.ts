@@ -19,13 +19,100 @@ import {
 } from '../utils/deletedSitesSync';
 import { logActivity, buildRecordDiffSummary, getActiveActor } from '../utils/auditService';
 import { formatSupabaseSaveError } from '../utils/siteValidation';
+import { normalizeCodeKey } from '../utils/vodafoneNormalizer';
 
 const STORAGE_KEY = 'ftts_orange_records_v3';
 const ORANGE_TABLE_CANDIDATES = ['orange_records', 'orange', 'we_records'];
 
-export function mapOrangeRecordToSiteRecord(r: OrangeRecord, index = 0): SiteRecord {
-  const rawCode = r[' Site code'] || r['Site code'] || r['site code'] || r['HUBID'] || `ORG-${index + 1}`;
-  const code = String(rawCode).trim();
+function extractOrangeSiteCode(raw: any): string {
+  if (!raw || typeof raw !== 'object') return '';
+  const val =
+    raw.site_code ??
+    raw.Site_code ??
+    raw['Site code'] ??
+    raw['site code'] ??
+    raw[' Site code'] ??
+    raw.HUBID ??
+    raw.hubid ??
+    raw.siteCode ??
+    '';
+  return String(val ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/^(ORG-|ORANGE-)/i, '')
+    .trim();
+}
+
+function extractOrangeSiteName(raw: any): string {
+  if (!raw || typeof raw !== 'object') return '';
+  const candidates = [
+    raw.site_name,
+    raw['Site name'],
+    raw['Site Name'],
+    raw.siteName,
+    raw['اسم الموقع'],
+    raw['إسم الموقع'],
+    raw.name,
+  ];
+  for (const c of candidates) {
+    const s = String(c ?? '').trim();
+    if (s && s !== 'undefined' && s !== 'null' && s !== '-') return s;
+  }
+  return '';
+}
+
+function normalizeOrangeCodeKey(code: unknown): string {
+  const bare = String(code ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/^(ORG-|ORANGE-)/i, '')
+    .trim();
+  return normalizeCodeKey(bare);
+}
+
+export function normalizeOrangeRecord(raw: any): OrangeRecord {
+  const base: Record<string, any> =
+    raw && typeof raw === 'object'
+      ? raw.data && typeof raw.data === 'object'
+        ? { ...raw, ...raw.data }
+        : { ...raw }
+      : {};
+  delete base.data;
+
+  const code = extractOrangeSiteCode(base);
+  const siteName = extractOrangeSiteName(base);
+  const sec = normalizeSectorName(
+    base['رئاسة قطاعات التنفيذ'] || base['رئاسة القطاعات '] || base['رئاسة القطاعات'] || base.sector || ''
+  );
+  const execSec = normalizeSectorName(base['قطاع التنفيذ'] || base.execution_sector || sec || '');
+  const central = String(base['سنترال الربط'] ?? base.central ?? '').trim();
+  const governorate = String(base['المحافظه'] ?? base['المحافظة'] ?? base.governorate ?? '').trim();
+  const status = String(
+    base['التصنيف'] ?? base['التصنيف (مدني)'] ?? base.general_status ?? base.status ?? base.classification ?? ''
+  ).trim();
+
+  return {
+    ...base,
+    company: 'Orange',
+    site_code: code,
+    'Site code': code,
+    'site code': code,
+    ' Site code': code,
+    HUBID: code || base.HUBID,
+    site_name: siteName,
+    'Site name': siteName,
+    'اسم الموقع': siteName,
+    ...(sec ? { 'رئاسة قطاعات التنفيذ': sec, 'رئاسة القطاعات': sec, 'رئاسة القطاعات ': sec, sector: sec } : {}),
+    ...(execSec ? { 'قطاع التنفيذ': execSec, execution_sector: execSec } : {}),
+    ...(central ? { 'سنترال الربط': central, central } : {}),
+    ...(governorate ? { 'المحافظه': governorate, governorate } : {}),
+    ...(status ? { 'التصنيف': status, 'التصنيف (مدني)': base['التصنيف (مدني)'] || status, classification: status } : {}),
+  };
+}
+
+export function mapOrangeRecordToSiteRecord(rawInput: OrangeRecord, index = 0): SiteRecord {
+  const r = normalizeOrangeRecord(rawInput);
+  const code = extractOrangeSiteCode(r) || `ORG-${index + 1}`;
   const rawTasneef = String(r['التصنيف'] || r['التصنيف (مدني)'] || '').trim();
 
   let status = 'جاري المعاينة';
@@ -73,17 +160,19 @@ export function mapOrangeRecordToSiteRecord(r: OrangeRecord, index = 0): SiteRec
   }
 
   const central = String(r['سنترال الربط'] || 'سنترال رئيسي').trim();
+  const explicitName = extractOrangeSiteName(r);
+  const displayName = explicitName || `موقع ${code} - ${central}`;
   const sector = normalizeSectorName(String(r['رئاسة قطاعات التنفيذ'] || r['رئاسة القطاعات '] || r['رئاسة القطاعات'] || 'قطاع الشرقية').trim()) || 'قطاع الشرقية';
   const generalAdmin = String(r['الادارة العامة لتنفيذ الشبكات'] || r['الادارة العامة للتنفيذ'] || r['الادارة العامة'] || 'الإدارة العامة لتنفيذ الشبكات').trim();
   const subSector = normalizeSectorName(String(r['قطاع التنفيذ'] || r['قطاع المناطق'] || r['القطاع'] || 'إدارة مختصة').trim()) || 'إدارة مختصة';
   const competentAdmin = String(r['ادارة التنفيذ الفرعية'] || r['الادارة العامة للمنطقة'] || r['المنطقة'] || 'إدارة المنطقة').trim();
-  const obstacleReason = String(r['اسباب التعّذر'] || r['اسباب التعذر'] || r['نوع المعوق المدني'] || r['الملاحظات'] || 'لا يوجد تعذر').trim();
+  const obstacleReason = String(r['اسباب المعوق'] || r['اسباب التعّذر'] || r['اسباب التعذر'] || r['نوع المعوق المدني'] || r['الملاحظات'] || 'لا يوجد تعذر').trim();
   const expectedDate = r['التاريخ المتوقع للانتهاء'] || (r['خطة'] ? `${r['خطة']}-12-31` : '2026-12-31');
 
   return {
     id: `ORG-${code}`,
     siteCode: code,
-    siteName: `موقع ${code} - ${central}`,
+    siteName: displayName,
     company: 'Orange',
     status,
     executionCategory,
@@ -138,13 +227,7 @@ export function mapOrangeRecordToSiteRecord(r: OrangeRecord, index = 0): SiteRec
 let inMemoryOrangeRecords: OrangeRecord[] = [];
 
 function normalizeOrangeSector(r: OrangeRecord): OrangeRecord {
-  const sec = normalizeSectorName(r['رئاسة قطاعات التنفيذ'] || r['رئاسة القطاعات '] || r['رئاسة القطاعات']);
-  const execSec = normalizeSectorName(r['قطاع التنفيذ']);
-  return {
-    ...r,
-    ...(sec ? { 'رئاسة قطاعات التنفيذ': sec, 'رئاسة القطاعات': sec } : {}),
-    ...(execSec ? { 'قطاع التنفيذ': execSec } : {}),
-  };
+  return normalizeOrangeRecord(r);
 }
 
 function loadStoredOrangeRecords(): OrangeRecord[] {
@@ -175,12 +258,10 @@ function saveStoredOrangeRecords(records: OrangeRecord[]): void {
 }
 
 export function fetchOrangeSiteRecord(code: string): OrangeRecord | null {
-  const norm = String(code ?? '').trim().toUpperCase();
+  const targetKey = normalizeOrangeCodeKey(code);
+  if (!targetKey) return null;
   const records = loadStoredOrangeRecords();
-  return records.find((r) => {
-    const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
-    return c === norm;
-  }) || null;
+  return records.find((r) => normalizeOrangeCodeKey(extractOrangeSiteCode(r)) === targetKey) || null;
 }
 
 export function useOrangeAPI() {
@@ -193,8 +274,10 @@ export function useOrangeAPI() {
     try {
       const deletedCodes = await fetchCloudDeletedCodes();
 
-      // 1. Attempt to fetch live from Supabase tables across active clients
+      // 1. Fetch live from Supabase across both `orange_records` (if created) and `we_records` (Orange rows)
+      const fetchedRows: { row: any; source: string }[] = [];
       for (const client of supabaseClients) {
+        let clientFoundAny = false;
         for (const table of ORANGE_TABLE_CANDIDATES) {
           try {
             let query = client.from(table).select('*').limit(5000);
@@ -202,37 +285,60 @@ export function useOrangeAPI() {
               query = query.eq('data->>company', 'Orange');
             }
             const { data, error: sbError } = await query;
-            if (!sbError && data && data.length > 0) {
-              const baseMap = new Map<string, OrangeRecord>();
-              loadStoredOrangeRecords().forEach((r) => {
-                const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
-                if (c && !deletedCodes.has(c)) baseMap.set(c, r);
-              });
-              data.forEach((row: any) => {
-                const rowData = row.data && typeof row.data === 'object' ? row.data : row;
-                const code = String(
-                  row.site_code || row['site code'] || row['Site code'] || rowData['Site code'] || rowData['site code'] || row.id || ''
-                ).trim().toUpperCase();
-                if (code && code !== SYNC_DELETED_CODES_SITE_CODE && !deletedCodes.has(code)) {
-                  const prev = baseMap.get(code) || {};
-                  baseMap.set(code, normalizeOrangeSector({ ...prev, ...rowData, ...row, 'Site code': code, 'site code': code }));
-                }
-              });
-              const merged = Array.from(baseMap.values()).filter((r) => {
-                const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
-                return !deletedCodes.has(c);
-              });
-              saveStoredOrangeRecords(merged);
-              setOrangeRecords(merged);
-              return;
+            if (!sbError && Array.isArray(data) && data.length > 0) {
+              data.forEach((row: any) => fetchedRows.push({ row, source: table }));
+              clientFoundAny = true;
             }
           } catch { }
         }
+        if (clientFoundAny) break;
+      }
+
+      if (fetchedRows.length > 0) {
+        const baseMap = new Map<string, OrangeRecord>();
+        loadStoredOrangeRecords().forEach((r) => {
+          const normRec = normalizeOrangeRecord(r);
+          const code = extractOrangeSiteCode(normRec);
+          const key = normalizeOrangeCodeKey(code);
+          if (key && !deletedCodes.has(code) && !deletedCodes.has(key) && !deletedCodes.has(`ORG-${key}`)) {
+            baseMap.set(key, normRec);
+          }
+        });
+        fetchedRows.forEach(({ row }) => {
+          const normCloud = normalizeOrangeRecord(row);
+          const code = extractOrangeSiteCode(normCloud);
+          const key = normalizeOrangeCodeKey(code);
+          if (
+            key &&
+            code !== SYNC_DELETED_CODES_SITE_CODE &&
+            !deletedCodes.has(code) &&
+            !deletedCodes.has(key) &&
+            !deletedCodes.has(`ORG-${key}`)
+          ) {
+            const prev = baseMap.get(key) || {};
+            const mergedRow = normalizeOrangeRecord({
+              ...prev,
+              ...normCloud,
+              _id: isUUID(row.id) ? row.id : (normCloud._id || prev._id),
+              ...(row.updated_at ? { _updatedAt: row.updated_at } : {}),
+            });
+            baseMap.set(key, mergedRow);
+          }
+        });
+        const merged = Array.from(baseMap.values()).filter((r) => {
+          const code = extractOrangeSiteCode(r);
+          const key = normalizeOrangeCodeKey(code);
+          return !deletedCodes.has(code) && !deletedCodes.has(key) && !deletedCodes.has(`ORG-${key}`);
+        });
+        saveStoredOrangeRecords(merged);
+        setOrangeRecords(merged);
+        return;
       }
 
       const records = loadStoredOrangeRecords().filter((r) => {
-        const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
-        return !deletedCodes.has(c);
+        const code = extractOrangeSiteCode(r);
+        const key = normalizeOrangeCodeKey(code);
+        return !deletedCodes.has(code) && !deletedCodes.has(key) && !deletedCodes.has(`ORG-${key}`);
       });
       setOrangeRecords(records);
     } catch (err: any) {
@@ -245,9 +351,16 @@ export function useOrangeAPI() {
   useEffect(() => {
     refetchOrangeRecords();
 
-    // Supabase Realtime channel for instant cross-device updates
+    // Supabase Realtime channel for instant cross-device updates on both orange_records & we_records
     const channel = supabaseFallback
       .channel('orange_realtime_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orange_records' },
+        () => {
+          refetchOrangeRecords();
+        }
+      )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'we_records' },
@@ -285,15 +398,13 @@ export function useOrangeAPI() {
 
   const saveOrangeRecord = useCallback(async (record: OrangeRecord): Promise<{ success: boolean; cloudSaved?: boolean; message?: string; error?: string }> => {
     try {
-      const rawCode = record[' Site code'] || record['Site code'] || record['site code'] || (record as any).site_code;
-      const code = String(rawCode || '').trim().toUpperCase();
-      if (!code) return { success: false, error: 'كود الموقع مطلوب' };
+      const code = extractOrangeSiteCode(record);
+      const codeKey = normalizeOrangeCodeKey(code);
+      if (!code || !codeKey) return { success: false, error: 'يرجى إدخال كود الموقع قبل الحفظ (Site Code)' };
 
       const current = loadStoredOrangeRecords();
-      const idx = current.findIndex((r) => {
-        const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
-        return c === code;
-      });
+      const idx = current.findIndex((r) => normalizeOrangeCodeKey(extractOrangeSiteCode(r)) === codeKey);
+      const oldRec = idx >= 0 ? current[idx] : null;
 
       const now = new Date().toISOString();
       const isSpecial = Boolean(
@@ -306,157 +417,234 @@ export function useOrangeAPI() {
         false
       );
 
-      const docUrl = record.documentUrl || (record as any).attachmentUrl || '';
+      const docUrl = String(record.documentUrl || (record as any).attachmentUrl || '').trim();
+      const isInlineDataUrl = docUrl.startsWith('data:');
+      const recordUuid =
+        (record._id && isUUID(record._id) ? record._id : null) ||
+        (oldRec?._id && isUUID(oldRec._id) ? oldRec._id : null) ||
+        (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : undefined);
+
       const canonSec = normalizeSectorName(
         record['رئاسة قطاعات التنفيذ'] || record['رئاسة القطاعات '] || record['رئاسة القطاعات'] || record['قطاع التنفيذ'] || ''
       );
       const actor = getActiveActor();
-      const enriched: OrangeRecord = {
+      const enriched: OrangeRecord = normalizeOrangeRecord({
         ...record,
+        ...(recordUuid ? { _id: recordUuid } : {}),
         company: 'Orange',
+        ' Site code': code,
         'Site code': code,
         'site code': code,
         site_code: code,
+        HUBID: code,
         ...(canonSec ? {
           'رئاسة قطاعات التنفيذ': canonSec,
           'رئاسة القطاعات ': canonSec,
           'رئاسة القطاعات': canonSec,
           'قطاع التنفيذ': canonSec,
         } : {}),
-        'التصنيف': record['التصنيف'] || record['التصنيف (مدني)'] || '',
-        'التصنيف (مدني)': record['التصنيف (مدني)'] || record['التصنيف'] || '',
-        classification: record['التصنيف'] || record['التصنيف (مدني)'] || '',
+        'التصنيف': String(record['التصنيف'] || record['التصنيف (مدني)'] || '').trim() || 'جاري المعاينة',
+        'التصنيف (مدني)': String(record['التصنيف (مدني)'] || record['التصنيف'] || '').trim() || 'جاري المعاينة',
+        classification: String(record['التصنيف'] || record['التصنيف (مدني)'] || '').trim() || 'جاري المعاينة',
         documentUrl: docUrl,
-        attachmentUrl: docUrl,
+        attachmentUrl: isInlineDataUrl ? '' : docUrl,
         'المستند': record['المستند'] || (docUrl ? `Doc-Orange-${code}.pdf` : ''),
         specialTarget: isSpecial,
         special_target: isSpecial,
         'سبيشال تارجت': isSpecial,
+        _createdAt: oldRec?._createdAt || record._createdAt || now,
         _updatedAt: now,
         _lastModifiedBy: actor.displayName,
         _lastModifiedAt: now,
-      };
+      });
 
-      // 1. Instant local optimistic update: immediate reflection across localStorage & all dashboard counters
-      const oldRec = idx >= 0 ? current[idx] : null;
+      // 1. Ensure code & ORG- prefixed variant are removed from deleted-codes registry BEFORE updating state/cloud
+      await removeCloudDeletedCode(code);
+      await removeCloudDeletedCode(`ORG-${code}`);
+
+      // 2. Instant local optimistic update
       let updated: OrangeRecord[];
       if (idx >= 0) {
         updated = [...current];
         updated[idx] = { ...updated[idx], ...enriched };
       } else {
-        enriched._createdAt = now;
         updated = [enriched, ...current];
       }
+      saveStoredOrangeRecords(updated);
+      setOrangeRecords(updated);
+
+      const toNullableText = (v: any): string | null => {
+        const s = String(v ?? '').trim();
+        return s ? s : null;
+      };
+
+      const buildCloudPayload = (dataObj: OrangeRecord, physicalSiteCode: string, table: string): Record<string, any> => {
+        if (table === 'orange_records' || table === 'orange') {
+          const p: Record<string, any> = {
+            site_code: physicalSiteCode,
+            site_name: toNullableText(extractOrangeSiteName(dataObj)),
+            sector: toNullableText(dataObj['رئاسة قطاعات التنفيذ'] || dataObj['قطاع التنفيذ']),
+            execution_sector: toNullableText(dataObj['قطاع التنفيذ']),
+            governorate: toNullableText(dataObj['المحافظه']),
+            central: toNullableText(dataObj['سنترال الربط']),
+            status: toNullableText(dataObj['التصنيف'] || dataObj['التصنيف (مدني)']) || 'جاري المعاينة',
+            data: dataObj,
+            updated_at: now,
+          };
+          if (recordUuid) p.id = recordUuid;
+          return p;
+        }
+
+        // Physical columns verified on live `we_records` table
+        const p: Record<string, any> = {
+          site_code: physicalSiteCode,
+          'site code': physicalSiteCode,
+          'Exc Sectores': dataObj['قطاع التنفيذ'] || dataObj['رئاسة قطاعات التنفيذ'] || '',
+          'Sectores': dataObj['رئاسة قطاعات التنفيذ'] || dataObj['قطاع التنفيذ'] || '',
+          'Exc sector': dataObj['قطاع التنفيذ'] || '',
+          'Sectore': dataObj['رئاسة قطاعات التنفيذ'] || '',
+          'Site Status': dataObj['التصنيف (مدني)'] || dataObj['التصنيف'] || 'جاري المعاينة',
+          'NLatitude': toNullableText(dataObj['احدثيات خط العرض']),
+          'NLongitude': toNullableText(dataObj['احدثيات خط الطول']),
+          data: dataObj,
+          updated_at: now,
+        };
+        if (recordUuid) p.id = recordUuid;
+        return p;
+      };
+
+      const cloudDataPrimary: OrangeRecord = isInlineDataUrl ? { ...enriched, attachmentUrl: '' } : enriched;
+      const cloudDataMetadataOnly: OrangeRecord = {
+        ...enriched,
+        documentUrl: isInlineDataUrl ? '' : docUrl,
+        attachmentUrl: isInlineDataUrl ? '' : docUrl,
+      };
+
+      // Persist directly into Supabase (`orange_records` if created, otherwise `we_records` with company='Orange')
+      let cloudSaved = false;
+      let confirmedRowId: string | undefined = recordUuid;
+      let lastCloudError: any = null;
+      const physicalCodesToTry = [code, `ORG-${code}`];
+
+      clientLoop: for (const client of supabaseClients) {
+        for (const table of ORANGE_TABLE_CANDIDATES) {
+          for (const physicalCode of physicalCodesToTry) {
+            const safePayload = buildCloudPayload(cloudDataPrimary, physicalCode, table);
+            try {
+              // A. Direct UPDATE scoped to Orange so we never overwrite a WE/Vodafone row
+              let updateQuery = client
+                .from(table)
+                .update(safePayload)
+                .eq('site_code', physicalCode);
+              if (table === 'we_records') {
+                updateQuery = updateQuery.eq('data->>company', 'Orange');
+              }
+              const { data: updateData, error: updateErr } = await updateQuery.select('id, site_code');
+
+              if (!updateErr && updateData && updateData.length > 0) {
+                cloudSaved = true;
+                confirmedRowId = updateData[0]?.id || confirmedRowId;
+                break clientLoop;
+              }
+              if (updateErr?.code === 'PGRST205') {
+                lastCloudError = updateErr;
+                break;
+              }
+
+              // B. Try UPDATE by exact UUID if this record already had a UUID
+              if (recordUuid) {
+                const { data: uuidData, error: uuidErr } = await client
+                  .from(table)
+                  .update(safePayload)
+                  .eq('id', recordUuid)
+                  .select('id, site_code');
+                if (!uuidErr && uuidData && uuidData.length > 0) {
+                  cloudSaved = true;
+                  confirmedRowId = uuidData[0]?.id || confirmedRowId;
+                  break clientLoop;
+                }
+              }
+
+              // C. UPSERT new row and require returned row confirmation
+              const insertPayload: Record<string, any> = {
+                ...safePayload,
+                created_at: enriched._createdAt || now,
+              };
+
+              let { data: insertData, error: insertErr } = await client
+                .from(table)
+                .upsert([insertPayload], { onConflict: 'id' })
+                .select('id, site_code');
+
+              // Retry with metadata-only payload if large inline Base64 caused a payload error
+              if (insertErr && isInlineDataUrl && insertErr.code !== 'PGRST205' && insertErr.code !== '23505') {
+                const retryPayload = {
+                  ...buildCloudPayload(cloudDataMetadataOnly, physicalCode, table),
+                  created_at: enriched._createdAt || now,
+                };
+                const retryRes = await client
+                  .from(table)
+                  .upsert([retryPayload], { onConflict: 'id' })
+                  .select('id, site_code');
+                insertData = retryRes.data;
+                insertErr = retryRes.error;
+              }
+
+              if (!insertErr && insertData && insertData.length > 0) {
+                cloudSaved = true;
+                confirmedRowId = insertData[0]?.id || confirmedRowId;
+                break clientLoop;
+              }
+
+              if (insertErr) {
+                lastCloudError = insertErr;
+                if (insertErr.code === 'PGRST205') break;
+                if (insertErr.code === '23505') continue; // Try ORG-${code} next
+              }
+            } catch (err: any) {
+              lastCloudError = err;
+            }
+          }
+        }
+      }
+
+      if (!cloudSaved) {
+        // Strict rollback: never keep unpersisted optimistic data or log false activity
+        saveStoredOrangeRecords(current);
+        setOrangeRecords(current);
+        console.error(`[Orange Supabase] Failed to persist site ${code}:`, lastCloudError);
+        return {
+          success: false,
+          cloudSaved: false,
+          error: formatSupabaseSaveError(
+            lastCloudError || { message: 'لم تؤكد قاعدة البيانات حفظ السجل' },
+            code
+          ),
+        };
+      }
+
+      // Sync confirmed UUID back into local cache & state
+      if (confirmedRowId && isUUID(confirmedRowId)) {
+        const synced = updated.map((r) =>
+          normalizeOrangeCodeKey(extractOrangeSiteCode(r)) === codeKey ? { ...r, _id: confirmedRowId } : r
+        );
+        saveStoredOrangeRecords(synced);
+        setOrangeRecords(synced);
+      }
+
       logActivity({
         actionType: oldRec ? 'تعديل موقع' : 'إضافة موقع',
         module: 'Orange',
         siteCode: code,
         details: buildRecordDiffSummary(oldRec, enriched, docUrl ? `مرفق: ${enriched['المستند']}` : undefined),
       });
-      saveStoredOrangeRecords(updated);
-      setOrangeRecords(updated);
 
-      // Safe payload matching physical Supabase table columns + JSONB data
-      // (Preserves specialTarget and all operator attributes inside data: enriched)
-      const safePayload: any = {
-        site_code: code,
-        'site code': code,
-        'Exc sector': canonSec || enriched['قطاع التنفيذ'] || '',
-        'Sectores': canonSec || enriched['قطاع التنفيذ'] || '',
-        'Sectore': canonSec || enriched['قطاع التنفيذ'] || '',
-        'Site Status': enriched['التصنيف (مدني)'] || enriched['التصنيف'] || 'جاري',
-        data: enriched,
-        updated_at: now,
-      };
-      if (enriched._id && isUUID(enriched._id)) {
-        safePayload.id = enriched._id;
-      }
-
-      // Persist directly into Supabase orange tables across active clients
-      let cloudSaved = false;
-      let lastCloudError: any = null;
-      clientLoop: for (const client of supabaseClients) {
-        for (const table of ORANGE_TABLE_CANDIDATES) {
-          try {
-            // 1. Direct UPDATE on existing record in Supabase
-            let { data: updateData, error: updateErr } = await client
-              .from(table)
-              .update(safePayload)
-              .eq('site_code', code)
-              .select();
-
-            if (updateErr || !updateData || updateData.length === 0) {
-              const retryQuoted = await client
-                .from(table)
-                .update(safePayload)
-                .eq('site code', code)
-                .select();
-              if (!retryQuoted.error && retryQuoted.data && retryQuoted.data.length > 0) {
-                updateData = retryQuoted.data;
-                updateErr = null;
-              } else if (retryQuoted.error) {
-                lastCloudError = retryQuoted.error;
-              }
-            }
-
-            if (updateErr) {
-              lastCloudError = updateErr;
-              console.error(`[Orange Supabase] Update error on table ${table}:`, updateErr);
-            }
-
-            if (!updateErr && updateData && updateData.length > 0) {
-              cloudSaved = true;
-              console.log(`[Orange Supabase] Successfully updated site ${code} in ${table}`);
-              break clientLoop;
-            }
-
-            // 2. INSERT if row does not exist
-            const insertPayload: any = {
-              ...safePayload,
-              created_at: enriched._createdAt || now,
-            };
-            if (enriched._id && isUUID(enriched._id)) {
-              insertPayload.id = enriched._id;
-            }
-
-            const { data: insertData, error: insertErr } = await client
-              .from(table)
-              .insert([insertPayload])
-              .select();
-
-            if (insertErr) {
-              lastCloudError = insertErr;
-              console.error(`[Orange Supabase] Insert error on table ${table}:`, insertErr);
-            }
-
-            if (!insertErr && insertData && insertData.length > 0) {
-              cloudSaved = true;
-              console.log(`[Orange Supabase] Successfully inserted site ${code} in ${table}`);
-              break clientLoop;
-            }
-          } catch (err: any) {
-            lastCloudError = err;
-            console.error(`[Orange Supabase] Error saving site ${code} to table ${table}:`, err);
-          }
-        }
-      }
-
-      if (cloudSaved) {
-        await removeCloudDeletedCode(code);
-        return {
-          success: true,
-          cloudSaved: true,
-          message: `تم حفظ وتحديث بيانات موقع Orange (${code}) وتصنيفه بنجاح في قاعدة بيانات Supabase السحابية ✅`,
-        };
-      }
-
-      // Cloud save failed — rollback optimistic local cache & report explicit Arabic reason
-      saveStoredOrangeRecords(current);
-      setOrangeRecords(current);
       return {
-        success: false,
-        cloudSaved: false,
-        error: formatSupabaseSaveError(lastCloudError, code),
+        success: true,
+        cloudSaved: true,
+        message: `تم الحفظ في قاعدة بيانات Orange بنجاح (${code}) ✅`,
       };
     } catch (err: any) {
       return { success: false, error: err?.message || 'فشل حفظ بيانات الموقع' };

@@ -494,13 +494,18 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
       const canonSector = normalizeSectorName(
         String(formData['رئاسة قطاعات التنفيذ'] || formData['رئاسة القطاعات '] || formData['رئاسة القطاعات'] || formData['قطاع التنفيذ'] || '').trim()
       );
-      const cleanCode = String(formData['Site code'] || formData.HUBID || '').trim().toUpperCase();
+      const finalCode = String(formData['Site code'] || formData.HUBID || cleanCode).trim().toUpperCase();
+      const existingUuid =
+        formData._id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(formData._id))
+          ? formData._id
+          : undefined;
 
       const payload: OrangeRecord = {
         ...formData,
-        'Site code': cleanCode,
-        'site code': cleanCode,
-        HUBID: cleanCode,
+        ...(existingUuid ? { _id: existingUuid } : {}),
+        'Site code': finalCode,
+        'site code': finalCode,
+        HUBID: finalCode,
         ...(canonSector ? {
           'رئاسة قطاعات التنفيذ': canonSector,
           'رئاسة القطاعات ': canonSector,
@@ -517,14 +522,14 @@ export const OrangeAddDataModal: React.FC<OrangeAddDataModalProps> = ({
         'سبيشال تارجت': isSpecial,
       };
       const res = await onSave(payload);
-      if (res.success) {
-        setSuccessMessage(res.message || '✅ تم حفظ وتحديث بيانات موقع Orange بنجاح في قاعدة البيانات!');
+      if (res.success && (res as any).cloudSaved !== false) {
+        setSuccessMessage(res.message || `✅ تم الحفظ في قاعدة بيانات Orange بنجاح (${finalCode})!`);
         setTimeout(() => {
           onClose();
           setSuccessMessage('');
         }, 1200);
       } else {
-        setErrors({ _general: res.error || 'حدث خطأ أثناء الحفظ.' });
+        setErrors({ _general: res.error || 'فشل الحفظ في قاعدة بيانات Orange السحابية — لم يتم تسجيل الموقع.' });
       }
     } catch (err: any) {
       setErrors({ _general: err?.message || 'فشل الاتصال وحفظ البيانات.' });
