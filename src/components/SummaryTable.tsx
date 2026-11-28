@@ -13,6 +13,7 @@ import {
 import type { StatusSummary } from '../types/dashboard';
 import { toFilterArray } from '../utils/filterUtils';
 import { getBreakdownKind } from '../utils/reasonBreakdown';
+import { getStatusDisplayPriority } from '../data/dashboardData';
 
 interface SummaryTableProps {
   data: StatusSummary[];
@@ -26,7 +27,7 @@ interface SummaryTableProps {
   embedded?: boolean;
 }
 
-type SortField = 'status' | 'sitesCount' | 'linksCount';
+type SortField = 'priority' | 'status' | 'sitesCount' | 'linksCount';
 type SortDirection = 'asc' | 'desc';
 
 export const SummaryTable: React.FC<SummaryTableProps> = ({
@@ -40,7 +41,7 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
   companyVariant,
   embedded = false,
 }) => {
-  const [sortField, setSortField] = useState<SortField>('sitesCount');
+  const [sortField, setSortField] = useState<SortField>('priority');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [tableSearch, setTableSearch] = useState<string>('');
 
@@ -49,7 +50,7 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
       setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortField(field);
-      setSortDirection('asc');
+      setSortDirection(field === 'sitesCount' || field === 'linksCount' ? 'desc' : 'asc');
     }
   };
 
@@ -59,6 +60,12 @@ export const SummaryTable: React.FC<SummaryTableProps> = ({
   );
 
   const sortedData = [...filteredData].sort((a, b) => {
+    if (sortField === 'priority') {
+      const pDiff = getStatusDisplayPriority(a.status) - getStatusDisplayPriority(b.status);
+      if (pDiff !== 0) return pDiff;
+      return b.sitesCount - a.sitesCount;
+    }
+
     let comparison = 0;
     if (sortField === 'status') {
       comparison = a.status.localeCompare(b.status, 'ar');

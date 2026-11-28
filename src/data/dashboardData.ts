@@ -770,6 +770,49 @@ export function getWeExactCategory(site: SiteRecord): string {
 export const getSiteAggregateCategory = getSiteClassification;
 
 /**
+ * Returns the canonical top-to-bottom display priority for status rows in "جدول حصر الموقف والمسارات":
+ * 1) Completed ("تم الانتهاء" and standalone completed variants)
+ * 2) Fiber Lit / Activated ("تم التشغيل فايبر" / "تم تشغيل فايبر")
+ * 3) In-Progress ("جاري ...")
+ * 4) Any other intermediate classifications
+ * 5) Blocked / Obstacles ("متعذر" / "معوقات") at the bottom before Total
+ */
+export function getStatusDisplayPriority(status: string): number {
+  const norm = String(status || '')
+    .replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Priority 5: Blocked / Obstacles at bottom before Total
+  if (norm.includes('متعذر') || norm.includes('تعذر') || norm.includes('متعثر')) return 55;
+  if (norm.includes('معوق')) return 50;
+
+  // Priority 2: Fiber Activated ("تم التشغيل فايبر" / "تم تشغيل فايبر")
+  if (norm.includes('فايبر') || norm.includes('فيبر') || norm.includes('تشغيل')) return 20;
+
+  // Priority 1: Completed ("تم الانتهاء", "تم التنفيذ", "تمت تنفيذ", "تم التسليم", "تم مدني", etc.)
+  if (norm === 'تم الانتهاء' || norm === 'تم الانتهاء والتسليم') return 10;
+  if (
+    norm.includes('تم الانتهاء') ||
+    norm.includes('تم التنفيذ') ||
+    norm.includes('تمت تنفيذ') ||
+    norm.includes('تم التسليم') ||
+    norm.startsWith('تم ')
+  ) {
+    return 15;
+  }
+
+  // Priority 3: In-Progress ("جاري ...")
+  if (norm.includes('جاري')) return 30;
+
+  // Priority 4: Remaining intermediate/other classifications
+  return 40;
+}
+
+/**
  * Computes status summaries strictly based on the exact classifications present in the uploaded Excel data
  */
 export function calculateStatusSummaries(sites: SiteRecord[]): StatusSummary[] {
@@ -786,8 +829,13 @@ export function calculateStatusSummaries(sites: SiteRecord[]): StatusSummary[] {
     countMap.set(category, entry);
   });
 
-  // Sort by count descending
-  const sorted = Array.from(countMap.entries()).sort((a, b) => b[1].count - a[1].count);
+  // Sort by canonical workflow priority (Completed -> Fiber Lit -> In Progress -> Other -> Blocked/Obstacles),
+  // breaking ties within the same priority group by count descending
+  const sorted = Array.from(countMap.entries()).sort((a, b) => {
+    const pDiff = getStatusDisplayPriority(a[0]) - getStatusDisplayPriority(b[0]);
+    if (pDiff !== 0) return pDiff;
+    return b[1].count - a[1].count;
+  });
 
   return sorted.map(([category, data], index) => {
     const percentage = Number(((data.count / totalSites) * 100).toFixed(1));
