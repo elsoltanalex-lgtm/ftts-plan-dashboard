@@ -41,6 +41,7 @@ import {
   type OperatorWeeklySummary,
   type OperatorWeekAggregated,
 } from '../data/operatorWeeklyRolloutData';
+import { isDigitalTransformationOverallDone } from '../hooks/useTahawolAPI';
 
 export interface WeeklyPerformanceLineChartProps {
   sites: SiteRecord[];
@@ -361,8 +362,20 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
     URL.revokeObjectURL(url);
   };
 
+  // Detect if current scope is Digital Transformation (التحول الرقمي)
+  const isDigitalTransformation = useMemo(() => {
+    const sc = String(activeScope || '').toUpperCase();
+    return (
+      sc === 'TAHAWOL' ||
+      sc === 'DIGITAL_TRANSFORMATION' ||
+      filters.company === 'التحول الرقمي' ||
+      filters.company === 'Digital Transformation'
+    );
+  }, [activeScope, filters.company]);
+
   // Detect if current scope is Availability Projects
   const isAvailability = useMemo(() => {
+    if (isDigitalTransformation) return false;
     return (
       activeScope === 'AVAILABILITY' ||
       activeScope === 'ETAHA' ||
@@ -377,7 +390,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
           Boolean(s.paymentAndStartDate)
       )
     );
-  }, [activeScope, filters.company, sites]);
+  }, [isDigitalTransformation, activeScope, filters.company, sites]);
 
   // Current As-Of Date (November 2026 dataset reference)
   const asOfDate = useMemo(() => new Date('2026-11-23T23:59:59Z'), []);
@@ -426,10 +439,123 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
     return undefined;
   }, [selectedDeptFilter, filters.generalAdmin]);
 
-  // Operator Rollout Data (Parsed from official operations Excel & synchronized with live sites)
+  // Rollout Data: 100% dedicated to Digital Transformation when in TAHAWOL scope,
+  // or FTTS Mobile Rollout when in FTTS scope
   const operatorRollout: OperatorWeeklySummary = useMemo(() => {
+    if (isDigitalTransformation) {
+      // Filter Digital Transformation sites by selected general admin if any
+      const scopedSites = selectedDeptFilter
+        ? sites.filter((s) => {
+            const raw = (s.rawRecord || {}) as Record<string, any>;
+            const ga = String(s.generalAdmin || raw['الادارة العامة للتنفيذ'] || 'غير محدد').trim();
+            return ga === selectedDeptFilter;
+          })
+        : sites;
+
+      const totalCount = scopedSites.length;
+      // Map each completed Digital Transformation site to one of the 8 Oct-Nov 2026 weeks
+      const weeklyAdditions = new Array(OPERATOR_WEEKS.length).fill(0);
+      let baselinePriorDelivered = 0;
+
+      const weekRanges: { start: number; end: number }[] = [
+        { start: Date.UTC(2026, 9, 1), end: Date.UTC(2026, 9, 7, 23, 59, 59) },
+        { start: Date.UTC(2026, 9, 8), end: Date.UTC(2026, 9, 14, 23, 59, 59) },
+        { start: Date.UTC(2026, 9, 15), end: Date.UTC(2026, 9, 21, 23, 59, 59) },
+        { start: Date.UTC(2026, 9, 22), end: Date.UTC(2026, 9, 31, 23, 59, 59) },
+        { start: Date.UTC(2026, 10, 1), end: Date.UTC(2026, 10, 7, 23, 59, 59) },
+        { start: Date.UTC(2026, 10, 8), end: Date.UTC(2026, 10, 14, 23, 59, 59) },
+        { start: Date.UTC(2026, 10, 15), end: Date.UTC(2026, 10, 21, 23, 59, 59) },
+        { start: Date.UTC(2026, 10, 22), end: Date.UTC(2026, 10, 30, 23, 59, 59) },
+      ];
+
+      let totalDeliveredNow = 0;
+      scopedSites.forEach((s) => {
+        if (!isDigitalTransformationOverallDone(s)) return;
+        totalDeliveredNow += 1;
+        const raw = (s.rawRecord || {}) as Record<string, any>;
+        const dStr =
+          raw['تاريخ تنفيذ المسار الداخلي'] ||
+          raw['تاريخ تنفيذ المسار الخارجي'] ||
+          s.deliveryDate ||
+          raw['تاريخ التسليم'] ||
+          raw._updatedAt;
+        const parsed = parseDateSafe(dStr);
+        if (!parsed) {
+          baselinePriorDelivered += 1;
+          return;
+        }
+        const t = parsed.getTime();
+        if (t < weekRanges[0].start) {
+          baselinePriorDelivered += 1;
+        } else {
+          const wIdx = weekRanges.findIndex((r) => t >= r.start && t <= r.end);
+          if (wIdx >= 0) {
+            weeklyAdditions[wIdx] += 1;
+          } else {
+            weeklyAdditions[OPERATOR_WEEKS.length - 1] += 1;
+          }
+        }
+      });
+
+      let runningDelivered = baselinePriorDelivered;
+      const weeks: OperatorWeekAggregated[] = OPERATOR_WEEKS.map((wDef, idx) => {
+        const added = weeklyAdditions[idx];
+        runningDelivered += added;
+        const delivered = idx === OPERATOR_WEEKS.length - 1 ? totalDeliveredNow : runningDelivered;
+        const last5Start = Math.max(0, idx - 4);
+        const deliveredLast5Weeks = weeklyAdditions
+          .slice(last5Start, idx + 1)
+          .reduce((sum, n) => sum + n, 0);
+        const targetRate = totalCount;
+        const achievementPercent = targetRate > 0 ? Math.round((delivered / targetRate) * 100) : 0;
+        const remainingGap = Math.max(0, targetRate - delivered);
+
+        return {
+          weekKey: wDef.key,
+          weekDef: wDef,
+          totalSites: totalCount,
+          targetRate,
+          delivered,
+          deliveredThisWeek: added,
+          deliveredLast5Weeks,
+          achievementPercent,
+          remainingGap,
+        };
+      });
+
+      // Department breakdown directly from Digital Transformation sites
+      const deptMap = new Map<string, { total: number; delivered: number }>();
+      sites.forEach((s) => {
+        const raw = (s.rawRecord || {}) as Record<string, any>;
+        const ga = String(s.generalAdmin || raw['الادارة العامة للتنفيذ'] || 'غير محدد').trim() || 'غير محدد';
+        const cur = deptMap.get(ga) || { total: 0, delivered: 0 };
+        cur.total += 1;
+        if (isDigitalTransformationOverallDone(s)) cur.delivered += 1;
+        deptMap.set(ga, cur);
+      });
+
+      const departmentSummaries = Array.from(deptMap.entries())
+        .map(([admin, st]) => ({
+          rawAdmin: admin,
+          canonicalAdmin: admin,
+          totalSites: st.total,
+          targetRate: st.total,
+          delivered: st.delivered,
+          achievementPercent: st.total > 0 ? Math.round((st.delivered / st.total) * 100) : 0,
+        }))
+        .sort((a, b) => b.totalSites - a.totalSites);
+
+      const latestWeek = weeks[weeks.length - 1];
+      return {
+        operator: 'All',
+        weeks,
+        latestWeek,
+        departmentSummaries,
+      };
+    }
+
     return getOperatorWeeklyRollout(selectedOperator, activeDeptFilter, sites);
-  }, [selectedOperator, activeDeptFilter, sites]);
+  }, [isDigitalTransformation, selectedDeptFilter, selectedOperator, activeDeptFilter, sites]);
 
   // ─────────────────────────────────────────────────────────────
   // 2. AVAILABILITY WEEKLY SLA / 3-MONTH DELIVERY CALCULATION
@@ -902,15 +1028,19 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
               <h3 className="text-sm sm:text-base font-black text-slate-800 leading-tight">
                 {isAvailability
                   ? 'المسار الأسبوعي ومتابعة التزام التسليم (Availability Weekly SLA & Delivery Tracking)'
-                  : 'المسار الأسبوعي ومتابعة التزام التسليم (FTTS Weekly Progress & Delivery Commitment)'}
+                  : isDigitalTransformation
+                    ? 'المسار الأسبوعي ومتابعة التزام التسليم (Digital Transformation Weekly Progress)'
+                    : 'المسار الأسبوعي ومتابعة التزام التسليم (FTTS Weekly Progress & Delivery Commitment)'}
               </h3>
               <span
                 className={`text-[11px] px-2 py-0.5 rounded-full font-bold border ${isAvailability
                   ? 'bg-teal-50 text-teal-800 border-teal-200/80'
-                  : 'bg-indigo-50 text-indigo-700 border-indigo-200/80'
+                  : isDigitalTransformation
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200/80'
+                    : 'bg-indigo-50 text-indigo-700 border-indigo-200/80'
                   }`}
               >
-                {isAvailability ? 'Availability' : companyLabelEn}
+                {isAvailability ? 'Availability' : isDigitalTransformation ? 'Digital Transformation' : companyLabelEn}
               </span>
               {selectedDeptFilter && (
                 <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
@@ -929,15 +1059,17 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             <p className="text-xs text-slate-500 mt-1">
               {isAvailability
                 ? `Availability Weekly SLA & Delivery Tracking (W1 – W${totalSteps}, 2026)`
-                : `FTTS Weekly Progress (Oct – Nov 2026): Cumulative Target, Cumulative Achieved, & Last 5 Weeks`}
+                : isDigitalTransformation
+                  ? `Digital Transformation Weekly Progress (Oct – Nov 2026): Cumulative Target, Cumulative Achieved, & Last 5 Weeks`
+                  : `FTTS Weekly Progress (Oct – Nov 2026): Cumulative Target, Cumulative Achieved, & Last 5 Weeks`}
             </p>
           </div>
         </div>
 
         {/* View Mode & Operator Switcher */}
         <div className="flex items-center gap-2.5 flex-wrap justify-end">
-          {/* Operator Selector Pills (When not in Availability mode) */}
-          {!isAvailability && (
+          {/* Operator Selector Pills (FTTS Mobile Mode ONLY — hidden in Availability & Digital Transformation) */}
+          {!isAvailability && !isDigitalTransformation && (
             <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
               <button
                 onClick={() => setSelectedOperator('All')}
@@ -1023,14 +1155,20 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             <div className="hidden sm:flex items-center gap-2 text-xs font-mono">
               <span className="bg-sky-50 text-sky-800 border border-sky-200 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
                 <Target className="w-3.5 h-3.5 text-sky-600" />
-                <span>المعدل المطلوب (W2-Nov): <strong>{operatorRollout.latestWeek.targetRate}</strong></span>
+                <span>
+                  {isDigitalTransformation ? 'المستهدف (Digital Transformation): ' : 'المعدل المطلوب (W4-Nov): '}
+                  <strong>{operatorRollout.latestWeek.targetRate}</strong>
+                </span>
               </span>
               <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                 <span>تم التسليم: <strong>{operatorRollout.latestWeek.delivered}</strong></span>
               </span>
               <span className="bg-slate-900 text-white px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 shadow-2xs">
-                <span>إجمالي المواقع: <strong>{operatorRollout.latestWeek.totalSites}</strong></span>
+                <span>
+                  {isDigitalTransformation ? 'إجمالي المشروعات: ' : 'إجمالي المواقع: '}
+                  <strong>{operatorRollout.latestWeek.totalSites}</strong>
+                </span>
               </span>
             </div>
           )}
@@ -1067,14 +1205,24 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             {viewMode === 'cumulative' && (
               <div className="flex items-center gap-1.5 text-purple-700">
                 <span className="w-3.5 h-1 bg-purple-500 rounded-full inline-block border-b-2 border-dashed border-purple-500 shrink-0"></span>
-                <span>إجمالي عدد المواقع (Total Mobile Sites)</span>
+                <span>
+                  {isDigitalTransformation
+                    ? 'إجمالي مشروعات التحول الرقمي (Total Digital Transformation Projects)'
+                    : 'إجمالي عدد المواقع (Total Mobile Sites)'}
+                </span>
               </div>
             )}
           </div>
         )}
 
         <div className="text-[11px] text-slate-500 font-normal">
-          <span>{isAvailability ? 'Availability Weekly Tracking • 2026' : 'FTTS Weekly Rollout • Oct – Nov 2026'}</span>
+          <span>
+            {isAvailability
+              ? 'Availability Weekly Tracking • 2026'
+              : isDigitalTransformation
+                ? 'Digital Transformation Weekly Tracking • Oct – Nov 2026'
+                : 'FTTS Weekly Rollout • Oct – Nov 2026'}
+          </span>
         </div>
       </div>
 
@@ -2579,7 +2727,11 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                   </span>
                 </div>
                 <span className="text-[11px] text-slate-500 font-semibold">
-                  Operator: <strong className="text-indigo-700">{selectedOperator === 'All' ? 'All Operators' : selectedOperator}</strong>
+                  {isDigitalTransformation ? (
+                    <>Scope: <strong className="text-emerald-700">Digital Transformation</strong></>
+                  ) : (
+                    <>Operator: <strong className="text-indigo-700">{selectedOperator === 'All' ? 'All Operators' : selectedOperator}</strong></>
+                  )}
                 </span>
               </div>
 
@@ -2589,7 +2741,9 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                   <span className="text-lg sm:text-xl font-black text-sky-800 font-mono">
                     {activeOpWeek.targetRate}
                   </span>
-                  <span className="text-[10px] text-sky-600 block font-semibold">غير المنتهي / غير المشغل فايبر</span>
+                  <span className="text-[10px] text-sky-600 block font-semibold">
+                    {isDigitalTransformation ? 'إجمالي مستهدف مشروعات التحول الرقمي' : 'غير المنتهي / غير المشغل فايبر'}
+                  </span>
                 </div>
 
                 <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-center space-y-0.5">
@@ -2627,7 +2781,9 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-indigo-600" />
                     <h4 className="text-xs sm:text-sm font-black text-slate-800">
-                      تفصيل الإدارات العامة لتنفيذ الشبكات (Oct – Nov 2026)
+                      {isDigitalTransformation
+                        ? 'تفصيل الإدارات العامة للتنفيذ — التحول الرقمي (Oct – Nov 2026)'
+                        : 'تفصيل الإدارات العامة لتنفيذ الشبكات (Oct – Nov 2026)'}
                 </h4>
               </div>
               <span className="text-[11px] text-slate-500 font-medium">
