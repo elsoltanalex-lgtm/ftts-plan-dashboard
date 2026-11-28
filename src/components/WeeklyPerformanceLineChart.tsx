@@ -196,12 +196,23 @@ function getWeekNumber(d: Date): { year: number; week: number } {
   return { year: date.getUTCFullYear(), week: Math.max(1, Math.min(52, weekNo)) };
 }
 
-// Generate smooth cubic bezier SVG path starting from the origin (0,0)
-function getSmoothCurvePath(points: { x: number; y: number }[]): string {
+// Generate smooth cubic bezier SVG path clamped strictly within vertical plot bounds
+function getSmoothCurvePath(
+  points: { x: number; y: number }[],
+  minY?: number,
+  maxY?: number
+): string {
   if (points.length === 0) return '';
   if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
 
-  let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  const clampY = (y: number) => {
+    let v = y;
+    if (minY !== undefined) v = Math.max(minY, v);
+    if (maxY !== undefined) v = Math.min(maxY, v);
+    return v;
+  };
+
+  let d = `M ${points[0].x.toFixed(1)} ${clampY(points[0].y).toFixed(1)}`;
   for (let i = 0; i < points.length - 1; i++) {
     const p0 = points[i === 0 ? i : i - 1];
     const p1 = points[i];
@@ -209,12 +220,12 @@ function getSmoothCurvePath(points: { x: number; y: number }[]): string {
     const p3 = points[i + 2] || p2;
 
     const cp1x = p1.x + (p2.x - p0.x) / 6;
-    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp1y = clampY(p1.y + (p2.y - p0.y) / 6);
 
     const cp2x = p2.x - (p3.x - p1.x) / 6;
-    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    const cp2y = clampY(p2.y - (p3.y - p1.y) / 6);
 
-    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${clampY(p2.y).toFixed(1)}`;
   }
   return d;
 }
@@ -691,12 +702,12 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
   // ─────────────────────────────────────────────────────────────
   // 3. SVG GEOMETRY AND SCALING (Origin 0,0 strictly anchored)
   // ─────────────────────────────────────────────────────────────
-  const svgWidth = 1000;
-  const svgHeight = 360;
-  const marginLeft = 65;
-  const marginRight = 35;
-  const marginTop = 30;
-  const marginBottom = 55;
+  const svgWidth = 1080;
+  const svgHeight = 300;
+  const marginLeft = 56;
+  const marginRight = 56;
+  const marginTop = 22;
+  const marginBottom = 48;
 
   const chartWidth = svgWidth - marginLeft - marginRight;
   const chartHeight = svgHeight - marginTop - marginBottom;
@@ -704,10 +715,10 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
   const originX = marginLeft;
   const originY = svgHeight - marginBottom;
 
-  // Total steps on X-axis: 6 weeks for operators, 47..52 for Availability
-  const totalSteps = isAvailability ? availabilityStats.weeklyPoints.length : operatorRollout.weeks.length;
+  // Total steps on X-axis: 8 weeks for operators, 47..52 for Availability
+  const totalSteps = Math.max(1, isAvailability ? availabilityStats.weeklyPoints.length : operatorRollout.weeks.length);
 
-  // Maximum value for Y scaling
+  // Maximum value for Y scaling (includes every rendered series so nothing spills above top axis)
   const maxY = useMemo(() => {
     if (isAvailability) {
       if (viewMode === 'cumulative') {
@@ -715,35 +726,38 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
           10,
           ...availabilityStats.weeklyPoints.map((d) => Math.max(d.cumTarget, d.cumAchieved, d.cumOverdue))
         );
-        return Math.max(10, Math.ceil((maxVal * 1.15) / 10) * 10);
+        return Math.max(10, Math.ceil((maxVal * 1.12) / 10) * 10);
       } else {
         const maxWeekly = Math.max(
           1,
           ...availabilityStats.weeklyPoints.map((d) => Math.max(d.targetThisWeek, d.achievedThisWeek, d.overdueThisWeek))
         );
-        return Math.max(5, Math.ceil((maxWeekly * 1.25) / 5) * 5);
+        return Math.max(5, Math.ceil((maxWeekly * 1.2) / 5) * 5);
       }
     } else {
       // Operator Mode (supports both Cumulative & Weekly views)
       if (viewMode === 'cumulative') {
         const maxSite = Math.max(
           10,
-          ...operatorRollout.weeks.map((d) => Math.max(d.targetRate, d.delivered, d.deliveredLast5Weeks))
+          ...operatorRollout.weeks.map((d) => Math.max(d.totalSites, d.targetRate, d.delivered, d.deliveredLast5Weeks))
         );
-        return Math.max(10, Math.ceil((maxSite * 1.15) / 10) * 10);
+        return Math.max(10, Math.ceil((maxSite * 1.1) / 10) * 10);
       } else {
         const maxWeekly = Math.max(
           5,
           ...operatorRollout.weeks.map((d) => Math.max(d.deliveredThisWeek, d.deliveredLast5Weeks))
         );
-        return Math.max(5, Math.ceil((maxWeekly * 1.25) / 5) * 5);
+        return Math.max(5, Math.ceil((maxWeekly * 1.2) / 5) * 5);
       }
     }
   }, [isAvailability, viewMode, availabilityStats.weeklyPoints, operatorRollout.weeks]);
 
-  // Coordinate scales
+  // Coordinate scales (strictly clamped within plot bounds)
   const getX = (stepIndex: number) => originX + (stepIndex / totalSteps) * chartWidth;
-  const getY = (val: number) => originY - (Math.max(0, val) / (maxY || 1)) * chartHeight;
+  const getY = (val: number) => {
+    const ratio = Math.min(1, Math.max(0, val / (maxY || 1)));
+    return originY - ratio * chartHeight;
+  };
 
   // ── Availability Points ──
   const availabilityTargetPoints = useMemo(() => {
@@ -806,14 +820,14 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
     return pts;
   }, [isAvailability, operatorRollout.weeks, originX, originY, maxY]);
 
-  // Smooth Curves
-  const availTargetCurve = useMemo(() => getSmoothCurvePath(availabilityTargetPoints), [availabilityTargetPoints]);
-  const availAchievedCurve = useMemo(() => getSmoothCurvePath(availabilityAchievedPoints), [availabilityAchievedPoints]);
-  const availOverdueCurve = useMemo(() => getSmoothCurvePath(availabilityOverduePoints), [availabilityOverduePoints]);
+  // Smooth Curves (strictly clamped within [marginTop, originY])
+  const availTargetCurve = useMemo(() => getSmoothCurvePath(availabilityTargetPoints, marginTop, originY), [availabilityTargetPoints, marginTop, originY]);
+  const availAchievedCurve = useMemo(() => getSmoothCurvePath(availabilityAchievedPoints, marginTop, originY), [availabilityAchievedPoints, marginTop, originY]);
+  const availOverdueCurve = useMemo(() => getSmoothCurvePath(availabilityOverduePoints, marginTop, originY), [availabilityOverduePoints, marginTop, originY]);
 
-  const opTargetCurve = useMemo(() => getSmoothCurvePath(operatorTargetPoints), [operatorTargetPoints]);
-  const opDeliveredCurve = useMemo(() => getSmoothCurvePath(operatorDeliveredPoints), [operatorDeliveredPoints]);
-  const opTotalCurve = useMemo(() => getSmoothCurvePath(operatorTotalSitesPoints), [operatorTotalSitesPoints]);
+  const opTargetCurve = useMemo(() => getSmoothCurvePath(operatorTargetPoints, marginTop, originY), [operatorTargetPoints, marginTop, originY]);
+  const opDeliveredCurve = useMemo(() => getSmoothCurvePath(operatorDeliveredPoints, marginTop, originY), [operatorDeliveredPoints, marginTop, originY]);
+  const opTotalCurve = useMemo(() => getSmoothCurvePath(operatorTotalSitesPoints, marginTop, originY), [operatorTotalSitesPoints, marginTop, originY]);
 
   // Area Paths
   const availTargetArea = useMemo(() => {
@@ -871,27 +885,27 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
   }, [selectedOperator]);
 
   return (
-    <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-7 shadow-sm my-6 transition-all duration-300">
+    <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-sm my-5 overflow-x-clip transition-all duration-300">
       {/* ── Top Header Section ── */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between pb-5 mb-5 border-b border-slate-100 gap-4">
-        <div className="flex items-center gap-3.5">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between pb-3.5 mb-3.5 border-b border-slate-100 gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <div
-            className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-md ring-4 ${isAvailability
+            className={`w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-sm ring-2 shrink-0 ${isAvailability
               ? 'bg-gradient-to-br from-teal-600 via-sky-600 to-indigo-700 ring-teal-50'
               : 'bg-gradient-to-br from-indigo-600 via-sky-600 to-purple-700 ring-indigo-50'
               }`}
           >
-            {isAvailability ? <CalendarCheck2 className="w-6 h-6" /> : <Smartphone className="w-6 h-6" />}
+            {isAvailability ? <CalendarCheck2 className="w-5 h-5" /> : <Smartphone className="w-5 h-5" />}
           </div>
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h3 className="text-base sm:text-lg font-black text-slate-800 leading-tight">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm sm:text-base font-black text-slate-800 leading-tight">
                 {isAvailability
                   ? 'المسار الأسبوعي ومتابعة التزام التسليم (Availability Weekly SLA & Delivery Tracking)'
                   : 'المسار الأسبوعي ومتابعة التزام التسليم (FTTS Weekly Progress & Delivery Commitment)'}
               </h3>
               <span
-                className={`text-xs px-2.5 py-0.5 rounded-full font-bold border ${isAvailability
+                className={`text-[11px] px-2 py-0.5 rounded-full font-bold border ${isAvailability
                   ? 'bg-teal-50 text-teal-800 border-teal-200/80'
                   : 'bg-indigo-50 text-indigo-700 border-indigo-200/80'
                   }`}
@@ -1024,36 +1038,38 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
       </div>
 
       {/* ── Legend Bar ── */}
-      <div className="flex items-center justify-between mb-3 px-2 text-xs font-bold flex-wrap gap-2">
+      <div className="flex items-center justify-between mb-2.5 px-1 text-[11px] font-bold flex-wrap gap-2">
         {isAvailability ? (
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2 text-sky-700">
-              <span className="w-4 h-1.5 bg-sky-500 rounded-full inline-block"></span>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5 text-sky-700">
+              <span className="w-3.5 h-1 bg-sky-500 rounded-full inline-block shrink-0"></span>
               <span>المستهدف / التارجت (نافذة 3 أشهر من تاريخ السداد)</span>
             </div>
-            <div className="flex items-center gap-2 text-emerald-700">
-              <span className="w-4 h-1.5 bg-emerald-500 rounded-full inline-block"></span>
+            <div className="flex items-center gap-1.5 text-emerald-700">
+              <span className="w-3.5 h-1 bg-emerald-500 rounded-full inline-block shrink-0"></span>
               <span>ما تم تحقيقه (تم التسليم الفعلي)</span>
             </div>
-            <div className="flex items-center gap-2 text-rose-700">
-              <span className="w-4 h-1.5 bg-rose-500 rounded-full inline-block border-b-2 border-dashed border-rose-600"></span>
+            <div className="flex items-center gap-1.5 text-rose-700">
+              <span className="w-3.5 h-1 bg-rose-500 rounded-full inline-block border-b-2 border-dashed border-rose-600 shrink-0"></span>
               <span>تجاوز المدة ولم يتم التسليم (متأخر عن 3 أشهر)</span>
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2 text-sky-700">
-              <span className="w-3.5 h-1 bg-sky-600 rounded-full inline-block"></span>
-              <span>المعدل المطلوب تسليمه (Required Target Rate)</span>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5 text-sky-700">
+              <span className="w-3.5 h-1 bg-sky-600 rounded-full inline-block shrink-0"></span>
+              <span>{viewMode === 'cumulative' ? 'المعدل المطلوب تسليمه (Required Target Rate)' : 'المسلمة آخر 5 أسابيع (Last 5 Weeks)'}</span>
             </div>
-            <div className="flex items-center gap-2 text-emerald-700">
-              <span className="w-3.5 h-1 bg-emerald-500 rounded-full inline-block"></span>
-              <span>ما تم تسليمه فعلياً (Actual Delivered Sites)</span>
+            <div className="flex items-center gap-1.5 text-emerald-700">
+              <span className="w-3.5 h-1 bg-emerald-500 rounded-full inline-block shrink-0"></span>
+              <span>{viewMode === 'cumulative' ? 'ما تم تسليمه فعلياً (Actual Delivered Sites)' : 'الإنجاز الأسبوعي (Delivered This Week)'}</span>
             </div>
-            <div className="flex items-center gap-2 text-purple-700">
-              <span className="w-3.5 h-1 bg-purple-500 rounded-full inline-block border-b-2 border-dashed border-purple-500"></span>
-              <span>إجمالي عدد المواقع (Total Mobile Sites)</span>
-            </div>
+            {viewMode === 'cumulative' && (
+              <div className="flex items-center gap-1.5 text-purple-700">
+                <span className="w-3.5 h-1 bg-purple-500 rounded-full inline-block border-b-2 border-dashed border-purple-500 shrink-0"></span>
+                <span>إجمالي عدد المواقع (Total Mobile Sites)</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -1063,26 +1079,37 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
       </div>
 
       {/* ── Main SVG Line Chart Container ── */}
-      <div className="relative select-none">
-        <svg
-          viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-          className="w-full h-auto overflow-visible drop-shadow-2xs"
-        >
-          <defs>
-            {/* Target Area Gradient */}
-            <linearGradient id="targetAreaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.22" />
-              <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.0" />
-            </linearGradient>
+      <div className="relative select-none rounded-2xl border border-slate-100 bg-slate-50/40 px-1.5 py-2 sm:px-3 sm:py-2.5">
+        <div className="w-full overflow-hidden">
+          <svg
+            viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+            className="w-full h-auto block overflow-hidden"
+          >
+            <defs>
+              {/* Strict Plot Area ClipPath so no curve/glow ever spills outside axes */}
+              <clipPath id="weeklyChartPlotClip">
+                <rect
+                  x={originX - 2}
+                  y={marginTop - 4}
+                  width={chartWidth + 4}
+                  height={chartHeight + 8}
+                />
+              </clipPath>
 
-            {/* Glowing Stroke Filter */}
-            <filter id="lineGlowEmerald" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#10b981" floodOpacity="0.35" />
-            </filter>
-            <filter id="targetGlowSky" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#0284c7" floodOpacity="0.3" />
-            </filter>
-          </defs>
+              {/* Target Area Gradient */}
+              <linearGradient id="targetAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.18" />
+                <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.0" />
+              </linearGradient>
+
+              {/* Glowing Stroke Filter */}
+              <filter id="lineGlowEmerald" x="-10%" y="-10%" width="120%" height="120%">
+                <feDropShadow dx="0" dy="1.5" stdDeviation="2" floodColor="#10b981" floodOpacity="0.28" />
+              </filter>
+              <filter id="targetGlowSky" x="-10%" y="-10%" width="120%" height="120%">
+                <feDropShadow dx="0" dy="1.5" stdDeviation="2" floodColor="#0284c7" floodOpacity="0.24" />
+              </filter>
+            </defs>
 
           {/* Horizontal Gridlines & Y-axis Labels */}
           {yTicks.map((tick, idx) => (
@@ -1124,39 +1151,41 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
               const showTick = w === 1 || w % 5 === 0 || w === totalSteps;
               if (!showTick) return null;
               const x = getX(w);
+              const isLast = w === totalSteps;
               return (
                 <g key={w}>
-                  <line x1={x} y1={originY} x2={x} y2={originY + 6} stroke="#64748b" strokeWidth="1.5" />
+                  <line x1={x} y1={originY} x2={x} y2={originY + 5} stroke="#64748b" strokeWidth="1.25" />
                   <text
-                    x={x}
-                    y={originY + 22}
-                    textAnchor="middle"
-                    className={`text-[11px] font-mono ${w === totalSteps ? 'font-black fill-teal-700 font-bold' : 'font-semibold fill-slate-500'
+                    x={isLast ? x + 4 : x}
+                    y={originY + 20}
+                    textAnchor={isLast ? 'end' : 'middle'}
+                    className={`text-[10.5px] font-mono ${isLast ? 'font-black fill-teal-700 font-bold' : 'font-semibold fill-slate-500'
                       }`}
                   >
-                    {w === totalSteps ? `W${w} (Current)` : `W${w}`}
+                    {isLast ? `W${w} (Current)` : `W${w}`}
                   </text>
                 </g>
               );
             })
             : operatorRollout.weeks.map((w, idx) => {
               const x = getX(idx + 1);
+              const isLast = idx === operatorRollout.weeks.length - 1;
               return (
                 <g key={w.weekKey}>
-                  <line x1={x} y1={originY} x2={x} y2={originY + 6} stroke="#64748b" strokeWidth="1.5" />
+                  <line x1={x} y1={originY} x2={x} y2={originY + 5} stroke="#64748b" strokeWidth="1.25" />
                   <text
-                    x={x}
-                    y={originY + 20}
-                    textAnchor="middle"
-                    className={`text-[11px] font-bold ${idx === operatorRollout.weeks.length - 1 ? 'fill-sky-800 font-black' : 'fill-slate-600'
+                    x={isLast ? x + 6 : x}
+                    y={originY + 19}
+                    textAnchor={isLast ? 'end' : 'middle'}
+                    className={`text-[10.5px] font-bold ${isLast ? 'fill-sky-800 font-black' : 'fill-slate-600'
                       }`}
                   >
                     {w.weekDef.shortAr}
                   </text>
                   <text
-                    x={x}
-                    y={originY + 34}
-                    textAnchor="middle"
+                    x={isLast ? x + 6 : x}
+                    y={originY + 32}
+                    textAnchor={isLast ? 'end' : 'middle'}
                     className="text-[9px] font-mono fill-slate-400"
                   >
                     {w.weekDef.dateRangeAr.replace(', 2026', '')}
@@ -1166,10 +1195,10 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             })}
 
           {/* Origin (0,0) Intersection Indicator */}
-          <circle cx={originX} cy={originY} r="4" fill="#64748b" />
+          <circle cx={originX} cy={originY} r="3.5" fill="#64748b" />
           <text
             x={originX - 8}
-            y={originY + 16}
+            y={originY + 15}
             textAnchor="end"
             className="text-[10px] font-bold fill-slate-400 font-mono"
           >
@@ -1181,35 +1210,37 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
           {/* ───────────────────────────────────────────────────────── */}
           {isAvailability ? (
             <>
-              <path d={availTargetArea} fill="url(#targetAreaGrad)" />
-              <path
-                d={availTargetCurve}
-                fill="none"
-                stroke="#0284c7"
-                strokeWidth="2.75"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                filter="url(#targetGlowSky)"
-              />
-              <path
-                d={availAchievedCurve}
-                fill="none"
-                stroke="#10b981"
-                strokeWidth="3.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                filter="url(#lineGlowEmerald)"
-              />
-              <path
-                d={availOverdueCurve}
-                fill="none"
-                stroke="#ef4444"
-                strokeWidth="2.5"
-                strokeDasharray="5 4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity="0.9"
-              />
+              <g clipPath="url(#weeklyChartPlotClip)">
+                <path d={availTargetArea} fill="url(#targetAreaGrad)" />
+                <path
+                  d={availTargetCurve}
+                  fill="none"
+                  stroke="#0284c7"
+                  strokeWidth="2.25"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  filter="url(#targetGlowSky)"
+                />
+                <path
+                  d={availAchievedCurve}
+                  fill="none"
+                  stroke="#10b981"
+                  strokeWidth="2.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  filter="url(#lineGlowEmerald)"
+                />
+                <path
+                  d={availOverdueCurve}
+                  fill="none"
+                  stroke="#ef4444"
+                  strokeWidth="2"
+                  strokeDasharray="5 4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  opacity="0.9"
+                />
+              </g>
 
               {availabilityAchievedPoints.slice(1).map((pt, idx) => {
                 const isHovered = hoveredWeekIndex === idx;
@@ -1222,10 +1253,10 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                     key={`ach-${idx}`}
                     cx={pt.x}
                     cy={pt.y}
-                    r={isHovered ? 6 : 3.5}
+                    r={isHovered ? 5 : 3}
                     fill={isHovered ? '#10b981' : '#ffffff'}
                     stroke="#10b981"
-                    strokeWidth={isHovered ? '2.5' : '1.75'}
+                    strokeWidth={isHovered ? '2' : '1.5'}
                     className="transition-all duration-150"
                   />
                 );
@@ -1236,42 +1267,46 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             /* OPERATOR RENDER PATHS (Target Rate vs Actual Delivered)   */
             /* ───────────────────────────────────────────────────────── */
             <>
-              {/* Target Area Fill */}
-              <path d={opTargetArea} fill="url(#targetAreaGrad)" />
+              <g clipPath="url(#weeklyChartPlotClip)">
+                {/* Target Area Fill */}
+                <path d={opTargetArea} fill="url(#targetAreaGrad)" />
 
-              {/* Series 1: Total Mobile Sites Reference Line (Dashed) */}
-              <path
-                d={opTotalCurve}
-                fill="none"
-                stroke="#8b5cf6"
-                strokeWidth="2"
-                strokeDasharray="4 3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity="0.75"
-              />
+                {/* Series 1: Total Mobile Sites Reference Line (Cumulative Mode Only) */}
+                {viewMode === 'cumulative' && (
+                  <path
+                    d={opTotalCurve}
+                    fill="none"
+                    stroke="#8b5cf6"
+                    strokeWidth="1.75"
+                    strokeDasharray="4 3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity="0.75"
+                  />
+                )}
 
-              {/* Series 2: Required Target Rate (Sky Curve) */}
-              <path
-                d={opTargetCurve}
-                fill="none"
-                stroke="#0284c7"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                filter="url(#targetGlowSky)"
-              />
+                {/* Series 2: Required Target Rate (Sky Curve) */}
+                <path
+                  d={opTargetCurve}
+                  fill="none"
+                  stroke="#0284c7"
+                  strokeWidth="2.25"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  filter="url(#targetGlowSky)"
+                />
 
-              {/* Series 3: Actual Delivered (Emerald Curve) */}
-              <path
-                d={opDeliveredCurve}
-                fill="none"
-                stroke="#10b981"
-                strokeWidth="3.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                filter="url(#lineGlowEmerald)"
-              />
+                {/* Series 3: Actual Delivered (Emerald Curve) */}
+                <path
+                  d={opDeliveredCurve}
+                  fill="none"
+                  stroke="#10b981"
+                  strokeWidth="2.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  filter="url(#lineGlowEmerald)"
+                />
+              </g>
 
               {/* Circles on Target Rate Curve */}
               {operatorTargetPoints.slice(1).map((pt, idx) => {
@@ -1281,10 +1316,10 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                     key={`optgt-${idx}`}
                     cx={pt.x}
                     cy={pt.y}
-                    r={isHovered ? 5.5 : 3.5}
+                    r={isHovered ? 4.5 : 3}
                     fill={isHovered ? '#0284c7' : '#ffffff'}
                     stroke="#0284c7"
-                    strokeWidth="2"
+                    strokeWidth="1.75"
                     className="transition-all duration-150"
                   />
                 );
@@ -1298,10 +1333,10 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                     key={`opdel-${idx}`}
                     cx={pt.x}
                     cy={pt.y}
-                    r={isHovered ? 6.5 : 4}
+                    r={isHovered ? 5.5 : 3.5}
                     fill={isHovered ? '#10b981' : '#ffffff'}
                     stroke="#10b981"
-                    strokeWidth="2.5"
+                    strokeWidth="2"
                     className="transition-all duration-150"
                   />
                 );
@@ -1318,23 +1353,23 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
                 x2={hoveredPoint.x}
                 y2={originY}
                 stroke={isAvailability ? '#0284c7' : '#0ea5e9'}
-                strokeWidth="1.5"
+                strokeWidth="1.25"
                 strokeDasharray="4 3"
               />
               <circle
                 cx={hoveredPoint.x}
                 cy={hoveredPoint.y}
-                r="7"
+                r="5.5"
                 fill="#10b981"
                 stroke="#ffffff"
-                strokeWidth="2.5"
+                strokeWidth="2"
               />
               <circle
                 cx={hoveredPoint.x}
                 cy={hoveredPoint.y}
-                r="13"
+                r="10"
                 fill="#10b981"
-                opacity="0.2"
+                opacity="0.18"
               />
             </g>
           )}
@@ -1365,21 +1400,22 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
               />
             );
           })}
-        </svg>
+          </svg>
+        </div>
 
-        {/* ── Hover Tooltip (Interactive Floating Details Card) ── */}
+        {/* ── Hover Tooltip (Interactive Floating Details Card — Clamped to Bounds) ── */}
         {hoveredPoint && (
           <div
             className="absolute z-30 pointer-events-auto transition-all duration-75 animate-in fade-in zoom-in-95"
             style={{
-              left: `${(hoveredPoint.x / svgWidth) * 100}%`,
-              top: `${(hoveredPoint.y / svgHeight) * 100}%`,
-              transform: `translate(${hoveredPoint.x > svgWidth * 0.72
-                ? '-95%'
-                : hoveredPoint.x < svgWidth * 0.28
-                  ? '-5%'
+              left: `${Math.min(Math.max((hoveredPoint.x / svgWidth) * 100, 12), 88)}%`,
+              top: `${Math.min(Math.max((hoveredPoint.y / svgHeight) * 100, 12), 86)}%`,
+              transform: `translate(${hoveredPoint.x > svgWidth * 0.68
+                ? '-92%'
+                : hoveredPoint.x < svgWidth * 0.32
+                  ? '-8%'
                   : '-50%'
-                }, ${hoveredPoint.y < 150 ? '16px' : '-105%'})`,
+                }, ${hoveredPoint.y < svgHeight * 0.52 ? '14px' : 'calc(-100% - 14px)'})`,
             }}
             onMouseEnter={() => {
               if (leaveTimeoutRef.current) clearTimeout(leaveTimeoutRef.current);
@@ -1389,7 +1425,7 @@ export const WeeklyPerformanceLineChart: React.FC<WeeklyPerformanceLineChartProp
             }}
           >
             <div
-              className={`text-white p-3.5 rounded-2xl shadow-2xl border text-right min-w-[320px] max-w-[380px] backdrop-blur-md ${isAvailability
+              className={`text-white p-3 rounded-2xl shadow-2xl border text-right w-[min(86vw,320px)] max-w-[320px] max-h-[320px] overflow-y-auto backdrop-blur-md ${isAvailability
                 ? 'bg-slate-950/95 border-teal-500/40 shadow-teal-950/50'
                 : 'bg-slate-950/95 border-sky-400/40 shadow-sky-950/40'
                 }`}
