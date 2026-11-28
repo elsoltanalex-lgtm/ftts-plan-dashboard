@@ -54,11 +54,15 @@ export function formatSupabaseSaveError(error: any, siteCode?: string): string {
  * Synchronous check against currently loaded sites array (instant UI warning while typing)
  */
 function normalizeComparableCode(code: unknown): string {
-  return String(code ?? '')
+  const cleaned = String(code ?? '')
     .trim()
     .toUpperCase()
     .replace(/^(VDF-|VODAFONE-|ORG-|ORANGE-|ETAH-|WE-)/i, '')
     .trim();
+  if (/^\d+$/.test(cleaned)) {
+    return cleaned.replace(/^0+/, '') || '0';
+  }
+  return cleaned;
 }
 
 export function findDuplicateInLocalSites(
@@ -83,22 +87,22 @@ export function findDuplicateInLocalSites(
       const raw = matched.rawRecord || matched;
       const sector = String(
         matched.sector ||
-          raw['رئاسة قطاعات التنفيذ'] ||
-          raw['قطاع التنفيذ'] ||
-          raw['Sectore'] ||
-          raw['القطاع'] ||
-          'غير محدد'
+        raw['رئاسة قطاعات التنفيذ'] ||
+        raw['قطاع التنفيذ'] ||
+        raw['Sectore'] ||
+        raw['القطاع'] ||
+        'غير محدد'
       ).trim();
       const central = String(
         matched.central || raw['سنترال الربط'] || raw['السنترال'] || 'غير محدد'
       ).trim();
       const status = String(
         matched.classification ||
-          matched.status ||
-          raw['التصنيف النهائي'] ||
-          raw['التصنيف'] ||
-          raw['موقف التسليم'] ||
-          'غير محدد'
+        matched.status ||
+        raw['التصنيف النهائي'] ||
+        raw['التصنيف'] ||
+        raw['موقف التسليم'] ||
+        'غير محدد'
       ).trim();
       return {
         siteCode: norm,

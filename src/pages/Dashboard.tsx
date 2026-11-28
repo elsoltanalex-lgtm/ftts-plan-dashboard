@@ -26,6 +26,7 @@ import { ShieldCheck, Building2, Eye, LogIn, Lock, LogOut, Globe, Trash2, PlusCi
 import { isRecordInSector, toCanonicalSector, normalizeSectorName } from '../utils/sectorPermissions';
 import { isWeSpecialTarget } from '../utils/specialTarget';
 import { toFilterArray } from '../utils/filterUtils';
+import { matchesSiteSearchQuery } from '../utils/vodafoneNormalizer';
 import { getSiteCompetentAdmin } from '../data/siteAdminMapping';
 import { useWeRecords, useWeSiteCodes, exportToCSV, deleteRecord, deleteRecordsBulk } from '../hooks/useWeAPI';
 import { exportFullDatabaseBackup } from '../utils/backupExportService';
@@ -935,24 +936,9 @@ export const Dashboard: React.FC = () => {
         if (!activeObstacles.includes(obs)) return false;
       }
 
-      // 10. Quick Site Search Query (Site ID, Site Code, Site Name, Central)
+      // 10. Quick Site Search Query (Normalized Site Code/Key, Site Name, Central, Sector, Notes)
       if (searchQuery) {
-        const code = String(site?.siteCode || '').toLowerCase();
-        const id = String(site?.id || '').toLowerCase();
-        const name = String(site?.siteName || '').toLowerCase();
-        const central = String(site?.central || '').toLowerCase();
-        const sector = String(site?.sector || '').toLowerCase();
-        const notes = String(site?.notes || '').toLowerCase();
-
-        const matchSearch =
-          code.includes(searchQuery) ||
-          id.includes(searchQuery) ||
-          name.includes(searchQuery) ||
-          central.includes(searchQuery) ||
-          sector.includes(searchQuery) ||
-          notes.includes(searchQuery);
-
-        if (!matchSearch) return false;
+        if (!matchesSiteSearchQuery(site, searchQuery)) return false;
       }
 
       // 11. Etaha & Tahawol: 3 Classification Axes & Execution Responsibility

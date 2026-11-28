@@ -18,13 +18,19 @@ import {
 } from '../utils/deletedSitesSync';
 import { logActivity, buildRecordDiffSummary, getActiveActor } from '../utils/auditService';
 import { formatSupabaseSaveError } from '../utils/siteValidation';
+import {
+  normalizeVodafoneRecord,
+  normalizeCodeKey,
+  extractVodafoneSiteCode,
+  extractVodafoneSiteName,
+} from '../utils/vodafoneNormalizer';
 
 const STORAGE_KEY = 'ftts_vodafone_records_v1';
 const VODAFONE_TABLE_CANDIDATES = ['vodafone_records', 'vodafone', 'we_records'];
 
-export function mapVodafoneRecordToSiteRecord(r: VodafoneRecord, index = 0): SiteRecord {
-  const rawCode = r[' Site code'] || r['Site code'] || r['site code'] || r.site_code || `VDF-${index + 1}`;
-  const siteCode = String(rawCode).trim();
+export function mapVodafoneRecordToSiteRecord(rawInput: VodafoneRecord, index = 0): SiteRecord {
+  const r = normalizeVodafoneRecord(rawInput);
+  const siteCode = extractVodafoneSiteCode(r) || `VDF-${index + 1}`;
   const rawTasneef = String(r['التصنيف'] || '').trim();
 
   let status = 'جاري المعاينة';
@@ -72,17 +78,19 @@ export function mapVodafoneRecordToSiteRecord(r: VodafoneRecord, index = 0): Sit
   }
 
   const central = String(r['سنترال الربط'] || 'سنترال رئيسي').trim();
+  const explicitSiteName = extractVodafoneSiteName(r);
+  const displaySiteName = explicitSiteName || `موقع ${siteCode} - ${central}`;
   const sector = normalizeSectorName(String(r['رئاسة قطاعات التنفيذ'] || 'قطاع عام').trim()) || 'قطاع عام';
   const executionSector = normalizeSectorName(String(r['قطاع التنفيذ'] || '').trim());
   const generalAdmin = String(r['الادارة العامة لتنفيذ الشبكات'] || r['الادارة العامة للمنطقة'] || 'الإدارة العامة لتنفيذ الشبكات').trim();
   const competentAdmin = String(r['ادارة التنفيذ الفرعية'] || 'إدارة التنفيذ والمسارات').trim();
-  const obstacleReason = String(r['اسباب التعّذر'] || r['اسباب التعذر'] || r['الملاحظات'] || 'لا يوجد تعذر').trim();
+  const obstacleReason = String(r['اسباب المعوق'] || r['اسباب التعّذر'] || r['اسباب التعذر'] || r['الملاحظات'] || 'لا يوجد تعذر').trim();
   const expectedDate = r['التاريخ المتوقع للانتهاء'] || (r['خطة'] ? `${r['خطة']}-12-31` : '2026-12-31');
 
   return {
     id: `VDF-${siteCode}`,
     siteCode,
-    siteName: `موقع ${siteCode} - ${central}`,
+    siteName: displaySiteName,
     company: 'Vodafone',
     status,
     executionCategory,
@@ -134,14 +142,7 @@ export function mapVodafoneRecordToSiteRecord(r: VodafoneRecord, index = 0): Sit
 let inMemoryVodafoneRecords: VodafoneRecord[] = [];
 
 function normalizeVodafoneSector(r: VodafoneRecord): VodafoneRecord {
-  const sec = normalizeSectorName(r['رئاسة قطاعات التنفيذ']);
-  const execSec = normalizeSectorName(r['قطاع التنفيذ']);
-  if (sec === r['رئاسة قطاعات التنفيذ'] && execSec === r['قطاع التنفيذ']) return r;
-  return {
-    ...r,
-    ...(sec ? { 'رئاسة قطاعات التنفيذ': sec } : {}),
-    ...(execSec ? { 'قطاع التنفيذ': execSec } : {}),
-  };
+  return normalizeVodafoneRecord(r);
 }
 
 function loadStoredVodafoneRecords(): VodafoneRecord[] {
@@ -187,12 +188,13 @@ function saveStoredVodafoneRecords(records: VodafoneRecord[]): void {
 }
 
 export function fetchVodafoneSiteRecord(code: string): VodafoneRecord | null {
-  const norm = String(code ?? '').trim().toUpperCase();
+  const normKey = normalizeCodeKey(code);
+  if (!normKey) return null;
   const records = loadStoredVodafoneRecords();
-  return records.find((r) => {
-    const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
-    return c === norm;
-  }) || null;
+  return (
+    records.find((r) => normalizeCodeKey(extractVodafoneSiteCode(r)) === normKey) ||
+    null
+  );
 }
 
 export function useVodafoneAPI() {
@@ -228,41 +230,38 @@ export function useVodafoneAPI() {
       if (fetchedRows.length > 0) {
         const baseMap = new Map<string, VodafoneRecord>();
         loadStoredVodafoneRecords().forEach((r) => {
-          const c = String(r[' Site code'] || r['Site code'] || r['site code'] || r.site_code || '').trim().toUpperCase();
-          if (c && !deletedCodes.has(c)) baseMap.set(c, r);
+          const normRec = normalizeVodafoneRecord(r);
+          const code = extractVodafoneSiteCode(normRec);
+          const key = normalizeCodeKey(code);
+          if (key && !deletedCodes.has(code.toUpperCase()) && !deletedCodes.has(key) && !deletedCodes.has(`VDF-${key}`)) {
+            baseMap.set(key, normRec);
+          }
         });
         fetchedRows.forEach(({ row }) => {
-          const rowData = row.data && typeof row.data === 'object' ? row.data : row;
-          const rawCodeFromRow =
-            rowData['Site code'] ||
-            rowData['site code'] ||
-            rowData[' Site code'] ||
-            rowData.site_code ||
-            row.site_code ||
-            row['site code'] ||
-            row['Site code'] ||
-            row.id ||
-            '';
-          const code = String(rawCodeFromRow).trim().toUpperCase().replace(/^VDF-/, '');
-          if (code && code !== SYNC_DELETED_CODES_SITE_CODE && !deletedCodes.has(code)) {
-            const prev = baseMap.get(code) || {};
-            const mergedRow: VodafoneRecord = normalizeVodafoneSector({
+          const normCloud = normalizeVodafoneRecord(row);
+          const code = extractVodafoneSiteCode(normCloud);
+          const key = normalizeCodeKey(code);
+          if (
+            key &&
+            code !== SYNC_DELETED_CODES_SITE_CODE &&
+            !deletedCodes.has(code.toUpperCase()) &&
+            !deletedCodes.has(key) &&
+            !deletedCodes.has(`VDF-${key}`)
+          ) {
+            const prev = baseMap.get(key) || {};
+            const mergedRow: VodafoneRecord = normalizeVodafoneRecord({
               ...prev,
-              ...rowData,
-              _id: isUUID(row.id) ? row.id : (rowData._id || prev._id),
-              company: 'Vodafone',
-              ' Site code': code,
-              'Site code': code,
-              'site code': code,
-              site_code: code,
+              ...normCloud,
+              _id: isUUID(row.id) ? row.id : (normCloud._id || prev._id),
               ...(row.updated_at ? { _updatedAt: row.updated_at } : {}),
             });
-            baseMap.set(code, mergedRow);
+            baseMap.set(key, mergedRow);
           }
         });
         const merged = Array.from(baseMap.values()).filter((r) => {
-          const c = String(r[' Site code'] || r['Site code'] || r['site code'] || r.site_code || '').trim().toUpperCase();
-          return !deletedCodes.has(c);
+          const code = extractVodafoneSiteCode(r);
+          const key = normalizeCodeKey(code);
+          return !deletedCodes.has(code.toUpperCase()) && !deletedCodes.has(key) && !deletedCodes.has(`VDF-${key}`);
         });
         saveStoredVodafoneRecords(merged);
         setVodafoneRecords(merged);
@@ -270,8 +269,9 @@ export function useVodafoneAPI() {
       }
 
       const records = loadStoredVodafoneRecords().filter((r) => {
-        const c = String(r[' Site code'] || r['Site code'] || r['site code'] || r.site_code || '').trim().toUpperCase();
-        return !deletedCodes.has(c);
+        const code = extractVodafoneSiteCode(r);
+        const key = normalizeCodeKey(code);
+        return !deletedCodes.has(code.toUpperCase()) && !deletedCodes.has(key) && !deletedCodes.has(`VDF-${key}`);
       });
       setVodafoneRecords(records);
     } catch (err: any) {
@@ -331,15 +331,14 @@ export function useVodafoneAPI() {
 
   const saveVodafoneRecord = useCallback(async (record: VodafoneRecord): Promise<{ success: boolean; cloudSaved?: boolean; message?: string; error?: string }> => {
     try {
-      const rawCode = record[' Site code'] || record['Site code'] || record['site code'] || record.site_code;
-      const code = String(rawCode ?? '').trim().toUpperCase();
-      if (!code) return { success: false, error: 'كود الموقع مطلوب' };
+      const code = extractVodafoneSiteCode(record).toUpperCase();
+      const codeKey = normalizeCodeKey(code);
+      if (!code || !codeKey) return { success: false, error: 'يرجى إدخال كود الموقع قبل الحفظ (Site Code)' };
 
       const current = loadStoredVodafoneRecords();
-      const idx = current.findIndex((r) => {
-        const c = String(r[' Site code'] || r['Site code'] || r['site code'] || r.site_code || '').trim().toUpperCase();
-        return c === code;
-      });
+      const idx = current.findIndex(
+        (r) => normalizeCodeKey(extractVodafoneSiteCode(r)) === codeKey
+      );
       const oldRec = idx >= 0 ? current[idx] : null;
 
       const now = new Date().toISOString();
@@ -429,8 +428,10 @@ export function useVodafoneAPI() {
         if (table === 'vodafone_records' || table === 'vodafone') {
           const p: Record<string, any> = {
             site_code: physicalSiteCode,
+            site_name: toNullableText(extractVodafoneSiteName(dataObj)),
             sector: toNullableText(dataObj['رئاسة قطاعات التنفيذ'] || dataObj['قطاع التنفيذ']),
             execution_sector: toNullableText(dataObj['قطاع التنفيذ']),
+            governorate: toNullableText(dataObj['المحافظه']),
             central: toNullableText(dataObj['سنترال الربط']),
             status: toNullableText(dataObj['التصنيف'] || dataObj.classification) || 'جاري العمل مدني',
             data: dataObj,
@@ -755,21 +756,21 @@ export function useVodafoneAPI() {
               const payload: any =
                 table === 'vodafone_records' || table === 'vodafone'
                   ? {
-                      site_code: physicalCode,
-                      sector: String(finalRec['رئاسة قطاعات التنفيذ'] || finalRec['قطاع التنفيذ'] || '').trim() || null,
-                      execution_sector: String(finalRec['قطاع التنفيذ'] || '').trim() || null,
-                      central: String(finalRec['سنترال الربط'] || '').trim() || null,
-                      status: String(finalRec['التصنيف'] || '').trim() || 'جاري العمل مدني',
-                      data: finalRec,
-                      updated_at: now,
-                    }
+                    site_code: physicalCode,
+                    sector: String(finalRec['رئاسة قطاعات التنفيذ'] || finalRec['قطاع التنفيذ'] || '').trim() || null,
+                    execution_sector: String(finalRec['قطاع التنفيذ'] || '').trim() || null,
+                    central: String(finalRec['سنترال الربط'] || '').trim() || null,
+                    status: String(finalRec['التصنيف'] || '').trim() || 'جاري العمل مدني',
+                    data: finalRec,
+                    updated_at: now,
+                  }
                   : {
-                      site_code: physicalCode,
-                      'site code': physicalCode,
-                      'Site Status': finalRec['التصنيف'] || 'جاري العمل مدني',
-                      data: finalRec,
-                      updated_at: now,
-                    };
+                    site_code: physicalCode,
+                    'site code': physicalCode,
+                    'Site Status': finalRec['التصنيف'] || 'جاري العمل مدني',
+                    data: finalRec,
+                    updated_at: now,
+                  };
               if (finalRec._id && isUUID(finalRec._id)) {
                 payload.id = finalRec._id;
               }

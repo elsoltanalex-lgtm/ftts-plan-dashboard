@@ -15,6 +15,7 @@ import {
 } from '../utils/siteValidation';
 import { DuplicateSiteAlertBanner } from './DuplicateSiteAlertBanner';
 import { normalizeSectorName } from '../utils/sectorPermissions';
+import { normalizeCodeKey, normalizeSearchText, extractVodafoneSiteName } from '../utils/vodafoneNormalizer';
 import {
   X,
   PlusCircle,
@@ -346,17 +347,35 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
     setSuccessMessage('');
   }, [isOpen, mode, initialSiteCode, initialRecord]);
 
-  // Search filtered site codes
+  // Search filtered site codes (matches normalized code key, site name, and central)
   const filteredCodes = useMemo(() => {
-    if (!siteCodeSearch.trim()) return allSiteCodes.slice(0, 40);
-    const q = siteCodeSearch.trim().toLowerCase();
-    return allSiteCodes.filter((c) => String(c || '').toLowerCase().includes(q)).slice(0, 40);
-  }, [allSiteCodes, siteCodeSearch]);
+    const trimmed = siteCodeSearch.trim();
+    if (!trimmed) return allSiteCodes.slice(0, 40);
+    const qNorm = normalizeSearchText(trimmed);
+    const qKey = normalizeCodeKey(trimmed);
+    return allSiteCodes
+      .filter((c) => {
+        const codeStr = String(c || '').trim();
+        const codeKey = normalizeCodeKey(codeStr);
+        if (codeStr.toLowerCase().includes(qNorm) || (qKey && (codeKey === qKey || codeKey.includes(qKey)))) {
+          return true;
+        }
+        const site = sitesData.find((s) => normalizeCodeKey(s?.siteCode) === codeKey);
+        if (!site) return false;
+        const name = extractVodafoneSiteName(site.rawRecord) || site.siteName || '';
+        return (
+          normalizeSearchText(name).includes(qNorm) ||
+          normalizeSearchText(site.central || '').includes(qNorm)
+        );
+      })
+      .slice(0, 40);
+  }, [allSiteCodes, siteCodeSearch, sitesData]);
 
   const handleSelectSiteCode = (code: string) => {
     const norm = String(code || '').trim().toUpperCase();
+    const targetKey = normalizeCodeKey(norm);
     const site = sitesData.find(
-      (s) => String(s?.siteCode || '').trim().toUpperCase() === norm
+      (s) => normalizeCodeKey(s?.siteCode) === targetKey
     );
     const raw = (site?.rawRecord as VodafoneRecord) || null;
     const isSpecial = Boolean(

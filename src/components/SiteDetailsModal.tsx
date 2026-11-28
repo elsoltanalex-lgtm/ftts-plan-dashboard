@@ -30,6 +30,7 @@ import { isRecordInSector } from '../utils/sectorPermissions';
 import { isWeSpecialTarget } from '../utils/specialTarget';
 import { BulkDeleteModal } from './BulkDeleteModal';
 import { parseToDateInputValue } from '../utils/filterUtils';
+import { matchesSiteSearchQuery } from '../utils/vodafoneNormalizer';
 
 import type { SiteRecord } from '../types/dashboard';
 import { STATUS_CONFIG } from '../data/dashboardData';
@@ -90,29 +91,9 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
     return sites.filter((site) => isRecordInSector(user.sector, site));
   }, [sites, user]);
 
-  const filteredSites = authorizedSites.filter((site) => {
-    const q = (searchTerm || '').toLowerCase();
-    const code = String(site?.siteCode || '').toLowerCase();
-    const name = String(site?.siteName || '').toLowerCase();
-    const central = String(site?.central || '').toLowerCase();
-    const sector = String(site?.sector || '').toLowerCase();
-    const company = String(site?.company || '').toLowerCase();
-    const status = String(site?.status || '').toLowerCase();
-    const notes = String(site?.notes || '').toLowerCase();
-    const obstacleReason = String(site?.obstacleReason || '').toLowerCase();
-    const civilContractor = String(site?.civilContractor || '').toLowerCase();
-    return (
-      code.includes(q) ||
-      name.includes(q) ||
-      central.includes(q) ||
-      sector.includes(q) ||
-      company.includes(q) ||
-      status.includes(q) ||
-      notes.includes(q) ||
-      obstacleReason.includes(q) ||
-      civilContractor.includes(q)
-    );
-  });
+  const filteredSites = authorizedSites.filter((site) =>
+    matchesSiteSearchQuery(site, searchTerm)
+  );
 
   const totalPages = Math.ceil(filteredSites.length / pageSize) || 1;
   const pagedSites = filteredSites.slice(
