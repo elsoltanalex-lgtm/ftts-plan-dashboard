@@ -166,7 +166,22 @@ function saveStoredVodafoneRecords(records: VodafoneRecord[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   } catch {
-    // storage limit fallback
+    // Storage quota exceeded (e.g. large inline Base64 attachment) — strip inline data URLs only for localStorage copy
+    try {
+      const compact = records.map((r) => {
+        const hasInlineDoc = typeof r.documentUrl === 'string' && r.documentUrl.startsWith('data:') && r.documentUrl.length > 40000;
+        const hasInlineAtt = typeof r.attachmentUrl === 'string' && r.attachmentUrl.startsWith('data:') && r.attachmentUrl.length > 40000;
+        if (!hasInlineDoc && !hasInlineAtt) return r;
+        return {
+          ...r,
+          documentUrl: hasInlineDoc ? '' : r.documentUrl,
+          attachmentUrl: hasInlineAtt ? '' : r.attachmentUrl,
+        };
+      });
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(compact));
+    } catch {
+      // keep in-memory copy intact
+    }
   }
 }
 
@@ -206,12 +221,30 @@ export function useVodafoneAPI() {
               });
               data.forEach((row: any) => {
                 const rowData = row.data && typeof row.data === 'object' ? row.data : row;
-                const code = String(
-                  row.site_code || row['site code'] || row['Site code'] || rowData['Site code'] || rowData['site code'] || row.id || ''
-                ).trim().toUpperCase();
+                const rawCodeFromRow =
+                  rowData['Site code'] ||
+                  rowData['site code'] ||
+                  rowData[' Site code'] ||
+                  rowData.site_code ||
+                  row.site_code ||
+                  row['site code'] ||
+                  row['Site code'] ||
+                  row.id ||
+                  '';
+                const code = String(rawCodeFromRow).trim().toUpperCase().replace(/^VDF-/, '');
                 if (code && code !== SYNC_DELETED_CODES_SITE_CODE && !deletedCodes.has(code)) {
                   const prev = baseMap.get(code) || {};
-                  baseMap.set(code, { ...prev, ...rowData, ...row, 'Site code': code, 'site code': code });
+                  const mergedRow: VodafoneRecord = normalizeVodafoneSector({
+                    ...prev,
+                    ...rowData,
+                    _id: isUUID(row.id) ? row.id : (rowData._id || prev._id),
+                    company: 'Vodafone',
+                    ' Site code': code,
+                    'Site code': code,
+                    'site code': code,
+                    site_code: code,
+                  });
+                  baseMap.set(code, mergedRow);
                 }
               });
               const merged = Array.from(baseMap.values()).filter((r) => {
@@ -282,14 +315,15 @@ export function useVodafoneAPI() {
   const saveVodafoneRecord = useCallback(async (record: VodafoneRecord): Promise<{ success: boolean; cloudSaved?: boolean; message?: string; error?: string }> => {
     try {
       const rawCode = record[' Site code'] || record['Site code'] || record['site code'] || record.site_code;
-      const code = String(rawCode || '').trim().toUpperCase();
+      const code = String(rawCode ?? '').trim().toUpperCase();
       if (!code) return { success: false, error: 'كود الموقع مطلوب' };
 
       const current = loadStoredVodafoneRecords();
       const idx = current.findIndex((r) => {
-        const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
+        const c = String(r[' Site code'] || r['Site code'] || r['site code'] || r.site_code || '').trim().toUpperCase();
         return c === code;
       });
+      const oldRec = idx >= 0 ? current[idx] : null;
 
       const now = new Date().toISOString();
       const isSpecial = Boolean(
@@ -302,35 +336,56 @@ export function useVodafoneAPI() {
         false
       );
 
-      const docUrl = record.documentUrl || record.attachmentUrl || '';
+      const docUrl = String(record.documentUrl || record.attachmentUrl || '').trim();
+      const isInlineDataUrl = docUrl.startsWith('data:');
       const actor = getActiveActor();
-      const enriched: VodafoneRecord = {
+      const recordUuid =
+        (record._id && isUUID(record._id) ? record._id : null) ||
+        (oldRec?._id && isUUID(oldRec._id) ? oldRec._id : null) ||
+        (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : undefined);
+
+      const canonSector = normalizeSectorName(
+        record['رئاسة قطاعات التنفيذ'] || record['قطاع التنفيذ'] || ''
+      );
+
+      const enriched: VodafoneRecord = normalizeVodafoneSector({
         ...record,
+        ...(recordUuid ? { _id: recordUuid } : {}),
         company: 'Vodafone',
+        ' Site code': code,
         'Site code': code,
         'site code': code,
         site_code: code,
-        'التصنيف': record['التصنيف'] || '',
-        classification: record['التصنيف'] || '',
+        ...(canonSector ? {
+          'رئاسة قطاعات التنفيذ': canonSector,
+          'قطاع التنفيذ': canonSector,
+        } : {}),
+        'التصنيف': String(record['التصنيف'] || '').trim() || 'جاري العمل مدني',
+        classification: String(record['التصنيف'] || '').trim() || 'جاري العمل مدني',
         documentUrl: docUrl,
-        attachmentUrl: docUrl,
+        attachmentUrl: isInlineDataUrl ? '' : docUrl,
         'المستند': record['المستند'] || (docUrl ? `Doc-${code}.pdf` : ''),
         specialTarget: isSpecial,
         special_target: isSpecial,
         'سبيشال تارجت': isSpecial,
+        _createdAt: oldRec?._createdAt || record._createdAt || now,
         _updatedAt: now,
         _lastModifiedBy: actor.displayName,
         _lastModifiedAt: now,
-      };
+      });
 
-      // 1. Instant local optimistic update: immediate reflection across localStorage & all dashboard counters
-      const oldRec = idx >= 0 ? current[idx] : null;
+      // 1. Ensure code is removed from deleted-codes cache BEFORE updating state & cloud
+      await removeCloudDeletedCode(code);
+      await removeCloudDeletedCode(`VDF-${code}`);
+
+      // 2. Instant local optimistic update: immediate reflection across localStorage & all dashboard counters
       let updated: VodafoneRecord[];
       if (idx >= 0) {
         updated = [...current];
         updated[idx] = { ...updated[idx], ...enriched };
       } else {
-        enriched._createdAt = now;
         updated = [enriched, ...current];
       }
       saveStoredVodafoneRecords(updated);
@@ -343,98 +398,127 @@ export function useVodafoneAPI() {
         details: buildRecordDiffSummary(oldRec, enriched, docUrl ? `مرفق: ${enriched['المستند']}` : undefined),
       });
 
-      // Safe payload matching physical Supabase table columns + JSONB data
-      // (Preserves specialTarget and all operator attributes inside data: enriched)
-      const safePayload: any = {
-        site_code: code,
-        'site code': code,
-        'Site Status': enriched['التصنيف'] || enriched.classification || 'جاري',
-        data: enriched,
-        updated_at: now,
+      // Build safe payload matching physical Supabase `we_records` columns + JSONB `data`
+      const buildCloudPayload = (dataObj: VodafoneRecord, physicalSiteCode: string): Record<string, any> => {
+        const p: Record<string, any> = {
+          site_code: physicalSiteCode,
+          'site code': physicalSiteCode,
+          'Exc Sectores': dataObj['قطاع التنفيذ'] || dataObj['رئاسة قطاعات التنفيذ'] || '',
+          'Sectores': dataObj['رئاسة قطاعات التنفيذ'] || dataObj['قطاع التنفيذ'] || '',
+          'Exc sector': dataObj['قطاع التنفيذ'] || '',
+          'Sectore': dataObj['رئاسة قطاعات التنفيذ'] || '',
+          'Site Status': dataObj['التصنيف'] || dataObj.classification || 'جاري العمل مدني',
+          data: dataObj,
+          updated_at: now,
+        };
+        if (recordUuid) p.id = recordUuid;
+        return p;
       };
-      if (enriched._id && isUUID(enriched._id)) {
-        safePayload.id = enriched._id;
-      }
+
+      const cloudDataPrimary: VodafoneRecord = isInlineDataUrl
+        ? { ...enriched, attachmentUrl: '' }
+        : enriched;
+      const cloudDataMetadataOnly: VodafoneRecord = {
+        ...enriched,
+        documentUrl: isInlineDataUrl ? '' : docUrl,
+        attachmentUrl: isInlineDataUrl ? '' : docUrl,
+      };
 
       // Persist directly into Supabase vodafone tables across active clients
       let cloudSaved = false;
       let lastCloudError: any = null;
+      const physicalCodesToTry = [code, `VDF-${code}`];
+
       clientLoop: for (const client of supabaseClients) {
         for (const table of VODAFONE_TABLE_CANDIDATES) {
-          try {
-            // 1. Direct UPDATE on existing record in Supabase
-            let { data: updateData, error: updateErr } = await client
-              .from(table)
-              .update(safePayload)
-              .eq('site_code', code)
-              .select();
-
-            if (updateErr || !updateData || updateData.length === 0) {
-              const retryQuoted = await client
+          for (const physicalCode of physicalCodesToTry) {
+            const safePayload = buildCloudPayload(cloudDataPrimary, physicalCode);
+            try {
+              // A. Direct UPDATE scoped to Vodafone (or matching UUID) so we never overwrite a WE row
+              let updateQuery = client
                 .from(table)
                 .update(safePayload)
-                .eq('site code', code)
-                .select();
-              if (!retryQuoted.error && retryQuoted.data && retryQuoted.data.length > 0) {
-                updateData = retryQuoted.data;
-                updateErr = null;
-              } else if (retryQuoted.error) {
-                lastCloudError = retryQuoted.error;
+                .eq('site_code', physicalCode);
+              if (table === 'we_records') {
+                updateQuery = updateQuery.eq('data->>company', 'Vodafone');
               }
-            }
+              const { data: updateData, error: updateErr } = await updateQuery.select('id');
 
-            if (updateErr) {
-              lastCloudError = updateErr;
-              console.error(`[Vodafone Supabase] Update error on table ${table}:`, updateErr);
-            }
+              if (!updateErr && updateData && updateData.length > 0) {
+                cloudSaved = true;
+                break clientLoop;
+              }
 
-            if (!updateErr && updateData && updateData.length > 0) {
-              cloudSaved = true;
-              console.log(`[Vodafone Supabase] Successfully updated site ${code} in ${table}`);
-              break clientLoop;
-            }
+              // B. Try UPDATE by exact UUID if this record already had a UUID
+              if (recordUuid) {
+                const { data: uuidData, error: uuidErr } = await client
+                  .from(table)
+                  .update(safePayload)
+                  .eq('id', recordUuid)
+                  .select('id');
+                if (!uuidErr && uuidData && uuidData.length > 0) {
+                  cloudSaved = true;
+                  break clientLoop;
+                }
+              }
 
-            // 2. INSERT if row does not exist
-            const insertPayload: any = {
-              ...safePayload,
-              created_at: enriched._createdAt || now,
-            };
-            if (enriched._id && isUUID(enriched._id)) {
-              insertPayload.id = enriched._id;
-            }
+              // C. INSERT new row (or UPSERT on id)
+              const insertPayload: Record<string, any> = {
+                ...safePayload,
+                created_at: enriched._createdAt || now,
+              };
 
-            const { data: insertData, error: insertErr } = await client
-              .from(table)
-              .insert([insertPayload])
-              .select();
+              let { data: insertData, error: insertErr } = await client
+                .from(table)
+                .upsert([insertPayload], { onConflict: 'id' })
+                .select('id');
 
-            if (insertErr) {
-              lastCloudError = insertErr;
-              console.error(`[Vodafone Supabase] Insert error on table ${table}:`, insertErr);
-            }
+              // Retry with metadata-only payload if large inline Base64 caused a payload error
+              if (insertErr && isInlineDataUrl && insertErr.code !== 'PGRST205' && insertErr.code !== '23505') {
+                const retryPayload = {
+                  ...buildCloudPayload(cloudDataMetadataOnly, physicalCode),
+                  created_at: enriched._createdAt || now,
+                };
+                const retryRes = await client
+                  .from(table)
+                  .upsert([retryPayload], { onConflict: 'id' })
+                  .select('id');
+                insertData = retryRes.data;
+                insertErr = retryRes.error;
+              }
 
-            if (!insertErr && insertData && insertData.length > 0) {
-              cloudSaved = true;
-              console.log(`[Vodafone Supabase] Successfully inserted site ${code} in ${table}`);
-              break clientLoop;
+              if (!insertErr && insertData && insertData.length > 0) {
+                cloudSaved = true;
+                break clientLoop;
+              }
+
+              if (insertErr) {
+                lastCloudError = insertErr;
+                // If table doesn't exist (PGRST205), move immediately to next table
+                if (insertErr.code === 'PGRST205') break;
+                // If unique site_code collision (23505) with another operator, loop tries `VDF-${code}` next!
+                if (insertErr.code === '23505') continue;
+              }
+            } catch (err: any) {
+              lastCloudError = err;
             }
-          } catch (err: any) {
-            lastCloudError = err;
-            console.error(`[Vodafone Supabase] Error saving site ${code} to table ${table}:`, err);
           }
         }
       }
 
-      if (cloudSaved) {
-        await removeCloudDeletedCode(code);
+      if (!cloudSaved && lastCloudError) {
+        console.error(`[Vodafone Supabase] Failed to persist site ${code}:`, lastCloudError);
+        return {
+          success: false,
+          cloudSaved: false,
+          error: `تم الحفظ محلياً لكن تعذر المزامنة مع السحابة (${lastCloudError?.message || lastCloudError?.code || 'خطأ اتصال'}). يرجى المحاولة مرة أخرى.`,
+        };
       }
 
       return {
         success: true,
-        cloudSaved,
-        message: cloudSaved
-          ? `تم حفظ وتحديث بيانات موقع Vodafone (${code}) وتصنيفه بنجاح في قاعدة بيانات Supabase السحابية ✅`
-          : `تم حفظ بيانات موقع Vodafone (${code}) محلياً وتحديث النظام فورياً ✅`,
+        cloudSaved: true,
+        message: `تم حفظ وتحديث بيانات موقع Vodafone (${code}) بنجاح في قاعدة البيانات السحابية ✅`,
       };
     } catch (err: any) {
       return { success: false, error: err?.message || 'فشل حفظ بيانات الموقع' };

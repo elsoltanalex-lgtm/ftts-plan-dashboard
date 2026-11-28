@@ -2486,18 +2486,19 @@ export const Dashboard: React.FC = () => {
           mode={vodafoneModalMode}
           sitesData={vodafoneSites}
           onSave={async (record) => {
+            const code = String(record['Site code'] || record['site code'] || (record as any).site_code || '').trim().toUpperCase();
+            if (code) {
+              setDeletedSiteCodes((prev) => {
+                const next = new Set(prev);
+                next.delete(code);
+                next.delete(`VDF-${code}`);
+                persistDeletedSiteCodes(next);
+                return next;
+              });
+            }
             const res = await saveVodafoneRecord(record);
             if (res.success) {
               await refetchVodafoneRecords();
-              const code = record['Site code'] || record['site code'] || (record as any).site_code || '';
-              if (code) {
-                setDeletedSiteCodes((prev) => {
-                  const next = new Set(prev);
-                  next.delete(String(code).trim().toUpperCase());
-                  persistDeletedSiteCodes(next);
-                  return next;
-                });
-              }
               setToastMessage(res.message || `تم حفظ وتحديث بيانات موقع Vodafone (${code}) بنجاح في قاعدة البيانات ✅`);
             } else {
               setToastMessage(`❌ خطأ: ${res.error || 'فشل حفظ وتحديث الموقع في قاعدة البيانات'}`);
