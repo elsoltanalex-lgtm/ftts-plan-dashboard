@@ -205,8 +205,10 @@ export function useVodafoneAPI() {
     try {
       const deletedCodes = await fetchCloudDeletedCodes();
 
-      // 1. Attempt to fetch live from Supabase tables across active clients
+      // 1. Fetch live from Supabase across both `vodafone_records` (if created) and `we_records` (Vodafone rows)
+      const fetchedRows: { row: any; source: string }[] = [];
       for (const client of supabaseClients) {
+        let clientFoundAny = false;
         for (const table of VODAFONE_TABLE_CANDIDATES) {
           try {
             let query = client.from(table).select('*').limit(5000);
@@ -214,54 +216,61 @@ export function useVodafoneAPI() {
               query = query.eq('data->>company', 'Vodafone');
             }
             const { data, error: sbError } = await query;
-            if (!sbError && data && data.length > 0) {
-              const baseMap = new Map<string, VodafoneRecord>();
-              loadStoredVodafoneRecords().forEach((r) => {
-                const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
-                if (c && !deletedCodes.has(c)) baseMap.set(c, r);
-              });
-              data.forEach((row: any) => {
-                const rowData = row.data && typeof row.data === 'object' ? row.data : row;
-                const rawCodeFromRow =
-                  rowData['Site code'] ||
-                  rowData['site code'] ||
-                  rowData[' Site code'] ||
-                  rowData.site_code ||
-                  row.site_code ||
-                  row['site code'] ||
-                  row['Site code'] ||
-                  row.id ||
-                  '';
-                const code = String(rawCodeFromRow).trim().toUpperCase().replace(/^VDF-/, '');
-                if (code && code !== SYNC_DELETED_CODES_SITE_CODE && !deletedCodes.has(code)) {
-                  const prev = baseMap.get(code) || {};
-                  const mergedRow: VodafoneRecord = normalizeVodafoneSector({
-                    ...prev,
-                    ...rowData,
-                    _id: isUUID(row.id) ? row.id : (rowData._id || prev._id),
-                    company: 'Vodafone',
-                    ' Site code': code,
-                    'Site code': code,
-                    'site code': code,
-                    site_code: code,
-                  });
-                  baseMap.set(code, mergedRow);
-                }
-              });
-              const merged = Array.from(baseMap.values()).filter((r) => {
-                const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
-                return !deletedCodes.has(c);
-              });
-              saveStoredVodafoneRecords(merged);
-              setVodafoneRecords(merged);
-              return;
+            if (!sbError && Array.isArray(data) && data.length > 0) {
+              data.forEach((row: any) => fetchedRows.push({ row, source: table }));
+              clientFoundAny = true;
             }
           } catch { }
         }
+        if (clientFoundAny) break;
+      }
+
+      if (fetchedRows.length > 0) {
+        const baseMap = new Map<string, VodafoneRecord>();
+        loadStoredVodafoneRecords().forEach((r) => {
+          const c = String(r[' Site code'] || r['Site code'] || r['site code'] || r.site_code || '').trim().toUpperCase();
+          if (c && !deletedCodes.has(c)) baseMap.set(c, r);
+        });
+        fetchedRows.forEach(({ row }) => {
+          const rowData = row.data && typeof row.data === 'object' ? row.data : row;
+          const rawCodeFromRow =
+            rowData['Site code'] ||
+            rowData['site code'] ||
+            rowData[' Site code'] ||
+            rowData.site_code ||
+            row.site_code ||
+            row['site code'] ||
+            row['Site code'] ||
+            row.id ||
+            '';
+          const code = String(rawCodeFromRow).trim().toUpperCase().replace(/^VDF-/, '');
+          if (code && code !== SYNC_DELETED_CODES_SITE_CODE && !deletedCodes.has(code)) {
+            const prev = baseMap.get(code) || {};
+            const mergedRow: VodafoneRecord = normalizeVodafoneSector({
+              ...prev,
+              ...rowData,
+              _id: isUUID(row.id) ? row.id : (rowData._id || prev._id),
+              company: 'Vodafone',
+              ' Site code': code,
+              'Site code': code,
+              'site code': code,
+              site_code: code,
+              ...(row.updated_at ? { _updatedAt: row.updated_at } : {}),
+            });
+            baseMap.set(code, mergedRow);
+          }
+        });
+        const merged = Array.from(baseMap.values()).filter((r) => {
+          const c = String(r[' Site code'] || r['Site code'] || r['site code'] || r.site_code || '').trim().toUpperCase();
+          return !deletedCodes.has(c);
+        });
+        saveStoredVodafoneRecords(merged);
+        setVodafoneRecords(merged);
+        return;
       }
 
       const records = loadStoredVodafoneRecords().filter((r) => {
-        const c = String(r[' Site code'] || r['Site code'] || r['site code'] || '').trim().toUpperCase();
+        const c = String(r[' Site code'] || r['Site code'] || r['site code'] || r.site_code || '').trim().toUpperCase();
         return !deletedCodes.has(c);
       });
       setVodafoneRecords(records);
@@ -275,9 +284,16 @@ export function useVodafoneAPI() {
   useEffect(() => {
     refetchVodafoneRecords();
 
-    // Supabase Realtime channel for instant cross-device updates
+    // Supabase Realtime channel for instant cross-device updates on both vodafone_records & we_records
     const channel = supabaseFallback
       .channel('vodafone_realtime_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'vodafone_records' },
+        () => {
+          refetchVodafoneRecords();
+        }
+      )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'we_records' },
@@ -399,8 +415,32 @@ export function useVodafoneAPI() {
         details: buildRecordDiffSummary(oldRec, enriched, docUrl ? `مرفق: ${enriched['المستند']}` : undefined),
       });
 
-      // Build safe payload matching physical Supabase `we_records` columns + JSONB `data`
-      const buildCloudPayload = (dataObj: VodafoneRecord, physicalSiteCode: string): Record<string, any> => {
+      // Build table-aware, cleanly normalized payload (null for empty nullable columns so Postgres never rejects types)
+      const toNullableText = (v: any): string | null => {
+        const s = String(v ?? '').trim();
+        return s ? s : null;
+      };
+
+      const buildCloudPayload = (
+        dataObj: VodafoneRecord,
+        physicalSiteCode: string,
+        table: string
+      ): Record<string, any> => {
+        if (table === 'vodafone_records' || table === 'vodafone') {
+          const p: Record<string, any> = {
+            site_code: physicalSiteCode,
+            sector: toNullableText(dataObj['رئاسة قطاعات التنفيذ'] || dataObj['قطاع التنفيذ']),
+            execution_sector: toNullableText(dataObj['قطاع التنفيذ']),
+            central: toNullableText(dataObj['سنترال الربط']),
+            status: toNullableText(dataObj['التصنيف'] || dataObj.classification) || 'جاري العمل مدني',
+            data: dataObj,
+            updated_at: now,
+          };
+          if (recordUuid) p.id = recordUuid;
+          return p;
+        }
+
+        // Physical columns verified on live `we_records` table
         const p: Record<string, any> = {
           site_code: physicalSiteCode,
           'site code': physicalSiteCode,
@@ -409,6 +449,8 @@ export function useVodafoneAPI() {
           'Exc sector': dataObj['قطاع التنفيذ'] || '',
           'Sectore': dataObj['رئاسة قطاعات التنفيذ'] || '',
           'Site Status': dataObj['التصنيف'] || dataObj.classification || 'جاري العمل مدني',
+          'NLatitude': toNullableText(dataObj['احدثيات خط العرض']),
+          'NLongitude': toNullableText(dataObj['احدثيات خط الطول']),
           data: dataObj,
           updated_at: now,
         };
@@ -425,17 +467,18 @@ export function useVodafoneAPI() {
         attachmentUrl: isInlineDataUrl ? '' : docUrl,
       };
 
-      // Persist directly into Supabase vodafone tables across active clients
+      // Persist directly into Supabase (`vodafone_records` if present, otherwise `we_records` with company='Vodafone')
       let cloudSaved = false;
+      let confirmedRowId: string | undefined = recordUuid;
       let lastCloudError: any = null;
       const physicalCodesToTry = [code, `VDF-${code}`];
 
       clientLoop: for (const client of supabaseClients) {
         for (const table of VODAFONE_TABLE_CANDIDATES) {
           for (const physicalCode of physicalCodesToTry) {
-            const safePayload = buildCloudPayload(cloudDataPrimary, physicalCode);
+            const safePayload = buildCloudPayload(cloudDataPrimary, physicalCode, table);
             try {
-              // A. Direct UPDATE scoped to Vodafone (or matching UUID) so we never overwrite a WE row
+              // A. Direct UPDATE scoped to Vodafone so we never overwrite a WE/Orange row
               let updateQuery = client
                 .from(table)
                 .update(safePayload)
@@ -443,11 +486,16 @@ export function useVodafoneAPI() {
               if (table === 'we_records') {
                 updateQuery = updateQuery.eq('data->>company', 'Vodafone');
               }
-              const { data: updateData, error: updateErr } = await updateQuery.select('id');
+              const { data: updateData, error: updateErr } = await updateQuery.select('id, site_code');
 
               if (!updateErr && updateData && updateData.length > 0) {
                 cloudSaved = true;
+                confirmedRowId = updateData[0]?.id || confirmedRowId;
                 break clientLoop;
+              }
+              if (updateErr?.code === 'PGRST205') {
+                lastCloudError = updateErr;
+                break; // Table does not exist — skip directly to next table
               }
 
               // B. Try UPDATE by exact UUID if this record already had a UUID
@@ -456,14 +504,15 @@ export function useVodafoneAPI() {
                   .from(table)
                   .update(safePayload)
                   .eq('id', recordUuid)
-                  .select('id');
+                  .select('id, site_code');
                 if (!uuidErr && uuidData && uuidData.length > 0) {
                   cloudSaved = true;
+                  confirmedRowId = uuidData[0]?.id || confirmedRowId;
                   break clientLoop;
                 }
               }
 
-              // C. INSERT new row (or UPSERT on id)
+              // C. INSERT / UPSERT new row and require returned row confirmation
               const insertPayload: Record<string, any> = {
                 ...safePayload,
                 created_at: enriched._createdAt || now,
@@ -472,24 +521,25 @@ export function useVodafoneAPI() {
               let { data: insertData, error: insertErr } = await client
                 .from(table)
                 .upsert([insertPayload], { onConflict: 'id' })
-                .select('id');
+                .select('id, site_code');
 
               // Retry with metadata-only payload if large inline Base64 caused a payload error
               if (insertErr && isInlineDataUrl && insertErr.code !== 'PGRST205' && insertErr.code !== '23505') {
                 const retryPayload = {
-                  ...buildCloudPayload(cloudDataMetadataOnly, physicalCode),
+                  ...buildCloudPayload(cloudDataMetadataOnly, physicalCode, table),
                   created_at: enriched._createdAt || now,
                 };
                 const retryRes = await client
                   .from(table)
                   .upsert([retryPayload], { onConflict: 'id' })
-                  .select('id');
+                  .select('id, site_code');
                 insertData = retryRes.data;
                 insertErr = retryRes.error;
               }
 
               if (!insertErr && insertData && insertData.length > 0) {
                 cloudSaved = true;
+                confirmedRowId = insertData[0]?.id || confirmedRowId;
                 break clientLoop;
               }
 
@@ -507,19 +557,35 @@ export function useVodafoneAPI() {
         }
       }
 
-      if (!cloudSaved && lastCloudError) {
+      if (!cloudSaved) {
+        // Strict rollback: never keep unpersisted optimistic data or show false success
+        saveStoredVodafoneRecords(current);
+        setVodafoneRecords(current);
         console.error(`[Vodafone Supabase] Failed to persist site ${code}:`, lastCloudError);
         return {
           success: false,
           cloudSaved: false,
-          error: formatSupabaseSaveError(lastCloudError, code),
+          error: formatSupabaseSaveError(
+            lastCloudError || { message: 'لم تؤكد قاعدة البيانات حفظ السجل' },
+            code
+          ),
         };
+      }
+
+      // Sync confirmed UUID back into local cache & state so future edits match directly by UUID
+      if (confirmedRowId && isUUID(confirmedRowId)) {
+        const synced = updated.map((r) => {
+          const c = String(r[' Site code'] || r['Site code'] || r['site code'] || r.site_code || '').trim().toUpperCase();
+          return c === code ? { ...r, _id: confirmedRowId } : r;
+        });
+        saveStoredVodafoneRecords(synced);
+        setVodafoneRecords(synced);
       }
 
       return {
         success: true,
         cloudSaved: true,
-        message: `تم حفظ وتحديث بيانات موقع Vodafone (${code}) بنجاح في قاعدة البيانات السحابية ✅`,
+        message: `تم الحفظ في قاعدة بيانات فودافون بنجاح (${code}) ✅`,
       };
     } catch (err: any) {
       return { success: false, error: err?.message || 'فشل حفظ بيانات الموقع' };
@@ -677,54 +743,85 @@ export function useVodafoneAPI() {
 
         recordMap.set(code, finalRec);
 
-        // Standardized Supabase payload
+        // Standardized Supabase payload (table-aware)
         finalRec.company = 'Vodafone';
-        const payload: any = {
-          site_code: code,
-          'site code': code,
-          'Site Status': finalRec['التصنيف'] || 'جاري',
-          data: finalRec,
-          updated_at: now,
-        };
-        if (finalRec._id && isUUID(finalRec._id)) {
-          payload.id = finalRec._id;
-        }
+        let rowSaved = false;
+        let rowErr: any = null;
+        const physicalCodes = [code, `VDF-${code}`];
 
         clientLoop: for (const client of supabaseClients) {
           for (const table of VODAFONE_TABLE_CANDIDATES) {
-            try {
-              if (isExisting) {
-                const { data: updateData, error: updateErr } = await client
-                  .from(table)
-                  .update(payload)
-                  .eq('site_code', code)
-                  .select();
+            for (const physicalCode of physicalCodes) {
+              const payload: any =
+                table === 'vodafone_records' || table === 'vodafone'
+                  ? {
+                      site_code: physicalCode,
+                      sector: String(finalRec['رئاسة قطاعات التنفيذ'] || finalRec['قطاع التنفيذ'] || '').trim() || null,
+                      execution_sector: String(finalRec['قطاع التنفيذ'] || '').trim() || null,
+                      central: String(finalRec['سنترال الربط'] || '').trim() || null,
+                      status: String(finalRec['التصنيف'] || '').trim() || 'جاري العمل مدني',
+                      data: finalRec,
+                      updated_at: now,
+                    }
+                  : {
+                      site_code: physicalCode,
+                      'site code': physicalCode,
+                      'Site Status': finalRec['التصنيف'] || 'جاري العمل مدني',
+                      data: finalRec,
+                      updated_at: now,
+                    };
+              if (finalRec._id && isUUID(finalRec._id)) {
+                payload.id = finalRec._id;
+              }
 
-                if (!updateErr && updateData && updateData.length > 0) {
+              try {
+                if (isExisting) {
+                  let uq = client.from(table).update(payload).eq('site_code', physicalCode);
+                  if (table === 'we_records') uq = uq.eq('data->>company', 'Vodafone');
+                  const { data: updateData, error: updateErr } = await uq.select('id');
+                  if (!updateErr && updateData && updateData.length > 0) {
+                    rowSaved = true;
+                    break clientLoop;
+                  }
+                  if (updateErr?.code === 'PGRST205') {
+                    rowErr = updateErr;
+                    break;
+                  }
+                }
+
+                const { data: insertData, error: insertErr } = await client
+                  .from(table)
+                  .insert([payload])
+                  .select('id');
+
+                if (!insertErr && insertData && insertData.length > 0) {
+                  rowSaved = true;
                   break clientLoop;
                 }
+                if (insertErr) {
+                  rowErr = insertErr;
+                  if (insertErr.code === 'PGRST205') break;
+                  if (insertErr.code === '23505') continue;
+                }
+              } catch (err: any) {
+                rowErr = err;
+                console.warn(`[Vodafone Supabase] Error saving row ${code} to ${table}:`, err);
               }
-
-              // Insert new record or if update found 0 rows
-              const { data: insertData, error: insertErr } = await client
-                .from(table)
-                .insert([payload])
-                .select();
-
-              if (!insertErr && insertData && insertData.length > 0) {
-                break clientLoop;
-              }
-            } catch (err: any) {
-              console.warn(`[Vodafone Supabase] Error saving row ${code} to ${table}:`, err);
             }
           }
         }
 
-        savedCount++;
-        if (isExisting) {
-          updatedCount++;
+        if (rowSaved) {
+          savedCount++;
+          if (isExisting) {
+            updatedCount++;
+          } else {
+            insertedCount++;
+          }
         } else {
-          insertedCount++;
+          failedCount++;
+          errors.push(`${code}: ${formatSupabaseSaveError(rowErr, code)}`);
+          if (!isExisting) recordMap.delete(code);
         }
       }
 

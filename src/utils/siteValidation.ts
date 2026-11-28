@@ -132,6 +132,33 @@ export async function checkDuplicateSiteInSupabase(
   if (deleted.has(norm)) return null;
 
   try {
+    if (module === 'Vodafone') {
+      // Check dedicated `vodafone_records` first if present in Supabase
+      try {
+        const { data: vfData, error: vfErr } = await supabaseFallback
+          .from('vodafone_records')
+          .select('id, site_code, sector, status, central, data')
+          .or(`site_code.eq.${norm},site_code.eq.VDF-${norm}`)
+          .limit(1);
+        if (!vfErr && Array.isArray(vfData) && vfData.length > 0) {
+          const row: any = vfData[0];
+          const d = row.data && typeof row.data === 'object' ? row.data : {};
+          const sector = String(d['رئاسة قطاعات التنفيذ'] || d['قطاع التنفيذ'] || row.sector || 'غير محدد').trim();
+          const central = String(d['سنترال الربط'] || row.central || 'غير محدد').trim();
+          const status = String(d['التصنيف'] || d.classification || row.status || 'غير محدد').trim();
+          return {
+            siteCode: norm,
+            sector,
+            central,
+            status,
+            message: buildDuplicateSiteMessage(norm, sector, status),
+          };
+        }
+      } catch {
+        // Table may not exist yet — fall through to we_records
+      }
+    }
+
     if (module === 'WE' || module === 'Vodafone' || module === 'Orange') {
       const prefix = module === 'Vodafone' ? `VDF-${norm}` : module === 'Orange' ? `ORG-${norm}` : norm;
       const { data, error } = await supabaseFallback

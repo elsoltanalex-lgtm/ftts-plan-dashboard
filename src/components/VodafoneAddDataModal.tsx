@@ -585,6 +585,13 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
         }
       }
 
+      const existingUuid =
+        masterRecord?._id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(masterRecord._id))
+          ? masterRecord._id
+          : formData._id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(formData._id))
+            ? formData._id
+            : undefined;
+
       const payload: VodafoneRecord = {
         ...formData,
         documentUrl: docUrl,
@@ -597,20 +604,20 @@ export const VodafoneAddDataModal: React.FC<VodafoneAddDataModalProps> = ({
         'اسباب التعذر': finalObstacleReason,
         'اسباب التعّذر': finalObstacleReason,
         'اسباب المعوق': formData['اسباب المعوق'] || '',
-        _id: `VDF-${code}`,
+        ...(existingUuid ? { _id: existingUuid } : {}),
         _updatedAt: new Date().toISOString(),
         _createdBy: user?.displayName || 'Vodafone Form UI',
       };
 
       const res = await onSave(payload);
-      if (res.success) {
-        setSuccessMessage(res.message || `تم حفظ وتحديث بيانات موقع Vodafone (${code}) بنجاح في قاعدة البيانات ✅`);
+      if (res.success && (res as any).cloudSaved !== false) {
+        setSuccessMessage(res.message || `تم الحفظ في قاعدة بيانات فودافون بنجاح (${code}) ✅`);
         setTimeout(() => {
           onClose();
           setSuccessMessage('');
         }, 1200);
       } else {
-        setErrors({ _general: res.error || 'فشل حفظ بيانات الموقع' });
+        setErrors({ _general: res.error || 'فشل الحفظ في قاعدة بيانات فودافون السحابية — لم يتم تسجيل الموقع.' });
       }
     } catch (err: any) {
       setErrors({ _general: err?.message || 'حدث خطأ أثناء حفظ البيانات' });
