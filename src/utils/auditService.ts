@@ -56,12 +56,14 @@ export interface ActivityLogRecord {
 const SESSION_AUTH_KEY = 'ftts_auth_user_session_v2';
 const SESSIONS_STORAGE_KEY = 'ftts_user_sessions_v1';
 const TAB_SESSION_ID_KEY = 'ftts_tab_session_id_v2';
+const ACTIVE_SESSION_META_KEY = 'ftts_active_session_meta_v2';
 const ACTIVITY_LOGS_STORAGE_KEY = 'ftts_activity_logs_v1';
 
 const MAX_LOCAL_SESSIONS = 500;
 const MAX_LOCAL_LOGS = 2000;
-// Any session with no heartbeat for > 50s is automatically treated as ended
-export const STALE_SESSION_THRESHOLD_MS = 50 * 1000;
+// Only reconcile truly orphaned sessions (e.g., hard browser crash/power loss) after 12 hours of silence;
+// never close or split an open session due to switching windows/tabs or brief inactivity.
+export const STALE_SESSION_THRESHOLD_MS = 12 * 60 * 60 * 1000;
 
 export function getActiveActor(): { id: string; displayName: string; username: string; role: string } {
   try {
@@ -90,18 +92,32 @@ export function getActiveActor(): { id: string; displayName: string; username: s
 
 export function getActiveSessionId(): string | null {
   try {
-    return sessionStorage.getItem(TAB_SESSION_ID_KEY);
+    const tabId = sessionStorage.getItem(TAB_SESSION_ID_KEY);
+    if (tabId) return tabId;
+    const rawMeta = localStorage.getItem(ACTIVE_SESSION_META_KEY);
+    if (rawMeta) {
+      const parsed = JSON.parse(rawMeta) as { sessionId?: string; userId?: string; closedOnUnload?: boolean };
+      if (parsed?.sessionId && !parsed.closedOnUnload) {
+        return parsed.sessionId;
+      }
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
-function setActiveSessionId(id: string | null): void {
+function setActiveSessionId(id: string | null, userId?: string, closedOnUnload = false): void {
   try {
     if (id) {
       sessionStorage.setItem(TAB_SESSION_ID_KEY, id);
+      localStorage.setItem(
+        ACTIVE_SESSION_META_KEY,
+        JSON.stringify({ sessionId: id, userId: userId || '', closedOnUnload })
+      );
     } else {
       sessionStorage.removeItem(TAB_SESSION_ID_KEY);
+      localStorage.removeItem(ACTIVE_SESSION_META_KEY);
     }
   } catch {
     // ignore
@@ -251,43 +267,91 @@ async function upsertSessionToSupabase(session: UserSessionRecord, keepalive = f
 }
 
 /**
- * Starts a distinct visit/session entry.
- * - On explicit login (`forceNew = true`), ALWAYS creates a brand-new session row.
- * - On page load/new tab (`forceNew = false`), creates a brand-new session row if this tab has no active session ID
- *   or if the previous session was closed/stale (> 50s).
+ * Maintains ONE continuous active session per sign-in until explicit Sign Out or browser/window close.
+ * - On explicit login (`forceNew = true`): reconciles any orphaned active session for this user and creates one fresh session.
+ * - On app reload / returning while signed in (`forceNew = false`): resumes the SAME existing session_id
+ *   (keeping its original `login_at` intact) rather than splitting into tiny fragments.
  */
 export function startUserSession(user: AuthUser, options: { forceNew?: boolean } = {}): UserSessionRecord {
   const now = new Date().toISOString();
   const nowMs = Date.now();
+  const userKey = user.id || user.username;
   const sessions = loadLocalSessions();
 
   if (!options.forceNew) {
-    const existingTabId = getActiveSessionId();
-    if (existingTabId) {
-      const idx = sessions.findIndex((s) => s.id === existingTabId && s.user_id === (user.id || user.username));
+    // 1. Check same-tab sessionStorage first (survives page reload F5; automatically cleared when tab/browser closes)
+    let resumeId: string | null = null;
+    try {
+      resumeId = sessionStorage.getItem(TAB_SESSION_ID_KEY);
+    } catch {
+      resumeId = null;
+    }
+
+    // 2. Fallback to persistent active session meta if not explicitly logged out or closed
+    if (!resumeId) {
+      try {
+        const rawMeta = localStorage.getItem(ACTIVE_SESSION_META_KEY);
+        if (rawMeta) {
+          const parsed = JSON.parse(rawMeta) as { sessionId?: string; userId?: string; closedOnUnload?: boolean };
+          if (parsed?.sessionId && !parsed.closedOnUnload && (!parsed.userId || parsed.userId === userKey)) {
+            resumeId = parsed.sessionId;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (resumeId) {
+      const idx = sessions.findIndex(
+        (s) => s.id === resumeId && (s.user_id === userKey || s.username === user.username)
+      );
       if (idx >= 0) {
         const prev = sessions[idx];
         const lastMs = new Date(prev.last_active_at || prev.login_at).getTime();
-        const isFresh = !prev.logout_at && nowMs - lastMs <= STALE_SESSION_THRESHOLD_MS * 2;
-        if (isFresh) {
-          const updated: UserSessionRecord = {
+        const isWithinContinuityWindow = nowMs - lastMs <= STALE_SESSION_THRESHOLD_MS;
+        if (isWithinContinuityWindow) {
+          const resumed: UserSessionRecord = {
             ...prev,
             last_active_at: now,
+            logout_at: null,
             duration_seconds: computeDurationSeconds(prev.login_at, now),
             is_active: true,
           };
-          sessions[idx] = updated;
+          sessions[idx] = resumed;
           saveLocalSessions(sessions);
-          void upsertSessionToSupabase(updated, false);
-          return updated;
+          setActiveSessionId(resumed.id, userKey, false);
+          void upsertSessionToSupabase(resumed, false);
+          return resumed;
         }
       }
+    }
+  } else {
+    // Explicit fresh sign-in: cleanly close any orphaned open sessions for this user first
+    let mutated = false;
+    for (let i = 0; i < sessions.length; i++) {
+      const s = sessions[i];
+      if ((s.user_id === userKey || s.username === user.username) && (s.is_active || !s.logout_at)) {
+        const exitAt = s.last_active_at || now;
+        const closedPrev: UserSessionRecord = {
+          ...s,
+          logout_at: exitAt,
+          duration_seconds: computeDurationSeconds(s.login_at, exitAt),
+          is_active: false,
+        };
+        sessions[i] = closedPrev;
+        mutated = true;
+        void upsertSessionToSupabase(closedPrev, false);
+      }
+    }
+    if (mutated) {
+      saveLocalSessions(sessions);
     }
   }
 
   const newSession: UserSessionRecord = {
     id: `sess-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    user_id: user.id || user.username,
+    user_id: userKey,
     user_name: user.displayName || user.username,
     username: user.username,
     role: user.role,
@@ -299,12 +363,12 @@ export function startUserSession(user: AuthUser, options: { forceNew?: boolean }
   };
 
   saveLocalSessions([newSession, ...sessions]);
-  setActiveSessionId(newSession.id);
+  setActiveSessionId(newSession.id, userKey, false);
   void upsertSessionToSupabase(newSession, false);
   return newSession;
 }
 
-export function heartbeatUserSession(): void {
+export function heartbeatUserSession(keepalive = false): void {
   try {
     const activeId = getActiveSessionId();
     if (!activeId) return;
@@ -322,7 +386,8 @@ export function heartbeatUserSession(): void {
     };
     sessions[idx] = updated;
     saveLocalSessions(sessions);
-    void upsertSessionToSupabase(updated, false);
+    setActiveSessionId(updated.id, updated.user_id, false);
+    void upsertSessionToSupabase(updated, keepalive);
   } catch {
     // non-blocking
   }
@@ -334,7 +399,9 @@ export function endUserSession(isTabClose = false): void {
     if (!activeId) return;
     const sessions = loadLocalSessions();
     const idx = sessions.findIndex((s) => s.id === activeId);
+    let userKey = '';
     if (idx >= 0) {
+      userKey = sessions[idx].user_id;
       const now = new Date().toISOString();
       const closed: UserSessionRecord = {
         ...sessions[idx],
@@ -347,7 +414,19 @@ export function endUserSession(isTabClose = false): void {
       saveLocalSessions(sessions);
       void upsertSessionToSupabase(closed, isTabClose);
     }
-    if (!isTabClose) {
+    if (isTabClose) {
+      // Mark localStorage as closedOnUnload so a new browser window starts a new session,
+      // while keeping sessionStorage intact so an in-tab page reload (F5) seamlessly resumes this same session.
+      try {
+        localStorage.setItem(
+          ACTIVE_SESSION_META_KEY,
+          JSON.stringify({ sessionId: activeId, userId: userKey, closedOnUnload: true })
+        );
+      } catch {
+        // ignore
+      }
+    } else {
+      // Explicit Sign Out: clear both sessionStorage and localStorage active session pointers
       setActiveSessionId(null);
     }
   } catch {
@@ -429,22 +508,23 @@ export async function fetchUserSessions(): Promise<{ records: UserSessionRecord[
   }
 
   const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
   const activeTabId = getActiveSessionId();
   const records = Array.from(map.values())
     .map((s) => {
       const lastMs = new Date(s.last_active_at || s.login_at).getTime();
-      const isCurrentTabVisible =
-        s.id === activeTabId &&
-        typeof document !== 'undefined' &&
-        document.visibilityState === 'visible';
+      const isCurrentSession = Boolean(activeTabId && s.id === activeTabId);
+      // Keep session active unless explicitly logged out/closed OR orphaned past STALE_SESSION_THRESHOLD_MS (12h)
       const stillOnline =
-        !s.logout_at && (isCurrentTabVisible || nowMs - lastMs <= STALE_SESSION_THRESHOLD_MS);
+        !s.logout_at && (isCurrentSession || nowMs - lastMs <= STALE_SESSION_THRESHOLD_MS);
       const effectiveExit = stillOnline ? null : s.logout_at || s.last_active_at;
-      const durationSec = computeDurationSeconds(s.login_at, effectiveExit || nowMs.toString());
+      const durationSec = stillOnline
+        ? computeDurationSeconds(s.login_at, nowIso)
+        : computeDurationSeconds(s.login_at, effectiveExit);
       return {
         ...s,
         logout_at: effectiveExit,
-        duration_seconds: stillOnline ? computeDurationSeconds(s.login_at, new Date().toISOString()) : durationSec,
+        duration_seconds: durationSec,
         is_active: stillOnline,
       };
     })

@@ -411,35 +411,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [managedUsers, user]);
 
-  // Periodic 15-second session heartbeat + resilient keepalive flush on pagehide / beforeunload / visibilitychange
+  // Continuous session heartbeat (every 20s) + close-only flush on pagehide/beforeunload.
+  // Never ends or splits the session when switching windows/tabs (visibilitychange).
   useEffect(() => {
     if (!user) return;
-    heartbeatUserSession();
+    heartbeatUserSession(false);
     const interval = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        heartbeatUserSession();
-      }
-    }, 15_000);
-
-    let hiddenSince = 0;
+      heartbeatUserSession(false);
+    }, 20_000);
 
     const handleCloseFlush = () => {
       endUserSession(true);
     };
     const handleVisibilityChange = () => {
+      // Keep the same continuous session alive across tab/window switches:
+      // only update last_active_at without ever closing or creating a new session.
       if (document.visibilityState === 'hidden') {
-        hiddenSince = Date.now();
-        // Flush exit time immediately for mobile browsers that suspend/kill background tabs without beforeunload
-        endUserSession(true);
+        heartbeatUserSession(true);
       } else if (document.visibilityState === 'visible') {
-        const awayMs = hiddenSince ? Date.now() - hiddenSince : 0;
-        hiddenSince = 0;
-        if (awayMs > 60_000) {
-          // Returning after > 60s away counts as a new visit
-          startUserSession(user, { forceNew: true });
-        } else {
-          heartbeatUserSession();
-        }
+        heartbeatUserSession(false);
       }
     };
 
